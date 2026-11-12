@@ -11,17 +11,28 @@
  *
  * ★ 选择判定唯一入口 = `logic.isSelectableNode()`（点击守卫 + 空态 v-if 共用）。
  */
-import { Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
+import { Delete, Plus, RefreshRight, Upload } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import {
+  YzhDialog,
   YzhFormDialog,
   YzhEmptyState,
   YzhStatusBadge,
   resolveStatusBadge,
   YzhTreeTableLayout,
   YzhTreeTable,
+  YzhTable,
+  unwrapOk,
   type TreeNode,
 } from '@yzh-core'
+import { buildAcceptAttribute } from '@share/constants/upload-file-policy'
 import { computed, onMounted, ref } from 'vue'
+import {
+  applyStandardClauses,
+  previewStandardClauses,
+  uploadStandardMarkdown,
+  type StandardSourcePreview,
+} from '@share/api/cert/iso-standard'
 import { ISOClauseLogic } from './logic'
 
 // 静默第三方库 ResizeObserver polyfill 的 startTime 错误（VM809:2，同 iso-standard）
@@ -62,6 +73,105 @@ const dialogTitle = computed(() =>
 )
 
 // ========================================================
+// ★ 标准原文 → Markdown → 条款（2026-11-10）
+//   Markdown 是知识层事实源：条款生成、文档内容提取都读它。
+// ========================================================
+
+const fileInput = ref<HTMLInputElement>()
+const uploadLoading = ref(false)
+const previewLoading = ref(false)
+const applyLoading = ref(false)
+const sourceDialog = ref(false)
+const overwrite = ref(false)
+const sourcePreview = ref<StandardSourcePreview | null>(null)
+
+/** 当前选中的标准（左侧标准节点 Code = cert_iso_standard.Code） */
+const selectedStdCode = computed(() =>
+  logic.isSelectableNode(logic.selectedNode) ? (logic.selectedNode?.Code ?? '') : '',
+)
+const selectedStdName = computed(() => {
+  const node: any = logic.selectedNode
+  if (!logic.isSelectableNode(node)) return ''
+  return String(node?.Extra?.StandardName ?? node?.Name ?? '')
+})
+const previewColumns = [
+  { prop: 'ClauseNumber', label: '条款号', width: 110 },
+  { prop: 'Title', label: '标题', minWidth: 240, showOverflowTooltip: true },
+  { prop: 'Description', label: '正文字数', width: 100, align: 'center' as const },
+]
+
+const mdSummary = computed(() => {
+  const p = sourcePreview.value
+  if (!p) return ''
+  return `原文 ${p.MarkdownChars} 字 · 解析 ${p.ParsedCount} 条 · 库内已有 ${p.ExistingCount} 条 · ${
+    p.Parser === 'llm' ? '模型兜底' : '按标题编号'
+  }`
+})
+
+function pickStandardFile(): void {
+  if (!selectedStdCode.value) {
+    ElMessage.warning('请先在左侧选择标准')
+    return
+  }
+  fileInput.value?.click()
+}
+
+async function onStandardFileChange(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  uploadLoading.value = true
+  try {
+    const res = await uploadStandardMarkdown(file, selectedStdCode.value)
+    const data = unwrapOk(res as any, '上传失败')
+    sourcePreview.value = (data ?? null) as StandardSourcePreview | null
+    overwrite.value = false
+    sourceDialog.value = true
+    ElMessage.success(res.message || '已转换并解析')
+  } catch (err: any) {
+    ElMessage.error(err?.message || '上传失败')
+  } finally {
+    uploadLoading.value = false
+  }
+}
+
+async function openPreview(): Promise<void> {
+  if (!selectedStdCode.value) {
+    ElMessage.warning('请先在左侧选择标准')
+    return
+  }
+  previewLoading.value = true
+  try {
+    const res = await previewStandardClauses(selectedStdCode.value)
+    sourcePreview.value = unwrapOk(res, '解析失败') as StandardSourcePreview
+    overwrite.value = false
+    sourceDialog.value = true
+  } catch (err: any) {
+    ElMessage.error(err?.message || '解析失败')
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+async function confirmApply(): Promise<void> {
+  if (!sourcePreview.value) return
+  applyLoading.value = true
+  try {
+    const res = await applyStandardClauses(sourcePreview.value.StandardCode, overwrite.value)
+    unwrapOk(res, '写入失败')
+    ElMessage.success(res.message || '条款已写入')
+    sourceDialog.value = false
+    await logic.refresh()
+  } catch (err: any) {
+    ElMessage.error(err?.message || '写入失败')
+  } finally {
+    applyLoading.value = false
+  }
+}
+
+// ========================================================
 // 树节点点击：仅标准节点触发条款加载（判定唯一入口 = isSelectableNode）
 // ========================================================
 
@@ -83,6 +193,42 @@ onMounted(async () => {
 
 <template>
   <div class="clause-page">
+    <!-- ★ 标准原文：上传即转 Markdown 存档，再按原文生成条款 -->
+    <div class="clause-page__topbar">
+      <div class="topbar-info">
+        <span class="topbar-label">标准原文</span>
+        <span v-if="selectedStdName" class="topbar-std">{{ selectedStdName }}</span>
+        <span v-else class="topbar-hint">先在左侧选择标准</span>
+        <span v-if="mdSummary" class="topbar-meta">{{ mdSummary }}</span>
+      </div>
+      <div class="topbar-actions">
+        <input
+          ref="fileInput"
+          type="file"
+          class="topbar-file"
+          :accept="buildAcceptAttribute(['document', 'pdf'])"
+          @change="onStandardFileChange"
+        />
+        <el-button
+          type="primary"
+          :icon="Upload"
+          :loading="uploadLoading"
+          :disabled="!selectedStdCode"
+          @click="pickStandardFile"
+        >
+          上传标准文件
+        </el-button>
+        <el-button
+          type="default"
+          :loading="previewLoading"
+          :disabled="!selectedStdCode"
+          @click="openPreview"
+        >
+          按原文生成条款
+        </el-button>
+      </div>
+    </div>
+
     <YzhTreeTableLayout
       :ref="setTreeTableRef"
       :tree-data="logic.treeData"
@@ -161,6 +307,55 @@ onMounted(async () => {
       </template>
     </YzhTreeTableLayout>
 
+    <!-- 条款解析预览弹窗：确认后才写库 -->
+    <YzhDialog
+      v-model="sourceDialog"
+      title="按标准原文生成条款"
+      width="760px"
+      top="4vh"
+      confirm-text="写入条款"
+      :confirm-loading="applyLoading"
+      append-to-body
+      @confirm="confirmApply"
+    >
+      <div v-if="sourcePreview" class="src-dialog">
+        <div class="src-dialog__meta">
+          <span>{{ sourcePreview.StandardName }}</span>
+          <span>Markdown {{ sourcePreview.MarkdownChars }} 字</span>
+          <span>解析 {{ sourcePreview.ParsedCount }} 条</span>
+          <span>库内已有 {{ sourcePreview.ExistingCount }} 条</span>
+        </div>
+        <!-- ★ 2026-11-11：操作栏放到表格**上方**并吸顶。
+             原来放在表格下方 + 依赖 dialog footer，短屏/缩放时整条被顶出视口，
+             用户只看到表格和复选框、看不到“写入条款”。 -->
+        <div class="src-dialog__actions">
+          <el-checkbox v-model="overwrite" class="src-dialog__overwrite">
+            先清空该标准现有条款，再按本次解析结果重建（上传错标准/换版时使用）
+          </el-checkbox>
+          <el-button type="primary" :loading="applyLoading" @click="confirmApply">写入条款</el-button>
+        </div>
+        <YzhTable
+          :columns="previewColumns as any"
+          :data="sourcePreview.Clauses as any"
+          :show-pagination="false"
+          :height="220"
+          :toolbar="false"
+          select-mode="none"
+          row-key="ClauseNumber"
+          no-padding
+        >
+          <template #column-Description="{ row }">
+            {{ (row.Description || '').length }}
+          </template>
+        </YzhTable>
+      </div>
+
+      <template #footer>
+        <el-button type="default" @click="sourceDialog = false">取消</el-button>
+        <el-button type="primary" :loading="applyLoading" @click="confirmApply">写入条款</el-button>
+      </template>
+    </YzhDialog>
+
     <!-- 条款新增/编辑弹窗 -->
     <YzhFormDialog
       v-model:visible="logic.dialogVisible.value"
@@ -184,6 +379,87 @@ onMounted(async () => {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+.clause-page__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yzh-space-3, 12px);
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
+  background: var(--yzh-color-bg-subtle, #f9fafb);
+  border-bottom: 1px solid var(--yzh-color-border-light, #ebeef5);
+  flex-wrap: wrap;
+}
+
+.topbar-info {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-3, 12px);
+  min-width: 0;
+}
+
+.topbar-label {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #909399);
+}
+
+.topbar-std {
+  font-size: var(--yzh-font-size-base, 14px);
+  color: var(--yzh-color-text-primary, #303133);
+  font-weight: 600;
+}
+
+.topbar-hint {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #909399);
+}
+
+.topbar-meta {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #909399);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+}
+
+.topbar-file {
+  display: none;
+}
+
+.src-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--yzh-space-3, 12px);
+}
+
+.src-dialog__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yzh-space-3, 12px);
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #909399);
+}
+
+.src-dialog__overwrite {
+  font-size: var(--yzh-font-size-sm, 13px);
+}
+
+.src-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yzh-space-3, 12px);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: var(--yzh-space-2, 8px) 0;
+  background: var(--yzh-color-bg-container, #fff);
+  border-bottom: 1px solid var(--yzh-color-border, #ebeef5);
 }
 
 .clause-page__content {

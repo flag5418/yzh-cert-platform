@@ -104,6 +104,29 @@ namespace CertPlatform.Auditor.Entities.Dir
     /// <summary>双产物（PDF + Markdown）完成时间</summary>
     public DateTime? ConvertDate { get; set; }
 
+    /// <summary>
+    /// ★ 文档简介 + 目录索引（JSON）。
+    /// <para>结构见 <c>EnterpriseDocProfileBuilder</c>：<c>DocType / Intro / Purpose / Scope /
+    /// SourceSha256 / VersionNumber / Toc[]</c>；<c>Toc[]</c> 带 <c>CharStart/CharEnd</c> 可直接回查原文。</para>
+    /// <para>⛔ 不参与「标准符合性」判定，只做文档路由；文件被替换后必须按 <c>Sha256</c> 判过期。</para>
+    /// </summary>
+    [SugarColumn(ColumnDataType = "longtext", IsNullable = true)]
+    public string? DocProfileJson { get; set; }
+
+    /// <summary>文档简介生成时间</summary>
+    public DateTime? DocProfileUpdatedTime { get; set; }
+
+    /// <summary>
+    /// ★ 手册章节索引（L1，JSON）：标准条款号 → 手册小节 + 原文偏移。
+    /// <para>由 <c>EnterpriseDocProfileBuilder.BuildSectionIndex</c> 生成；只服务「按检查项取小节」，
+    /// ⛔ 不参与标准符合性判定。</para>
+    /// </summary>
+    [SugarColumn(ColumnDataType = "longtext", IsNullable = true)]
+    public string? SectionMapJson { get; set; }
+
+    /// <summary>章节索引生成时间</summary>
+    public DateTime? SectionMapUpdatedTime { get; set; }
+
     // ──── 提取聚合状态（明细见 cert_document_extraction）───
 
     /// <summary>

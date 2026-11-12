@@ -31,17 +31,20 @@ public class CertQueryController : ControllerBase
     private readonly EntityService<ISOClause> _clauseSvc;
     private readonly EntityService<CertStage> _stageSvc;
     private readonly EntityService<CertAuditPlanDetail> _detailSvc;
+    private readonly EntityService<ClauseAttrRow> _clauseAttrSvc;
 
     public CertQueryController(
         EntityService<ISOStandard> stdSvc,
         EntityService<ISOClause> clauseSvc,
         EntityService<CertStage> stageSvc,
-        EntityService<CertAuditPlanDetail> detailSvc)
+        EntityService<CertAuditPlanDetail> detailSvc,
+        EntityService<ClauseAttrRow> clauseAttrSvc)
     {
         _stdSvc = stdSvc;
         _clauseSvc = clauseSvc;
         _stageSvc = stageSvc;
         _detailSvc = detailSvc;
+        _clauseAttrSvc = clauseAttrSvc;
     }
 
     /// <summary>标准目录（含简称 Abbrev）</summary>
@@ -139,6 +142,27 @@ public class CertQueryController : ControllerBase
             return Ok(ApiResponse<object?>.Fail(cl.Error ?? "查询条款失败"));
 
         var clauses = cl.Data ?? new List<ISOClause>();
+        var clauseCodeList = clauses
+            .Select(c => c.Code ?? string.Empty)
+            .Where(c => c.Length > 0)
+            .Distinct()
+            .ToList();
+
+        // ★ 条款属性一并带回：属性表用 ClauseCode 指向条款（不是复制正文），
+        //   这里把「条款正文 + 属性」合成一份响应，页面/分析不用再查两次。
+        var attrResult = clauseCodeList.Count == 0
+            ? null
+            : await _clauseAttrSvc.GetListAsync(a =>
+                clauseCodeList.Contains(a.ClauseCode) && !a.IsDeleted && a.IsValid == 1);
+        var attrsByClause = (attrResult?.Data ?? new List<ClauseAttrRow>())
+            .GroupBy(a => a.ClauseCode, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(a => a.Sort)
+                      .Select(a => new CertClauseAttrItem { AttrCode = a.AttrCode, AttrValue = a.AttrValue })
+                      .ToList(),
+                StringComparer.Ordinal);
+
         var stdCodes = clauses.Select(c => c.StandardCode ?? string.Empty).Where(c => c.Length > 0).Distinct().ToArray();
         var stds = stdCodes.Length == 0
             ? new List<ISOStandard>()
@@ -157,6 +181,9 @@ public class CertQueryController : ControllerBase
                     c.ClauseNumber,
                     c.Title,
                     c.Description,
+                    Attributes = attrsByClause.TryGetValue(c.Code ?? string.Empty, out var attrs)
+                        ? attrs
+                        : new List<CertClauseAttrItem>(),
                     StandardName = std?.StandardName,
                     Abbrev = std == null
                         ? string.Empty
@@ -183,4 +210,11 @@ public class CertQueryController : ControllerBase
             _ => standardCode.Length >= 3 ? standardCode.Substring(0, 3) : standardCode
         };
     }
+}
+
+/// <summary>条款属性（只带编码与值；中文标签由前端/属性池映射）</summary>
+public sealed class CertClauseAttrItem
+{
+    public string AttrCode { get; set; } = string.Empty;
+    public string? AttrValue { get; set; }
 }

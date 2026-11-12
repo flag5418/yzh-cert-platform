@@ -26,8 +26,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  ElAlert, ElButton, ElForm, ElFormItem, ElInput, ElMessage, ElOption, ElPopover, ElProgress,
-  ElSelect, ElTable, ElTableColumn,
+  ElAlert, ElButton, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElPopover,
+  ElProgress, ElSelect, ElTable, ElTableColumn,
 } from 'element-plus'
 import {
   YzhDialog, YzhDrawer, YzhStatusBadge, YzhTable, confirmOrFalse,
@@ -377,22 +377,52 @@ async function doAutoAnalyze() {
     }
 
     let ok = 0
-    let fail = 0
+    const failures: Array<{ label: string; reason: string }> = []
     for (const r of picked) {
+      const label = r.ClauseTitles || r.ClauseNumbers || r.DetailCode
       if (!r.TaskItemCode) {
-        fail++
+        // ★ 不再吞掉原因：没有任务项 Code 时，把「任务创建/刷新后仍拿不到」写清楚
+        failures.push({ label, reason: '未取得任务项 Code（任务创建后刷新列表仍未返回，请重试或检查后端日志）' })
         autoDone.value++
         continue
       }
-      const res = await analyzeCheckItem(r.TaskItemCode)
-      if (res.success) ok++
-      else fail++
+      try {
+        const res = await analyzeCheckItem(r.TaskItemCode)
+        if (res.success) {
+          ok++
+        } else {
+          failures.push({ label, reason: res.err || res.message || '接口返回失败但未给出原因' })
+        }
+      } catch (e) {
+        // 网络/异常也按项记录，避免整页只看到「失败 N 项」
+        failures.push({ label, reason: e instanceof Error ? e.message : String(e) })
+      }
       autoDone.value++
     }
 
     await reloadOnly()
     if (drawer.value && currentRow.value) await openDetail(currentRow.value)
-    ElMessage.success(`自动分析完成：成功 ${ok} 项${fail ? `，失败 ${fail} 项` : ''}`)
+
+    if (failures.length === 0) {
+      ElMessage.success(`自动分析完成：成功 ${ok} 项`)
+    } else {
+      const esc = (s: string) => s
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const list = failures
+        .map((f, i) => `<li style="margin-bottom:6px"><b>${i + 1}. ${esc(f.label)}</b><br/>${esc(f.reason)}</li>`)
+        .join('')
+      ElMessageBox.alert(
+        `<div style="max-height:320px;overflow:auto;line-height:1.6">`
+          + `<p>成功 ${ok} 项，失败 ${failures.length} 项。逐项失败原因：</p>`
+          + `<ol style="padding-left:18px;margin:0">${list}</ol></div>`,
+        '自动分析结果',
+        {
+          dangerouslyUseHTMLString: true,
+          type: ok > 0 ? 'warning' : 'error',
+          confirmButtonText: '知道了',
+        },
+      )
+    }
   } finally {
     autoRunning.value = false
   }
@@ -670,6 +700,23 @@ const clausePopup = reactive<{ loading: boolean; items: CertClauseContentRow[]; 
 })
 /** 同一检查项只取一次条款内容（后端按明细的 Clause Code 精确取，避免跨标准同号歧义） */
 const clauseCache = new Map<string, CertClauseContentRow[]>()
+
+/** 条款属性编码 → 中文标签（与后端 CertCheckContextBuilder.AttrOrder 一致） */
+const CLAUSE_ATTR_LABELS: Record<string, string> = {
+  ClauseIntent: '管什么',
+  Obligation: '约束强度',
+  Applicability: '适用性',
+  ApplicabilityCondition: '适用条件',
+  Severity: '严重度',
+  DocCheckMode: '资料核对方式',
+  Process: '涉及过程',
+  Artifacts: '企业应提供的资料',
+  EvidenceChain: '取证要求',
+}
+
+function clauseAttrLabel(code: string): string {
+  return CLAUSE_ATTR_LABELS[code] || code
+}
 
 async function showClause(detailCode: string, clauseNumber: string) {
   clausePopup.items = []
@@ -1185,6 +1232,12 @@ onMounted(loadAll)
                       <span v-if="c.Abbrev" class="cd-clause-pop__std">{{ c.Abbrev }}</span>
                     </div>
                     <div class="cd-clause-pop__body">{{ c.Description || '该条款未维护原文 / 摘要。' }}</div>
+                    <div v-if="c.Attributes?.length" class="cd-clause-pop__attrs">
+                      <div v-for="a in c.Attributes" :key="a.AttrCode" class="cd-clause-pop__attr">
+                        <span class="cd-clause-pop__attr-label">{{ clauseAttrLabel(a.AttrCode) }}</span>
+                        <span class="cd-clause-pop__attr-value">{{ a.AttrValue || '—' }}</span>
+                      </div>
+                    </div>
                   </div>
                 </template>
               </div>
@@ -2020,6 +2073,28 @@ onMounted(loadAll)
   word-break: break-word;
   max-height: var(--yzh-height-pop, 260px);
   overflow-y: auto;
+}
+.cd-clause-pop__attrs {
+  margin-top: var(--yzh-space-2, 8px);
+  padding-top: var(--yzh-space-2, 8px);
+  border-top: 1px dashed var(--yzh-color-border-light, var(--el-border-color-lighter));
+}
+.cd-clause-pop__attr {
+  display: flex;
+  gap: var(--yzh-space-2, 8px);
+  margin-bottom: var(--yzh-space-1, 4px);
+  font-size: var(--yzh-font-size-xs, 12px);
+  line-height: var(--yzh-line-height-normal, 1.5);
+}
+.cd-clause-pop__attr-label {
+  flex: 0 0 auto;
+  color: var(--yzh-color-text-tertiary, var(--el-text-color-secondary));
+}
+.cd-clause-pop__attr-value {
+  flex: 1;
+  color: var(--yzh-color-text-secondary, var(--el-text-color-regular));
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .cd-clause__title {
   margin-top: var(--yzh-space-1, 4px);

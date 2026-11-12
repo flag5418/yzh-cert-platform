@@ -62,7 +62,9 @@ namespace CertPlatform.Auditor.Services.Ent
         {
             var all = await _db.Client.Queryable<CertPromptTemplateRow>()
                 .Where(x => x.PromptCode == PromptCode && !x.IsDeleted && x.IsValid == 1
-                            && x.OrgCode == null)
+                            // ★ 2026-11-11：平台级行的 OrgCode 存的是空串（列 NOT NULL 无默认）。
+                            //   只写 == null 会永不命中 ⇒ 页面保存好的正文被忽略，静默走代码兜底。
+                            && (x.OrgCode == null || x.OrgCode == ""))
                 .ToListAsync();
 
             var rows = all ?? new List<CertPromptTemplateRow>();

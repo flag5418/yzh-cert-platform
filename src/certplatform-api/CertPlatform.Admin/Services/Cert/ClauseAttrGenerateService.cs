@@ -61,11 +61,13 @@ public sealed class ClauseAttrGenerateService
     public const int MaxBatchSize = 50;
 
     /// <summary>
-    /// 「值来源」判定：<b>只有这两条是 reference</b>（条款只给期望，实际值要靠证据/企业材料）；
-    /// 其余（条款意图/约束强度/适用性/适用条件/涉及过程/严重度/资料核对方式）由标准或工程师**当场定死**。
+    /// 「值来源」判定：<b>池内 9 条全部由标准或工程师当场定死（fixed）</b>。
+    /// <para>2026-11-10 属性池收敛：<c>Artifacts</c> / <c>EvidenceChain</c> 已移出属性池
+    /// （归第三类提示词 —— 审核发现/审核证据生成时结合事实产出），故本集合为空；
+    /// 保留结构以便将来出现真正的"参考型"属性时再登记。</para>
     /// </summary>
     private static readonly HashSet<string> ReferenceAttrs =
-        new(StringComparer.Ordinal) { "Artifacts", "EvidenceChain" };
+        new(StringComparer.Ordinal);
 
     public ClauseAttrGenerateService(
         IDbOrm db,
@@ -432,6 +434,9 @@ public sealed class ClauseAttrGenerateService
                 Sort = sort,
                 IsValid = 1,
                 IsDeleted = false,
+                // ⚠️ `cert_clause_attr.Status` = varchar(255) NOT NULL 无默认值（严格模式下缺列报 1364）
+                //    ⇒ 直插必须自己给，取值与既有 27 行一致（active）
+                Status = "active",
                 CreateBy = _user.UserCode,
                 CreateTime = DateTime.Now,
             };

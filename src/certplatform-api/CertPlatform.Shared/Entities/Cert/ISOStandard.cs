@@ -131,5 +131,50 @@ namespace CertPlatform.Shared.Entities.Cert
 
         /// <summary>描述</summary>
         public string? Description { get; set; }
+
+        // ──── 标准原文 Markdown（2026-11-10 V3 知识层） ────
+
+        /// <summary>
+        /// <b>标准原文 Markdown 的存储路径</b>（MinIO key，形如
+        /// <c>/standard-source/{标准Code}/{文件名}.md</c>）。
+        ///
+        /// <para><b>为什么挂在标准行上</b>：这份 Markdown 是「自动生成条款」与
+        /// 「企业文档内容提取（给模型看标准原文）」的<b>同一个输入</b>；
+        /// 挂在标准行 ⇒ 全系统只有一个事实源，⛔ 不允许第二个表再存一份。</para>
+        /// <para>空 = 还没上传过标准原文。</para>
+        /// </summary>
+        [StringLength(500)]
+        public string? MarkdownPath { get; set; }
+
+        /// <summary>Markdown 字符数（0 = 未生成；&gt;0 即已可用）</summary>
+        public int MarkdownChars { get; set; }
+
+        /// <summary>生成该 Markdown 的原始文件名（含扩展名）</summary>
+        [StringLength(255)]
+        public string? MarkdownSourceFile { get; set; }
+
+        /// <summary>Markdown 最近生成时间（本地时间，铁律十）</summary>
+        public DateTime? MarkdownUpdatedTime { get; set; }
+
+        // ──── 标准条款 Markdown（2026-11-11 V3 知识层，派生视图） ────
+
+        /// <summary>
+        /// <b>条款 Markdown 的存储路径</b>（MinIO key，形如
+        /// <c>/standard-source/{标准Code}/clauses/clauses.md</c>）。
+        ///
+        /// <para><b>它不是第二事实源</b>：由 <c>cert_iso_clause</c> 渲染，条款表是事实源；
+        /// 原始标准 Markdown 仍在 <see cref="MarkdownPath"/>，供人工核对与溯源。</para>
+        /// <para><b>用途</b>：构造提示词里的条款清单、按条款取「要求原文」、页面预览；
+        /// ⛔ 不要把它当成标准原文来判符合性。</para>
+        /// <para>空 = 还没执行过「写入条款」或补建。</para>
+        /// </summary>
+        [StringLength(500)]
+        public string? ClauseMarkdownPath { get; set; }
+
+        /// <summary>条款 Markdown 字符数（0 = 未生成）</summary>
+        public int ClauseMarkdownChars { get; set; }
+
+        /// <summary>条款 Markdown 最近生成时间（本地时间，铁律十）</summary>
+        public DateTime? ClauseMarkdownUpdatedTime { get; set; }
     }
 }

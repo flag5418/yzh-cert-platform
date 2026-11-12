@@ -130,5 +130,53 @@ export async function getPrompt(standardCode?: string): Promise<DocExtractPrompt
  * @param data.standardCode 空 = 保存全局默认；非空 = 保存该标准的专属提示词
  */
 export async function savePrompt(data: DocExtractPromptSaveRequest): Promise<void> {
-  await yzhApi.post(`${DOC_EXTRACT_RULE_BASE}/prompt`, data)
+  // ★ 必须 PascalCase：后端 DocExtractPromptSaveRequest 无 [JsonPropertyName]，
+  //   传 camelCase（template/standardCode）会全绑 null ⇒ 报「必填字段为空」且零提示。
+  await yzhApi.post(`${DOC_EXTRACT_RULE_BASE}/prompt`, {
+    Template: data.template,
+    StandardCode: data.standardCode ?? '',
+  })
+}
+
+// ── 页面内试跑（2026-11-10）──────────────────────────────────────────────
+
+/** 试跑结果（后端 DocExtractRuleController.TestPrompt） */
+export interface DocExtractTestResult {
+  Success: boolean
+  Message: string
+  Model: string
+  DurationMs: number
+  PromptTokens: number
+  CompletionTokens: number
+  /** 输出是不是合法 JSON（只判形状，不判内容对错） */
+  JsonValid: boolean
+  /** 模型原始输出（已去 ``` 围栏） */
+  Output: string
+  PromptChars: number
+  ClauseCount: number
+  MarkdownLength: number
+  /** 文档超 3 万字被截断（只取前 3 万送模型） */
+  Truncated: boolean
+  MarkdownHead: string
+  FileName: string
+}
+
+/**
+ * 上传文档 → 转 Markdown → 用「页面当前正文」跑一次（不落库）。
+ * @param params.template 页面上未保存的编辑内容（边改边试）
+ */
+export async function testDocExtractPrompt(params: {
+  file: File
+  standardCode: string
+  template: string
+}): Promise<DocExtractTestResult> {
+  const fd = new FormData()
+  fd.append('File', params.file, params.file.name)
+  fd.append('StandardCode', params.standardCode)
+  fd.append('Template', params.template)
+
+  const res = await yzhApi.upload<ApiResponse<DocExtractTestResult>>(`${DOC_EXTRACT_RULE_BASE}/prompt/test`, fd)
+  if (!res) throw new Error('试跑失败：无响应')
+  if (!res.data) throw new Error(res.err || res.message || '试跑失败')
+  return res.data
 }

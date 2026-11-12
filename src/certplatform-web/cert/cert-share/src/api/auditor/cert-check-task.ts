@@ -672,12 +672,20 @@ export async function getMemberOptions(
 // 条款详细内容（详情页点条款编号的小弹窗）
 // ══════════════════════════════════════════════════════════════════════
 
+export interface CertClauseAttrItem {
+  /** 属性编码（ClauseIntent / Artifacts / EvidenceChain …） */
+  AttrCode: string
+  AttrValue?: string | null
+}
+
 export interface CertClauseContentRow {
   Code: string
   ClauseNumber: string
   Title: string
   /** 条款原文或摘要 */
   Description?: string | null
+  /** ★ 该条款挂接的属性（按 ClauseCode 关联，不是复制正文） */
+  Attributes?: CertClauseAttrItem[] | null
   StandardName?: string | null
   Abbrev?: string | null
 }

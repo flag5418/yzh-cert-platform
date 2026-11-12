@@ -18,6 +18,14 @@ export interface ISOStandard {
   CategoryName?: string
   Description?: string
   Remark?: string
+  /** 标准原文 Markdown 存储路径（唯一事实源，2026-11-10） */
+  MarkdownPath?: string
+  /** Markdown 字符数（0 = 未上传原文） */
+  MarkdownChars?: number
+  /** 原文文件名 */
+  MarkdownSourceFile?: string
+  /** Markdown 生成时间 */
+  MarkdownUpdatedTime?: string
   Status?: string
   StatusName?: string
   ParentCode?: string

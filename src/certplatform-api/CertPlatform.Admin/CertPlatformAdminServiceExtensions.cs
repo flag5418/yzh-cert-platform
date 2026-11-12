@@ -24,6 +24,8 @@ public static class CertPlatformAdminServiceExtensions
     {
         // ──── 标准目录管理 ────
         services.AddScoped<StandardDirectoryService>();
+        // ★ 2026-11-10 V3：标准原文 → Markdown → 条款（上传/预览/写入）
+        services.AddScoped<StandardSourceService>();
         services.AddScoped<DirectoryTemplateService>();
         services.AddScoped<OfficeConvertService>();
         // ★ V2 条款属性 AI 预生成（P4）：给条款号+标题+正文 → 8 属性 JSON → 落 cert_clause_attr

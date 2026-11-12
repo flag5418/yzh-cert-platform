@@ -48,8 +48,16 @@ namespace CertPlatform.Auditor.Services.Ent
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<ClauseExtractExecutor> _logger;
 
-        /// <summary>单块送模型的文档字符数上限（约 1.2 万汉字 token，留足输出空间）</summary>
-        public const int ChunkChars = 30000;
+        /// <summary>
+        /// 单块送模型的文档字符数上限。
+        /// <para>★ 2026-11-11：由 30000 降到 15000 —— 实测 2.7 万字手册 + 3 万字标准原文一次调用
+        /// 输出 15630 字符、completion 正好撞 8192 上限被截断，只能救回 36 条。分段变小后每段
+        /// 输出量约减半，避免「后半本手册的条款被 max_tokens 吃掉」。</para>
+        /// </summary>
+        public const int ChunkChars = 15000;
+
+        /// <summary>标准原文注入上限（与文档分段同口径 3 万字）</summary>
+        private const int StandardTextChars = 30_000;
 
         /// <summary>最多切几块（防误传超大文件把额度烧光；超出的部分记入 Message ⛔ 不静默丢）</summary>
         public const int MaxChunks = 8;
@@ -179,6 +187,27 @@ namespace CertPlatform.Auditor.Services.Ent
                     return new TaskExecutionResult { Success = true, Message = why, Retryable = false };
                 }
 
+                // ── ⑤b 标准原文 Markdown（知识层事实源，2026-11-10） ──
+                //   用途：给模型核对条款措辞，避免只凭“编号+标题”猜条文含义。
+                //   ⛔ 不属于待提取的文档内容，单独加段并在提示词里显式隔离。
+                var standardMarkdown = string.Empty;
+                if (!string.IsNullOrWhiteSpace(standard.MarkdownPath))
+                {
+                    try
+                    {
+                        var (stdStream, _) = await storage.DownloadAsync(standard.MarkdownPath!.TrimStart('/'));
+                        using var stdReader = new StreamReader(stdStream, Encoding.UTF8, true);
+                        standardMarkdown = await stdReader.ReadToEndAsync();
+                        if (standardMarkdown.Length > StandardTextChars)
+                            standardMarkdown = standardMarkdown.Substring(0, StandardTextChars);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 非致命：标准原文读不到不影响提取，只记日志
+                        _logger.LogWarning(ex, "[条款提取] 标准原文 Markdown 读取失败: {Path}", standard.MarkdownPath);
+                    }
+                }
+
                 // ── ⑥ 提示词 + AI 参数 ──
                 var (template, promptScope, _) = await prompts.ResolveAsync(standard.StandardCode, cancellationToken);
                 var settings = await AiConnSettings.ReadAsync(db, cancellationToken);
@@ -220,6 +249,22 @@ namespace CertPlatform.Auditor.Services.Ent
                         clauseList,
                         chunks[i]);
 
+                    // ★ 附标准原文：只作“条款措辞参照”，⛔ 不是待提取文档内容
+                    if (standardMarkdown.Length > 0)
+                    {
+                        prompt += "\n\n【标准原文·仅用于核对条款措辞，不是待提取的文档内容】\n"
+                               + "（以下为该标准的正式条文；企业文档里若没有对应证据，不要凭它编造摘录）\n"
+                               + standardMarkdown;
+                    }
+
+                    // ★ 2026-11-11：长文档提取实测在 180s 稳定超时（提示词含标准原文 3 万字
+                    //   + 文档段 3 万字 + 输出上限 8192 token），单次必须给到 600s。
+                    //   同时把实际规模打进日志，便于判断是输入过大还是模型输出卡住。
+                    _logger.LogInformation(
+                        "[条款提取] {File}×{Std} 第 {I}/{N} 段：prompt {Chars} 字符（文档段 {DocChars}，标准原文 {StdChars}）",
+                        doc.Code, standard.StandardCode, i + 1, chunks.Count,
+                        prompt.Length, chunks[i].Length, standardMarkdown.Length);
+
                     var resp = await llm.CompleteAsync(new LlmInvokeRequest
                     {
                         BaseUrl = settings.BaseUrl,
@@ -229,6 +274,7 @@ namespace CertPlatform.Auditor.Services.Ent
                         MaxTokens = 8192,
                         Prompt = prompt,
                         ForceJson = true,
+                        TimeoutSeconds = 600,
                     });
 
                     if (!resp.Success || resp.Json == null)

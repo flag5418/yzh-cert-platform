@@ -162,8 +162,10 @@ public sealed class PromptTemplateService
                 Code = Guid.NewGuid().ToString("N"),
                 PromptCode = promptCode,
                 PromptName = promptName ?? promptCode,
-                OrgCode = orgCode,
-                ScopeKey = scopeKey,
+                // ★ 三列在库里都是 NOT NULL 无默认值：null ⇒ 1364「必填字段为空」
+                OrgCode = orgCode ?? string.Empty,
+                ScopeKey = scopeKey ?? string.Empty,
+                Placeholders = string.Join(",", GetPlaceholders(promptCode).Select(p => p.Token)),
                 Template = template,
                 Remark = remark,
                 Sort = 0,
@@ -228,10 +230,14 @@ public sealed class PromptTemplateService
     private async Task<PromptTemplate?> FindExactAsync(
         string promptCode, string? orgCode, string? scopeKey, CancellationToken ct)
     {
+        // ★ 必须把 null 归一为 ""：库里全局行是 OrgCode='' / ScopeKey=''，
+        //   直接 `== null` 在 SQL 里是 `= NULL`（永不命中）⇒ 每次都走「新增」并撞 NOT NULL。
+        var org = orgCode ?? string.Empty;
+        var scope = scopeKey ?? string.Empty;
         return await _db.Client.Queryable<PromptTemplate>()
             .Where(p => p.PromptCode == promptCode
-                        && p.OrgCode == orgCode
-                        && p.ScopeKey == scopeKey
+                        && p.OrgCode == org
+                        && p.ScopeKey == scope
                         && p.IsValid == 1 && !p.IsDeleted)
             .FirstAsync(ct);
     }

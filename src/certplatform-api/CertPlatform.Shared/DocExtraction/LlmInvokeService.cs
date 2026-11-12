@@ -57,6 +57,13 @@ namespace CertPlatform.Shared.DocExtraction
 
         /// <summary>是否强制 JSON 输出（analyze/verify 场景 true）</summary>
         public bool ForceJson { get; set; } = true;
+
+        /// <summary>
+        /// 本次调用超时（秒；0 = 用服务默认 <see cref="LlmInvokeService.TimeoutSeconds"/>）。
+        /// <para>长文档提取（提示词含标准原文 + 大段 Markdown，输出上限 8192 token）一次可能跑
+        /// 3~8 分钟，必须允许调用方按场景放宽，否则固定 180s 会稳定判超时。</para>
+        /// </summary>
+        public int TimeoutSeconds { get; set; } = 0;
     }
 
     /// <summary>LLM 调用响应</summary>
@@ -106,10 +113,11 @@ namespace CertPlatform.Shared.DocExtraction
                 return new LlmInvokeResponse { Success = false, Message = "Prompt 为空" };
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
+            var effectiveTimeout = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : TimeoutSeconds;
             try
             {
                 var client = _httpClientFactory.CreateClient("LlmInvoke");
-                client.Timeout = TimeSpan.FromSeconds(TimeoutSeconds);
+                client.Timeout = TimeSpan.FromSeconds(effectiveTimeout);
 
                 var url = request.BaseUrl.TrimEnd('/') + "/chat/completions";
 
@@ -247,7 +255,7 @@ namespace CertPlatform.Shared.DocExtraction
             }
             catch (TaskCanceledException)
             {
-                return new LlmInvokeResponse { Success = false, Message = $"AI 调用超时（{TimeoutSeconds}s）", DurationMs = sw.ElapsedMilliseconds };
+                return new LlmInvokeResponse { Success = false, Message = $"AI 调用超时（{effectiveTimeout}s）", DurationMs = sw.ElapsedMilliseconds };
             }
             catch (Exception ex)
             {

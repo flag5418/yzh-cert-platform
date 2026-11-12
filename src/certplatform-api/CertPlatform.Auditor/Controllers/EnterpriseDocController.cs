@@ -69,6 +69,34 @@ namespace CertPlatform.Auditor.Controllers
         public async Task<IActionResult> Markdown(string fileCode, [FromQuery] string? enterpriseCode)
             => Ok(ApiResponse<object?>.Ok(await _service.GetMarkdownAsync(fileCode, enterpriseCode ?? "")));
 
+        /// <summary>★ 文档简介 + 目录索引（只读）</summary>
+        [HttpGet("doc-profile/{fileCode}")]
+        public async Task<IActionResult> DocProfile(string fileCode, [FromQuery] string? enterpriseCode)
+            => Ok(ApiResponse<object?>.Ok(await _service.GetDocProfileAsync(fileCode, enterpriseCode ?? "")));
+
+        /// <summary>★ 重建文档简介 + 目录（读已生成 Markdown，不重新转换）</summary>
+        [HttpPost("doc-profile/rebuild/{fileCode}")]
+        public async Task<IActionResult> RebuildDocProfile(string fileCode, [FromQuery] string? enterpriseCode)
+            => Ok(ApiResponse<object?>.Ok(await _service.RebuildDocProfileAsync(fileCode, enterpriseCode ?? "")));
+
+        /// <summary>★ 生成 / 重建「标准条款 → 手册小节」索引（L1）</summary>
+        [HttpPost("section-map/rebuild/{fileCode}")]
+        public async Task<IActionResult> RebuildSectionMap(
+            string fileCode, [FromQuery] string? enterpriseCode, [FromQuery] string? standardCode)
+            => Ok(ApiResponse<object?>.Ok(
+                await _service.RebuildSectionMapAsync(fileCode, enterpriseCode ?? "", standardCode ?? "")));
+
+        /// <summary>★ 读取已保存的章节索引（只读）</summary>
+        [HttpGet("section-map/{fileCode}")]
+        public async Task<IActionResult> SectionMap(string fileCode, [FromQuery] string? enterpriseCode)
+            => Ok(ApiResponse<object?>.Ok(await _service.GetSectionMapAsync(fileCode, enterpriseCode ?? "")));
+
+        /// <summary>★ 单条款小节探针：只送该条款对应的手册小节给模型，验证「按检查项取小节」</summary>
+        [HttpPost("section-probe")]
+        public async Task<IActionResult> SectionProbe([FromBody] SectionProbeRequest req)
+            => Ok(ApiResponse<object?>.Ok(await _service.ProbeSectionAsync(
+                req.FileCode ?? "", req.EnterpriseCode ?? "", req.StandardCode ?? "", req.ClauseNo ?? "")));
+
         // ========================================================
         // 二、五段式上传（无阶段、无标准）
         // ========================================================
@@ -440,6 +468,16 @@ namespace CertPlatform.Auditor.Controllers
         {
             public string? EnterpriseCode { get; set; }
             public List<string>? FileCodes { get; set; }
+        }
+
+        /// <summary>单条款小节探针请求</summary>
+        public class SectionProbeRequest
+        {
+            public string? FileCode { get; set; }
+            public string? EnterpriseCode { get; set; }
+            public string? StandardCode { get; set; }
+            /// <summary>条款号，如 4.2 / 8.5.1；允许带「e 4.2」前缀</summary>
+            public string? ClauseNo { get; set; }
         }
     }
 }

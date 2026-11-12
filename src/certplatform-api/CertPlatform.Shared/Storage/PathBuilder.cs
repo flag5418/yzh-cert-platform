@@ -195,6 +195,53 @@ public static class PathBuilder
 
     #endregion
 
+    #region 标准原文库（2026-11-10 V3 知识层）
+
+    /// <summary>
+    /// 标准原文库前缀 —— 上传的**国标原文**（PDF/DOCX）与其 Markdown 产物。
+    /// <para>与「标准目录库」(`standard-directory`) 的区别：后者是<b>机构 × 标准 × 阶段</b>
+    /// 的企业体系文件目录模板；本库只放<b>标准本身</b>（平台级，一条标准一份原文）。</para>
+    /// </summary>
+    public const string StandardSourcePrefix = "standard-source";
+
+    /// <summary>
+    /// 标准原文（原始上传文件）路径。
+    /// <para>格式：<c>/standard-source/{标准Code}/source/{原始文件名}</c>（覆盖语义，无归档）。</para>
+    /// </summary>
+    public static string StandardSource(string? standardCode, string? fileName)
+        => Join(
+            StandardSourcePrefix,
+            Identity(standardCode, "标准编码 StandardCode"),
+            "source",
+            FileName(fileName));
+
+    /// <summary>
+    /// 标准原文 Markdown 产物路径。
+    /// <para>格式：<c>/standard-source/{标准Code}/markdown/{原始文件名}.md</c>。</para>
+    /// <para>★ 文件名保留完整原名再追加 <c>.md</c> —— 与 <see cref="Product"/> 同规则，
+    /// 人工排查时可以直接由路径反推源文件。</para>
+    /// </summary>
+    public static string StandardSourceMarkdown(string? standardCode, string? fileName)
+        => Join(
+            StandardSourcePrefix,
+            Identity(standardCode, "标准编码 StandardCode"),
+            MarkdownSegment,
+            FileName((fileName ?? "") + ".md"));
+
+    /// <summary>
+    /// 标准条款 Markdown 产物路径（<b>派生视图</b>，由 <c>cert_iso_clause</c> 渲染）。
+    /// <para>格式：<c>/standard-source/{标准Code}/clauses/clauses.md</c>（覆盖语义）。</para>
+    /// <para>★ 与原始 Markdown 分目录：原始是事实源，本文件可随时重建，⛔ 不得人工编辑。</para>
+    /// </summary>
+    public static string StandardSourceClauseMarkdown(string? standardCode)
+        => Join(
+            StandardSourcePrefix,
+            Identity(standardCode, "标准编码 StandardCode"),
+            "clauses",
+            "clauses.md");
+
+    #endregion
+
     #region 企业资料库（覆盖 + 归档 + 版本）
 
     /// <summary>

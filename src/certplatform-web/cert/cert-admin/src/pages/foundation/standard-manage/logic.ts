@@ -55,6 +55,11 @@ export interface VersionRow {
   FamilyCode: string | null
   Sort?: number
   IsValid: number
+  /** 标准原文 Markdown（0 = 未上传） */
+  MarkdownChars?: number
+  MarkdownPath?: string
+  MarkdownSourceFile?: string
+  MarkdownUpdatedTime?: string
 }
 
 type PanelMode = 'family' | 'version'

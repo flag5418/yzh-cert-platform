@@ -21,8 +21,10 @@ import {
   getRuleDetail,
   getPrompt,
   savePrompt,
+  testDocExtractPrompt,
   type DocExtractRuleDto,
   type DocExtractPromptDto,
+  type DocExtractTestResult,
 } from '@share/api/workflow/doc-extract-rule'
 
 // ── 数据 ──
@@ -168,13 +170,19 @@ async function handleSave() {
   }
 }
 
-// ── 测试（Phase C 实现） ──
+// ── 试跑（上传文档 → 转 Markdown → 用当前正文跑一次，不落库） ──
 const testResult = ref<string>('')
 const testFile = ref<File | null>(null)
+const testLoading = ref(false)
+const testMeta = ref<DocExtractTestResult | null>(null)
+const testError = ref('')
 
 function onFileChange(e: Event) {
   const target = e.target as HTMLInputElement
   testFile.value = target.files?.[0] ?? null
+  testMeta.value = null
+  testResult.value = ''
+  testError.value = ''
 }
 
 async function runTest() {
@@ -182,8 +190,43 @@ async function runTest() {
     ElMessage.warning('请先上传测试文档')
     return
   }
-  ElMessage.info('测试功能待 Phase C 实现')
-  // TODO: Phase C —— 上传文档 → LLM → 显示 JSON
+  if (!detail.value) {
+    ElMessage.warning('请先选择标准')
+    return
+  }
+  if (!promptEditing.value.trim()) {
+    ElMessage.warning('提示词正文为空，请先填写')
+    return
+  }
+  testLoading.value = true
+  testError.value = ''
+  testMeta.value = null
+  testResult.value = ''
+  try {
+    const r = await testDocExtractPrompt({
+      file: testFile.value,
+      standardCode: detail.value.StandardCode,
+      template: promptEditing.value,
+    })
+    testMeta.value = r
+    if (!r.Success) testError.value = r.Message || '试跑失败'
+    if (!r.Output) {
+      testResult.value = ''
+    } else if (r.JsonValid) {
+      try {
+        testResult.value = JSON.stringify(JSON.parse(r.Output), null, 2)
+      } catch {
+        testResult.value = r.Output
+      }
+    } else {
+      testResult.value = r.Output
+    }
+  } catch (e: any) {
+    testError.value = `试跑失败：${e?.message ?? e}`
+    ElMessage.error(testError.value)
+  } finally {
+    testLoading.value = false
+  }
 }
 
 const hasPrompt = computed(() => (promptEditing.value ?? '').length > 0)
@@ -262,18 +305,31 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
 
           <!-- 测试面板 -->
           <section class="doc-extract-rule__section">
-            <div class="doc-extract-rule__section-title">规则测试</div>
+            <div class="doc-extract-rule__section-title">
+              <span class="doc-extract-rule__section-title-text">规则测试</span>
+              <span class="doc-extract-rule__test-hint">
+                用编辑器当前内容跑，不落库；文档转 Markdown 与线上同一条链路
+              </span>
+            </div>
             <div class="doc-extract-rule__test-bar">
               <input type="file" :accept="buildAcceptAttribute(['document', 'pdf'])" @change="onFileChange" />
-              <el-button type="primary" :disabled="!testFile" @click="runTest">
-                运行测试
+              <el-button type="primary" :loading="testLoading" :disabled="!testFile || testLoading" @click="runTest">
+                {{ testLoading ? '试跑中…' : '运行测试' }}
               </el-button>
+              <span v-if="testMeta" class="doc-extract-rule__test-meta">
+                {{ testMeta.Model }} · {{ testMeta.DurationMs }}ms ·
+                {{ testMeta.PromptTokens + testMeta.CompletionTokens }} tokens ·
+                条款 {{ testMeta.ClauseCount }} 条 ·
+                正文 {{ testMeta.MarkdownLength }} 字<template v-if="testMeta.Truncated">（已截断至 3 万字）</template>
+                <template v-if="!testMeta.JsonValid"> · 输出不是合法 JSON</template>
+              </span>
             </div>
+            <el-alert v-if="testError" type="error" :closable="false" show-icon class="doc-extract-rule__test-alert" :title="testError" />
             <div v-if="testResult" class="doc-extract-rule__test-result">
               <pre>{{ testResult }}</pre>
             </div>
-            <div v-else class="doc-extract-rule__test-tip">
-              上传测试文档后点击"运行测试"，LLM 将返回提取的 JSON 结构（不落库）
+            <div v-else-if="!testLoading" class="doc-extract-rule__test-tip">
+              上传测试文档后点击“运行测试”，将返回 profile / clauses / doubts 三段 JSON（不落库）
             </div>
           </section>
         </template>
@@ -436,6 +492,21 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
   font-size: var(--yzh-font-size-sm, 13px);
   color: var(--yzh-color-text-secondary, #909399);
   padding: var(--yzh-space-3, 12px);
+}
+
+.doc-extract-rule__test-hint {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #909399);
+  font-weight: 400;
+}
+
+.doc-extract-rule__test-meta {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #909399);
+}
+
+.doc-extract-rule__test-alert {
+  margin-bottom: var(--yzh-space-3, 12px);
 }
 
 .doc-extract-rule__empty {

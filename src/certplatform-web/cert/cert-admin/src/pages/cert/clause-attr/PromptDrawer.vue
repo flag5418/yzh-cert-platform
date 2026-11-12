@@ -141,24 +141,6 @@ watch(
     <div class="prompt-drawer__layout">
       <!-- 滚动区 -->
       <div v-loading="loading" class="prompt-drawer__body">
-      <!-- 顶部说明 -->
-      <ElAlert
-        type="info"
-        :closable="false"
-        show-icon
-        class="prompt-drawer__alert"
-      >
-        <template #title>
-          这条提示词对<b>全部标准、全部条款</b>生效。下次点「AI 预生成」时使用。
-        </template>
-        <template #default>
-          <div class="prompt-drawer__alert-body">
-属性池（当前 {{ prompt?.AttrCount ?? '?' }} 条启用）通过 <code>{{ ATTR_POOL_TOKEN }}</code>
-占位符<b>实时注入</b>
-          </div>
-        </template>
-      </ElAlert>
-
       <!-- 未落库提示 -->
       <ElAlert
         v-if="prompt && !prompt.Stored"

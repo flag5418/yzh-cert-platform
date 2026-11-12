@@ -1,10 +1,16 @@
 
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using CertPlatform.Admin.Services.StandardDirectory;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
+using YZH.Core.Stand.Models.Result;
 using YZH.Core.Stand.Interfaces;
 
 namespace CertPlatform.Admin.Controllers.Foundation;
@@ -44,11 +50,15 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 [Route("api/Admin/Foundation/[controller]")]
 public class ISOStandardController : YzhControllerBase<ISOStandard>
 {
+    private readonly StandardSourceService _source;
+
     public ISOStandardController(
         EntityService<ISOStandard> entityService,
-        IUserContext userContext)
+        IUserContext userContext,
+        StandardSourceService source)
         : base(entityService, userContext)
     {
+        _source = source;
     }
 
     // ========================================================
@@ -119,4 +129,117 @@ public class ISOStandardController : YzhControllerBase<ISOStandard>
 
         return (true, null);
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    // ★ 标准原文 → Markdown → 条款（V3 知识层，2026-11-10）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// <b>上传标准文件</b>（PDF / DOCX）→ 转 Markdown 落库 → 返回条款解析预览。
+    /// <para>不写条款：前端看到预览、确认后再调 <see cref="ApplyClauses"/>。</para>
+    /// </summary>
+    [HttpPost("upload-markdown")]
+    [RequestSizeLimit(200_000_000)]
+    public async Task<IActionResult> UploadMarkdown([FromForm] StandardSourceUploadRequest req)
+    {
+        if (req?.File == null || req.File.Length == 0)
+            return Ok(ApiResponse.Fail("请选择标准原文文件（PDF / DOCX）"));
+        if (string.IsNullOrWhiteSpace(req.StandardCode))
+            return Ok(ApiResponse.Fail("缺少标准编码"));
+
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            await req.File.CopyToAsync(ms);
+            bytes = ms.ToArray();
+        }
+
+        var r = await _source.UploadAsync(req.StandardCode, string.IsNullOrWhiteSpace(req.File.FileName) ? "standard.pdf" : req.File.FileName, bytes);
+        return r.Success
+            ? Ok(ApiResponse<object>.Ok(r.Data, r.Message))
+            : Ok(ApiResponse.Fail(r.Message));
+    }
+
+    /// <summary><b>只解析、不写库</b>：对已存 Markdown 的标准重新生成条款预览。</summary>
+    [HttpPost("preview-clauses")]
+    public async Task<IActionResult> PreviewClauses([FromBody] StandardSourceKeyRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req?.StandardCode))
+            return Ok(ApiResponse.Fail("缺少标准编码"));
+
+        var data = await _source.PreviewAsync(req.StandardCode);
+        if (data == null)
+            return Ok(ApiResponse.Fail("该标准还没有原文 Markdown，请先上传标准文件"));
+
+        return Ok(ApiResponse<object>.Ok(data, $"解析出 {data.ParsedCount} 条条款"));
+    }
+
+    /// <summary>
+    /// <b>写入条款</b>：默认只补缺失编号；<c>Overwrite=true</c> 时<b>先软删除该标准现有条款及属性，再按本次解析结果全量重建</b>。
+    /// <para>用于「上传错标准」或标准换版；旧条款/属性保留在库里可追溯，但不再参与查询。</para>
+    /// </summary>
+    [HttpPost("apply-clauses")]
+    public async Task<IActionResult> ApplyClauses([FromBody] StandardClauseApplyRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req?.StandardCode))
+            return Ok(ApiResponse.Fail("缺少标准编码"));
+
+        var r = await _source.ApplyAsync(req.StandardCode, req.Overwrite);
+        return r.Success
+            ? Ok(ApiResponse<object>.Ok(r, r.Message))
+            : Ok(ApiResponse.Fail(r.Message));
+    }
+
+    /// <summary>
+    /// <b>补建条款 Markdown</b>：只按现有条款表重渲染派生视图，不重新解析原文、不写条款。
+    /// <para>用于存量标准（已有条款但还没有 ClauseMarkdownPath）或生成失败后的重试。</para>
+    /// </summary>
+    [HttpPost("rebuild-clause-markdown")]
+    public async Task<IActionResult> RebuildClauseMarkdown([FromBody] StandardSourceKeyRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req?.StandardCode))
+            return Ok(ApiResponse.Fail("缺少标准编码"));
+
+        var r = await _source.RebuildClauseMarkdownAsync(req.StandardCode);
+        return r.Success
+            ? Ok(ApiResponse<object>.Ok(r, r.Message))
+            : Ok(ApiResponse.Fail(r.Message));
+    }
+
+    /// <summary><b>预览条款 Markdown</b>（只读，不重新生成）。</summary>
+    [HttpGet("clause-markdown")]
+    public async Task<IActionResult> ClauseMarkdown([FromQuery] string? standardCode)
+    {
+        if (string.IsNullOrWhiteSpace(standardCode))
+            return Ok(ApiResponse.Fail("缺少标准编码"));
+
+        var data = await _source.PreviewClauseMarkdownAsync(standardCode);
+        if (data == null)
+            return Ok(ApiResponse.Fail("该标准还没有条款 Markdown，请先执行「写入条款」或补建"));
+
+        return Ok(ApiResponse<object>.Ok(data, $"条款 Markdown 共 {data.Length} 字"));
+    }
+
+}
+
+/// <summary>上传标准原文入参（multipart）</summary>
+public sealed class StandardSourceUploadRequest
+{
+    public IFormFile? File { get; set; }
+    /// <summary>标准短码（iso9001）或 Code（GUID）</summary>
+    public string? StandardCode { get; set; }
+}
+
+/// <summary>按标准取预览入参</summary>
+public sealed class StandardSourceKeyRequest
+{
+    public string? StandardCode { get; set; }
+}
+
+/// <summary>写入条款入参</summary>
+public sealed class StandardClauseApplyRequest
+{
+    public string? StandardCode { get; set; }
+    /// <summary>true = 同时更新已存在编号的标题/正文（默认 false）</summary>
+    public bool Overwrite { get; set; }
 }

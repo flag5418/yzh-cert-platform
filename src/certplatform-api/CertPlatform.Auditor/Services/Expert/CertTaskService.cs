@@ -1891,6 +1891,17 @@ namespace CertPlatform.Auditor.Services.Expert
         /// 解析疑点分析 JSON（<c>[{point, detail}]</c> 或 <c>["..."]</c>）。
         /// <para>空 / 非法 JSON ⇒ 空列表（不抛异常：疑点解析失败不能把整个详情拖垮）。</para>
         /// </summary>
+        /// <summary>按多个候选键名（大小写变体）取字符串值；都不命中返回空串。</summary>
+        private static string GetJsonString(JsonElement obj, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String)
+                    return v.GetString() ?? "";
+            }
+            return "";
+        }
+
         private static List<CertDoubtDto> ParseDoubtList(string? json)
         {
             if (string.IsNullOrWhiteSpace(json) || IsEmptyJsonArray(json))
@@ -1913,10 +1924,11 @@ namespace CertPlatform.Auditor.Services.Expert
                     }
                     if (item.ValueKind != JsonValueKind.Object) continue;
 
-                    var point = item.TryGetProperty("point", out var p) && p.ValueKind == JsonValueKind.String
-                        ? p.GetString() ?? "" : "";
-                    var detail = item.TryGetProperty("detail", out var d) && d.ValueKind == JsonValueKind.String
-                        ? d.GetString() ?? "" : "";
+                    // ★ 2026-11-11：模型/落库实际写的是 PascalCase（"Point"/"Detail"），
+                    //   原来只找小写键 ⇒ 永远取不到 ⇒ 页面「疑点分析 0 条」且不报错。
+                    //   两种大小写都认，避免再被序列化口径差异静默吃掉。
+                    var point = GetJsonString(item, "point", "Point");
+                    var detail = GetJsonString(item, "detail", "Detail");
                     if (string.IsNullOrWhiteSpace(point) && !string.IsNullOrWhiteSpace(detail))
                         point = detail.Length > 40 ? detail[..40] : detail;
                     if (string.IsNullOrWhiteSpace(point) && string.IsNullOrWhiteSpace(detail)) continue;

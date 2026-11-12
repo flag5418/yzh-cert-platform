@@ -303,6 +303,9 @@ namespace CertPlatform.Auditor.Services.Ent
                                 string.IsNullOrWhiteSpace(md.Message)
                                     ? "Markdown 由视觉模型 OCR 提取（ai_vision_config）"
                                     : md.Message);
+                            // ★ 第②步：Markdown 就绪后立即生成「简介 + 目录」，只做路由、不阻塞主链
+                            await EnterpriseDocProfileBuilder.BuildAndSaveAsync(
+                                db, row, System.Text.Encoding.UTF8.GetString(md.Content), _logger);
                             _logger.LogInformation("[企业文档转换] 视觉 OCR 回退成功: {Code} → {Path}",
                                 row.Code, md.TargetPath);
                             return true;
@@ -330,6 +333,9 @@ namespace CertPlatform.Auditor.Services.Ent
                 row.MarkdownPath = r.TargetPath;
                 row.ConvertDate = DateTime.Now;
                 await SetMdStatusAsync(db, row, St.Completed, r.Message);
+                // ★ 第②步：Markdown 就绪后立即生成「简介 + 目录」，只做路由、不阻塞主链
+                await EnterpriseDocProfileBuilder.BuildAndSaveAsync(
+                    db, row, System.Text.Encoding.UTF8.GetString(r.Content), _logger);
                 return true;
             }
             catch (Exception ex)

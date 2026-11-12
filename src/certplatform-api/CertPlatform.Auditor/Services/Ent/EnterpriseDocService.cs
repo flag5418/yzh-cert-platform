@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Auditor.Entities.Expert;
 using CertPlatform.Shared.Domain.Organization;
+using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Storage;
@@ -59,6 +60,7 @@ namespace CertPlatform.Auditor.Services.Ent
         private readonly WorkspaceContextService _workspace;
         private readonly IUserContext _user;
         private readonly ILogger<EnterpriseDocService> _logger;
+        private readonly LlmInvokeService _llm;
 
         /// <summary>核心资源检索唯一入口（铁律 L5）—— 企业/标准取数只走这里。</summary>
         private readonly ICoreResourceQuery _core;
@@ -76,7 +78,8 @@ namespace CertPlatform.Auditor.Services.Ent
             WorkspaceContextService workspace,
             IUserContext user,
             ILogger<EnterpriseDocService> logger,
-            ICoreResourceQuery core)
+            ICoreResourceQuery core,
+            LlmInvokeService llm)
         {
             _db = db;
             _storage = storage;
@@ -85,6 +88,7 @@ namespace CertPlatform.Auditor.Services.Ent
             _user = user;
             _logger = logger;
             _core = core;
+            _llm = llm;
         }
 
         // ========================================================
@@ -1240,6 +1244,414 @@ namespace CertPlatform.Auditor.Services.Ent
         // ========================================================
 
         /// <summary>取已生成的 Markdown <b>文本</b>（页面内核对用；下载走 file-markdown）</summary>
+        /// <summary>
+        /// 取文档简介 + 目录（只读）。未生成时返回 <c>Success=false</c>，页面据此提示「重建」。
+        /// </summary>
+        public async Task<object> GetDocProfileAsync(string fileCode, string enterpriseCode)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err };
+
+            var row = (await _db.GetOneIgnoreValidAsync<EnterpriseDoc>(x => x.Code == fileCode)).Data;
+            if (row == null || !string.Equals(row.EnterpriseCode, enterpriseCode, StringComparison.Ordinal))
+                return new { Success = false, Message = "记录不存在或不属于当前工作区" };
+
+            if (string.IsNullOrWhiteSpace(row.DocProfileJson))
+                return new
+                {
+                    Success = false,
+                    Message = string.IsNullOrWhiteSpace(row.MarkdownPath)
+                        ? "Markdown 尚未生成，无法建立目录"
+                        : "文档简介尚未生成，请点「重建文档简介」",
+                    DocProfileUpdatedTime = row.DocProfileUpdatedTime,
+                };
+
+            return new
+            {
+                Success = true,
+                FileCode = fileCode,
+                FileName = row.FileName,
+                MarkdownStatus = row.MarkdownStatus,
+                MarkdownPath = row.MarkdownPath,
+                DocProfileUpdatedTime = row.DocProfileUpdatedTime,
+                IsStale = EnterpriseDocProfileBuilder.IsStale(row.DocProfileJson, row.Sha256, row.VersionNumber),
+                ProfileJson = row.DocProfileJson,
+            };
+        }
+
+        /// <summary>
+        /// 重建文档简介 + 目录（读已生成的 Markdown 重新解析，不重新转换）。
+        /// </summary>
+        public async Task<object> RebuildDocProfileAsync(string fileCode, string enterpriseCode)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err };
+
+            var row = (await _db.GetOneIgnoreValidAsync<EnterpriseDoc>(x => x.Code == fileCode)).Data;
+            if (row == null || !string.Equals(row.EnterpriseCode, enterpriseCode, StringComparison.Ordinal))
+                return new { Success = false, Message = "记录不存在或不属于当前工作区" };
+            if (string.IsNullOrWhiteSpace(row.MarkdownPath))
+                return new { Success = false, Message = "Markdown 尚未生成，请先完成转换" };
+
+            try
+            {
+                var (stream, _) = await _storage.DownloadAsync(row.MarkdownPath.TrimStart('/'));
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var markdown = Encoding.UTF8.GetString(ms.ToArray());
+
+                var ok = await EnterpriseDocProfileBuilder.BuildAndSaveAsync(_db, row, markdown, _logger);
+                if (!ok) return new { Success = false, Message = "文档简介生成失败，请查看后端日志" };
+
+                var tocCount = CountToc(row.DocProfileJson);
+                return new
+                {
+                    Success = true,
+                    Message = $"文档简介已重建（目录 {tocCount} 节）",
+                    FileCode = fileCode,
+                    DocProfileUpdatedTime = row.DocProfileUpdatedTime,
+                    TocCount = tocCount,
+                    ProfileJson = row.DocProfileJson,
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[企业文档] 重建文档简介失败: {Code}", fileCode);
+                return new { Success = false, Message = $"重建失败：{ex.Message}" };
+            }
+        }
+
+        private static int CountToc(string? profileJson)
+        {
+            if (string.IsNullOrWhiteSpace(profileJson)) return 0;
+            try
+            {
+                using var doc = JsonDocument.Parse(profileJson);
+                return doc.RootElement.TryGetProperty("Toc", out var toc)
+                       && toc.ValueKind == JsonValueKind.Array
+                    ? toc.GetArrayLength()
+                    : 0;
+            }
+            catch (JsonException)
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// 构建 / 重建「标准条款 → 手册小节」索引（L1），保存到 <c>SectionMapJson</c>。
+        /// </summary>
+        public async Task<object> RebuildSectionMapAsync(string fileCode, string enterpriseCode, string standardCode)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err };
+            if (string.IsNullOrWhiteSpace(standardCode))
+                return new { Success = false, Message = "请选择标准" };
+
+            var row = (await _db.GetOneIgnoreValidAsync<EnterpriseDoc>(x => x.Code == fileCode)).Data;
+            if (row == null || !string.Equals(row.EnterpriseCode, enterpriseCode, StringComparison.Ordinal))
+                return new { Success = false, Message = "记录不存在或不属于当前工作区" };
+            if (string.IsNullOrWhiteSpace(row.MarkdownPath))
+                return new { Success = false, Message = "Markdown 尚未生成，请先完成转换" };
+
+            var clauses = await _core.GetClausesAsync(standardCode);
+            if (clauses.Count == 0)
+                return new { Success = false, Message = "该标准还没有条款，请先生成标准条款" };
+
+            try
+            {
+                var (stream, _) = await _storage.DownloadAsync(row.MarkdownPath.TrimStart('/'));
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var markdown = Encoding.UTF8.GetString(ms.ToArray());
+
+                var standard = await _core.GetStandardByCodeAsync(standardCode);
+                row.SectionMapJson = EnterpriseDocProfileBuilder.BuildSectionIndex(
+                    markdown, clauses, standardCode, standard?.StandardName ?? standardCode);
+                row.SectionMapUpdatedTime = DateTime.Now;
+                row.UpdateTime = DateTime.Now;
+                await _db.UpdateAsync(row,
+                    nameof(EnterpriseDoc.SectionMapJson),
+                    nameof(EnterpriseDoc.SectionMapUpdatedTime),
+                    nameof(EnterpriseDoc.UpdateTime));
+
+                var (exact, folded, missing, total) = CountCoverage(row.SectionMapJson);
+                return new
+                {
+                    Success = true,
+                    Message = $"章节索引已生成：精确 {exact} / folded {folded} / 缺失 {missing} / 共 {total}",
+                    FileCode = fileCode,
+                    StandardCode = standardCode,
+                    ExactCount = exact,
+                    FoldedCount = folded,
+                    MissingCount = missing,
+                    TotalClauses = total,
+                    SectionMapUpdatedTime = row.SectionMapUpdatedTime,
+                    SectionMapJson = row.SectionMapJson,
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[企业文档] 生成章节索引失败: {Code}", fileCode);
+                return new { Success = false, Message = $"生成失败：{ex.Message}" };
+            }
+        }
+
+        /// <summary>读取已保存的章节索引（只读）。</summary>
+        public async Task<object> GetSectionMapAsync(string fileCode, string enterpriseCode)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err };
+
+            var row = (await _db.GetOneIgnoreValidAsync<EnterpriseDoc>(x => x.Code == fileCode)).Data;
+            if (row == null || !string.Equals(row.EnterpriseCode, enterpriseCode, StringComparison.Ordinal))
+                return new { Success = false, Message = "记录不存在或不属于当前工作区" };
+            if (string.IsNullOrWhiteSpace(row.SectionMapJson))
+                return new { Success = false, Message = "章节索引尚未生成" };
+
+            var (exact, folded, missing, total) = CountCoverage(row.SectionMapJson);
+            return new
+            {
+                Success = true,
+                FileCode = fileCode,
+                SectionMapUpdatedTime = row.SectionMapUpdatedTime,
+                ExactCount = exact,
+                FoldedCount = folded,
+                MissingCount = missing,
+                TotalClauses = total,
+                SectionMapJson = row.SectionMapJson,
+            };
+        }
+
+        private static (int Exact, int Folded, int Missing, int Total) CountCoverage(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return (0, 0, 0, 0);
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                return (
+                    root.TryGetProperty("ExactCount", out var e) ? e.GetInt32() : 0,
+                    root.TryGetProperty("FoldedCount", out var f) ? f.GetInt32() : 0,
+                    root.TryGetProperty("MissingCount", out var m) ? m.GetInt32() : 0,
+                    root.TryGetProperty("TotalClauses", out var t) ? t.GetInt32() : 0);
+            }
+            catch (JsonException) { return (0, 0, 0, 0); }
+        }
+
+        /// <summary>
+        /// ★ 单条款「小节探针」：只把该条款对应的手册小节送给模型，验证按检查项取小节的可行性。
+        /// <para>⛔ 不写提取产物、不改文档状态，只用于 `prompt/test` 与后续 analyze-item 的形态验证。</para>
+        /// </summary>
+        public async Task<object> ProbeSectionAsync(
+            string fileCode, string enterpriseCode, string standardCode, string clauseNo)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err };
+            if (string.IsNullOrWhiteSpace(standardCode) || string.IsNullOrWhiteSpace(clauseNo))
+                return new { Success = false, Message = "请选择标准并填写条款号" };
+
+            var row = (await _db.GetOneIgnoreValidAsync<EnterpriseDoc>(x => x.Code == fileCode)).Data;
+            if (row == null || !string.Equals(row.EnterpriseCode, enterpriseCode, StringComparison.Ordinal))
+                return new { Success = false, Message = "记录不存在或不属于当前工作区" };
+            if (string.IsNullOrWhiteSpace(row.MarkdownPath))
+                return new { Success = false, Message = "Markdown 尚未生成，请先完成转换" };
+
+            var clauses = await _core.GetClausesAsync(standardCode);
+            if (clauses.Count == 0)
+                return new { Success = false, Message = "该标准还没有条款，请先生成标准条款" };
+
+            var no = NormalizeClauseNo(clauseNo);
+            var clause = clauses.FirstOrDefault(x => NormalizeClauseNo(x.ClauseNumber) == no);
+            if (clause == null)
+                return new { Success = false, Message = $"标准中找不到条款 {no}" };
+
+            // 没有索引就先建（只读探针不要求页面先点按钮）
+            if (string.IsNullOrWhiteSpace(row.SectionMapJson))
+            {
+                var standard0 = await _core.GetStandardByCodeAsync(standardCode);
+                row.SectionMapJson = EnterpriseDocProfileBuilder.BuildSectionIndex(
+                    await DownloadMarkdownAsync(row), clauses, standardCode,
+                    standard0?.StandardName ?? standardCode);
+                row.SectionMapUpdatedTime = DateTime.Now;
+                await _db.UpdateAsync(row,
+                    nameof(EnterpriseDoc.SectionMapJson),
+                    nameof(EnterpriseDoc.SectionMapUpdatedTime));
+            }
+
+            var (sectionStart, sectionEnd, sectionTitle, sectionPath, sectionMode) =
+                ReadSectionRange(row.SectionMapJson!, no);
+            if (sectionStart < 0 || sectionEnd <= sectionStart)
+                return new { Success = false, Message = $"条款 {no} 在手册中没有可定位的小节" };
+
+            var markdown = await DownloadMarkdownAsync(row);
+            if (sectionEnd > markdown.Length) sectionEnd = markdown.Length;
+            var sectionText = markdown.Substring(sectionStart, sectionEnd - sectionStart);
+            const int MaxSectionChars = 6000;
+            var truncated = sectionText.Length > MaxSectionChars;
+            if (truncated) sectionText = sectionText.Substring(0, MaxSectionChars);
+
+            var settings = await AiConnSettings.ReadAsync(_db, CancellationToken.None);
+            if (!settings.IsUsable)
+                return new { Success = false, Message = "AI 参数未配置：请先填写 ai_api_key 与 ai_base_url" };
+
+            var standard = await _core.GetStandardByCodeAsync(standardCode);
+            var prompt = BuildSectionProbePrompt(
+                standard?.StandardName ?? standardCode, clause, sectionTitle, sectionPath, sectionText);
+
+            var resp = await _llm.CompleteAsync(new LlmInvokeRequest
+            {
+                BaseUrl = settings.BaseUrl,
+                ApiKey = settings.ApiKey,
+                Model = settings.Model,
+                Temperature = 0.1f,
+                MaxTokens = 2000,
+                Prompt = prompt,
+                ForceJson = true,
+                TimeoutSeconds = 120,
+            });
+
+            if (!resp.Success)
+                return new { Success = false, Message = resp.Message, DurationMs = resp.DurationMs };
+
+            var anchors = new List<string>();
+            var anchorVerified = new List<object>();
+            using (resp.Json)
+            {
+                if (resp.Json != null && resp.Json.RootElement.TryGetProperty("Anchors", out var arr)
+                    && arr.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var a in arr.EnumerateArray())
+                    {
+                        var v = a.GetString();
+                        if (string.IsNullOrWhiteSpace(v)) continue;
+                        anchors.Add(v);
+                        anchorVerified.Add(new
+                        {
+                            Anchor = v,
+                            Found = NormalizeAnchorText(sectionText)
+                                .Contains(NormalizeAnchorText(v), StringComparison.Ordinal),
+                        });
+                    }
+                }
+            }
+
+            return new
+            {
+                Success = true,
+                Message = "小节探针完成",
+                FileCode = fileCode,
+                StandardCode = standardCode,
+                ClauseNo = no,
+                ClauseTitle = clause.Title,
+                CoverageMode = sectionMode,
+                SectionTitle = sectionTitle,
+                SectionPath = sectionPath,
+                SectionCharStart = sectionStart,
+                SectionCharEnd = sectionEnd,
+                SectionChars = sectionEnd - sectionStart,
+                SectionTruncated = truncated,
+                PromptChars = prompt.Length,
+                DurationMs = resp.DurationMs,
+                PromptTokens = resp.PromptTokens,
+                CompletionTokens = resp.CompletionTokens,
+                JsonValid = resp.Json != null,
+                Anchors = anchors,
+                AnchorVerified = anchorVerified,
+                Output = resp.Content,
+            };
+        }
+
+        private async Task<string> DownloadMarkdownAsync(EnterpriseDoc row)
+        {
+            var (stream, _) = await _storage.DownloadAsync(row.MarkdownPath!.TrimStart('/'));
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            return Encoding.UTF8.GetString(ms.ToArray());
+        }
+
+        private static string NormalizeClauseNo(string? value)
+        {
+            var s = (value ?? string.Empty).Trim();
+            if (s.StartsWith("e ", StringComparison.OrdinalIgnoreCase)) s = s.Substring(2).Trim();
+            s = s.TrimEnd('、', '：', ':');
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"\.0$", "");
+            return s;
+        }
+
+        private static (int Start, int End, string Title, string Path, string Mode) ReadSectionRange(
+            string sectionMapJson, string clauseNo)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(sectionMapJson);
+                if (!doc.RootElement.TryGetProperty("Sections", out var sections)
+                    || sections.ValueKind != JsonValueKind.Array)
+                    return (-1, -1, "", "", "missing");
+
+                foreach (var s in sections.EnumerateArray())
+                {
+                    var no = s.TryGetProperty("ClauseNo", out var n) ? n.GetString() : null;
+                    if (NormalizeClauseNo(no) != clauseNo) continue;
+                    var start = s.TryGetProperty("CharStart", out var st) ? st.GetInt32() : -1;
+                    var end = s.TryGetProperty("CharEnd", out var en) ? en.GetInt32() : -1;
+                    var title = s.TryGetProperty("HeadingTitle", out var t) ? t.GetString() : "";
+                    var path = s.TryGetProperty("HeadingPath", out var p) ? p.GetString() : "";
+                    var mode = s.TryGetProperty("CoverageMode", out var m) ? m.GetString() : "missing";
+                    return (start, end, title ?? "", path ?? "", mode ?? "missing");
+                }
+            }
+            catch (JsonException) { /* 落到 missing */ }
+            return (-1, -1, "", "", "missing");
+        }
+
+        /// <summary>Anchor 核验：去空白、统一破折号/引号，避免模型把换行写成空格导致「找不到」。</summary>
+        private static string NormalizeAnchorText(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            var s = System.Text.RegularExpressions.Regex.Replace(value, @"\s+", "");
+            return s.Replace('—', '-').Replace('－', '-').Replace('–', '-')
+                    .Replace('“', '"').Replace('”', '"')
+                    .Replace('‘', '\'').Replace('’', '\'');
+        }
+
+        private static string BuildSectionProbePrompt(
+            string standardName, ISOClause clause, string sectionTitle, string sectionPath, string sectionText)
+        {
+            var req = (clause.Description ?? "").Trim();
+            if (req.Length > 1200) req = req.Substring(0, 1200) + "…";
+
+            return $$"""
+你是 ISO 体系审核员。请只依据下面给出的【企业文档小节】判断条款覆盖情况，不要使用标准原文之外的知识编造企业做法。
+
+【标准】{{standardName}}
+【条款】{{clause.ClauseNumber}} {{clause.Title}}
+【条款要求（仅供理解，禁止抄进 Excerpt/Anchors）】
+{{req}}
+
+【企业文档小节】{{sectionPath}}
+【原文开始】
+{{sectionText}}
+【原文结束】
+
+【输出 JSON（只输出 JSON，不要解释）】
+{
+  "ClauseNumber": "{{clause.ClauseNumber}}",
+  "Verdict": "covered|partial|none|na",
+  "Anchors": ["逐字连续、≤30字、必须原样出现在上面小节中的句子片段，最多3条"],
+  "Excerpt": "≤300字；优先直接摘原文，不要抄标准条款",
+  "Reason": "为什么这样判断，≤200字",
+  "Doubts": ["需要现场核实或资料补充的点，可为空数组"]
+}
+
+【判定规则】
+1. Verdict=covered：本节有明确的企业做法/承诺，能对应条款要求；partial：只覆盖部分要求；none：本节没写；na：本节明确不适用。
+2. Anchors 必须逐字来自【企业文档小节】，不得改写、不得用标准原文；找不到就留空数组。
+3. Excerpt 不得出现“组织应/公司应”这类标准句式；必须是企业原文或原文摘录。
+4. 本节为空、只有标题、或只有目录，Verdict=none。
+""";
+        }
+
         public async Task<object> GetMarkdownAsync(string fileCode, string enterpriseCode)
         {
             var err = await OwnershipErrorAsync(enterpriseCode);

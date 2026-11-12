@@ -328,6 +328,43 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
     return this.selectedNode?.Children?.length ?? 0
   }
 
+  /** 已采用的属性（界面**只显示这些**；未采用的收进「添加属性」下拉） */
+  get adoptedAttrs(): AttrSheetRow[] {
+    return this.sheet.value.filter((r) => r.Configured)
+  }
+
+  /** 还能添加的属性（池里尚未采用的） */
+  get addableAttrs(): AttrSheetRow[] {
+    return this.sheet.value.filter((r) => !r.Configured)
+  }
+
+  /**
+   * 从「添加属性」下拉选一条 ⇒ 追加到已采用清单。
+   * 池内 9 条全部 fixed（2026-11-10 收敛），故不需要再让用户选值来源。
+   */
+  addAttr(attrCode: string): void {
+    const row = this.sheet.value.find((r) => r.AttrCode === attrCode)
+    if (!row) return
+    row.Configured = true
+    row.ValueSource = 'fixed'
+    row.IsValid = 1
+  }
+
+  /**
+   * 移除一条属性。
+   * <ul>
+   *   <li>已落库行 ⇒ 标 `Configured=false`，保存时删除（可撤销修改救回）</li>
+   *   <li>本次新加、还没落库的行 ⇒ 直接从清单摘掉（不产生删除请求）</li>
+   * </ul>
+   */
+  removeAttr(row: AttrSheetRow): void {
+    if (!row.Raw) {
+      this.sheet.value = this.sheet.value.filter((r) => r.AttrCode !== row.AttrCode)
+      return
+    }
+    row.Configured = false
+  }
+
   /** 属性清单里已配置的条数 */
   get configuredCount(): number {
     return this.sheet.value.filter((r) => r.Configured).length
@@ -561,8 +598,14 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
   genRunning = ref(false)
   /** 目标标准短码（默认 = 当前选中条款所属标准） */
   genStandardCode = ref('')
-  /** 单次条数（服务端硬上限 50） */
-  genCount = ref(5)
+  /** 服务端单次硬上限（前端自动按此切片分批，⛔ 不再让用户自己数） */
+  readonly genChunkSize = 50
+  /** 本轮目标条款总数 */
+  genTotal = ref(0)
+  /** 已返回的条款数 */
+  genDone = ref(0)
+  /** 用户点了「停止」（当前批跑完即停，已写入的保留） */
+  genStopRequested = ref(false)
   /** 是否覆盖已配属性 */
   genOverwrite = ref(false)
   /** 最近一次结果（逐条列表，失败原因直接展示给用户） */
@@ -577,8 +620,89 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
   genItems = ref<ClauseAttrGenerateItem[]>([])
   /** 已跑秒数（服务端串行，单条数秒 ⇒ 必须让用户看见"还在动"） */
   genElapsed = ref(0)
-  /** 指定条款 Code 集合（undefined = 全部） */
-  genClauseCodes = ref<string[] | undefined>(undefined)
+  /**
+   * 弹窗内的「条款多选」结果（空数组 = 不限定，按条数从该标准第一条起跑）。
+   *
+   * <p>★ 为什么要有：审核员常按"这一批条款"重跑（如 4–6 章），而不是整标准重跑；
+   * 全标准 60 条一轮要几分钟，且会把已满意的条款一起覆盖。</p>
+   */
+  genSelectedCodes = ref<string[]>([])
+
+  /** 当前标准下的叶子条款选项（弹窗多选用；标签 = `8.4.1 总则`） */
+  get genClauseOptions(): Array<{ label: string; value: string }> {
+    const std = this.genStandardCode.value
+    const root = this.treeData.find((n) => n.Code === std)
+    if (!root) return []
+    const out: Array<{ label: string; value: string }> = []
+    const walk = (nodes: TreeNode[] | undefined): void => {
+      for (const n of nodes ?? []) {
+        if (n.NodeType === 'clause') {
+          const number = String(n.Extra?.ClauseNumber ?? '')
+          const title = String(n.Extra?.Title ?? '')
+          out.push({ label: title ? `${number} ${title}` : (number || n.Name), value: n.Code })
+        } else {
+          walk(n.Children)
+        }
+      }
+    }
+    walk(root.Children)
+    return out
+  }
+
+  /** 切换标准 ⇒ 清空已选条款（条款 Code 是跨标准的，留着必然是错选） */
+  onGenStandardChange(): void {
+    this.genSelectedCodes.value = []
+  }
+
+  /** 全选当前标准下的叶子条款（一次跑全标准；前端按 50 条自动分批） */
+  selectAllGenClauses(): void {
+    this.genSelectedCodes.value = this.genClauseOptions.map((o) => o.value)
+  }
+
+  /** 弹窗内「只跑当前条款」快捷（等价于在工作台点该条款再生成） */
+  pickCurrentClause(): void {
+    const node = this.selectedNode
+    if (!node || node.NodeType !== 'clause') {
+      ElMessage.warning('请先在左侧选择一个具体条款')
+      return
+    }
+    this.genSelectedCodes.value = [node.Code]
+  }
+
+  /** 停止批量执行（当前批跑完即停，已写入的属性保留） */
+  stopGenerate(): void {
+    this.genStopRequested.value = true
+    ElMessage.info('将在当前批结束后停止')
+  }
+
+  /** 清空选择（回到"按条数"模式） */
+  clearGenClauses(): void {
+    this.genSelectedCodes.value = []
+  }
+
+  /** 结果行「查看」：定位到该条款的工作台（不改动已生成的值，只切换视图） */
+  jumpToClause(item: ClauseAttrGenerateItem): void {
+    const found = this.findClauseNode(item.ClauseCode)
+    if (!found) {
+      ElMessage.warning('条款树里没找到该条款，请刷新树后再试')
+      return
+    }
+    void this.onNodeClick(found)
+    ElMessage.success(`已定位到 ${item.ClauseNumber}，可直接核对并编辑`)
+  }
+
+  /** 在树里按 Code 递归找节点（只找叶子条款） */
+  private findClauseNode(code: string): TreeNode | null {
+    const walk = (nodes: TreeNode[] | undefined): TreeNode | null => {
+      for (const n of nodes ?? []) {
+        if (n.Code === code && n.NodeType === 'clause') return n
+        const hit = walk(n.Children)
+        if (hit) return hit
+      }
+      return null
+    }
+    return walk(this.treeData)
+  }
 
   /** 可选标准（树根节点 Code 就是标准短码，Name 带叶子数） */
   get standardOptions(): Array<{ label: string; value: string }> {
@@ -589,14 +713,17 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
   openGenerateDialog(): void {
     const std = this.standardCode || this.treeData[0]?.Code || ''
     this.genStandardCode.value = std
-    this.genClauseCodes.value = undefined
+    this.genSelectedCodes.value = []
     this.genResult.value = null
     this.genItems.value = []
     this.genElapsed.value = 0
+    this.genTotal.value = 0
+    this.genDone.value = 0
+    this.genStopRequested.value = false
     this.genVisible.value = true
   }
 
-  /** 只重跑当前条款 */
+  /** 只重跑当前条款（打开弹窗并对准这条；等价于弹窗内点「只跑当前条款」） */
   openGenerateForCurrent(): void {
     const node = this.selectedNode
     if (!node || node.NodeType !== 'clause') {
@@ -604,8 +731,10 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
       return
     }
     this.openGenerateDialog()
-    this.genStandardCode.value = this.standardCode || this.treeData[0]?.Code || ''
-    this.genClauseCodes.value = [node.Code]
+    this.genStandardCode.value = node.Extra?.StandardCode ? String(node.Extra.StandardCode) : (this.standardCode || this.treeData[0]?.Code || '')
+    // 用可见的多选来表达"只跑这一条"，⛔ 不再另留一条隐形的 genClauseCodes：
+    //   隐身状态 + 界面显示 5 条 ⇒ 用户看到"条数 5"却只跑 1 条，必然困惑
+    this.genSelectedCodes.value = [node.Code]
   }
 
   /** 计时器句柄（`⛔` 不用 ref：它不参与渲染，只作清理用） */
@@ -626,29 +755,67 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
     }
   }
 
-  /** 执行预生成（服务端逐条串行，期间锁按钮并显示已跑秒数） */
+  /**
+   * 执行预生成：**前端按 50 条自动分批**，一批跑完接着跑下一批。
+   *
+   * <p>★ 为什么不把上限放开到服务端：一次 HTTP 请求跑 60 条要好几钟，
+   * 网关/浏览器超时 + 中途失败全丢。切片后每批 50 条独立返回，进度可见、可停止、
+   * 已写入的不会被后面的失败回滚。</p>
+   */
   async runGenerate(): Promise<void> {
     if (!this.genStandardCode.value) {
       ElMessage.warning('请先选择标准')
       return
     }
     if (this.genRunning.value) return
-    const count = Math.max(1, Math.min(Number(this.genCount.value) || 5, 50))
+
+    const all = this.genClauseOptions.map((o) => o.value)
+    const picked = this.genSelectedCodes.value
+    // 勾了条款 ⇒ 只跑这些；没勾 ⇒ 跑该标准全部叶子条款（50 条一批自动分批）
+    const targets = picked.length > 0 ? [...picked] : all
+    if (targets.length === 0) {
+      ElMessage.warning('该标准下没有可执行的条款')
+      return
+    }
+
     this.genRunning.value = true
+    this.genStopRequested.value = false
     this.genResult.value = null
     this.genItems.value = []
+    this.genTotal.value = targets.length
+    this.genDone.value = 0
     this.startGenTimer()
+
+    let written = 0
+    let skipped = 0
+    let failed = 0
+    const items: ClauseAttrGenerateItem[] = []
     try {
-      const result = await generateClauseAttrs({
-        StandardCode: this.genStandardCode.value,
-        MaxCount: count,
-        Overwrite: this.genOverwrite.value,
-        ClauseCodes: this.genClauseCodes.value,
-      })
-      this.genResult.value = result
-      this.genItems.value = result.Items ?? []
-      if (result.Failed > 0) ElMessage.warning(result.Message)
-      else ElMessage.success(result.Message)
+      for (let i = 0; i < targets.length; i += this.genChunkSize) {
+        if (this.genStopRequested.value) break
+        const chunk = targets.slice(i, i + this.genChunkSize)
+        const result = await generateClauseAttrs({
+          StandardCode: this.genStandardCode.value,
+          MaxCount: chunk.length,
+          Overwrite: this.genOverwrite.value,
+          ClauseCodes: chunk,
+        })
+        written += result.Written
+        skipped += result.Skipped
+        failed += result.Failed
+        items.push(...(result.Items ?? []))
+        this.genDone.value = Math.min(i + chunk.length, targets.length)
+        this.genItems.value = [...items]
+        this.genResult.value = result
+      }
+      const summary = `完成：${this.genDone.value} 条条款，写入 ${written} 个属性，跳过 ${skipped} 个，失败 ${failed} 条`
+      if (this.genStopRequested.value) {
+        ElMessage.info(`已停止（已写入 ${written} 个属性，保留）`)
+      } else if (failed > 0) {
+        ElMessage.warning(summary)
+      } else {
+        ElMessage.success(summary)
+      }
       await this.loadSheet()
     } catch (e) {
       this.reportError(e, 'AI 预生成失败')
@@ -662,9 +829,10 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
   get genColumns() {
     return [
       { prop: 'ClauseNumber', label: '条款号', width: 110 },
-      { prop: 'Title', label: '标题', minWidth: 180, showOverflowTooltip: true },
+      { prop: 'Title', label: '标题', minWidth: 160, showOverflowTooltip: true },
       { label: '结果', width: 90, slotKey: 'status', slot: true },
-      { prop: 'Message', label: '说明', minWidth: 160, showOverflowTooltip: true },
+      { prop: 'Message', label: '说明', minWidth: 140, showOverflowTooltip: true },
+      { label: '查看', width: 80, slotKey: 'ops', slot: true },
     ]
   }
 

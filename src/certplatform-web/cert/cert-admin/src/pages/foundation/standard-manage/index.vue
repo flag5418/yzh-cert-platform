@@ -192,6 +192,7 @@ onMounted(async () => {
                 { prop: 'StandardName', label: '标准名称', minWidth: 200, showOverflowTooltip: true },
                 { prop: 'VersionYear', label: '年份', width: 80, sortable: true, align: 'center' },
                 { prop: 'Category', label: '体系', width: 120, slot: true },
+                { prop: 'MarkdownChars', label: '原文 Markdown', width: 130, align: 'center', slot: true },
                 { prop: 'IsValid', label: '状态', width: 90, align: 'center', slot: true },
               ]"
               :data-loader="logic.dataLoader.bind(logic)"
@@ -215,6 +216,16 @@ onMounted(async () => {
               </template>
               <template #column-Category="{ row }">
                 {{ categoryLabel(row.Category) }}
+              </template>
+              <template #column-MarkdownChars="{ row }">
+                <el-tooltip
+                  v-if="row.MarkdownChars"
+                  :content="`${row.MarkdownPath || ''}${row.MarkdownSourceFile ? '  ← ' + row.MarkdownSourceFile : ''}`"
+                  placement="top"
+                >
+                  <span class="md-badge">已存 {{ row.MarkdownChars }} 字</span>
+                </el-tooltip>
+                <span v-else class="md-badge md-badge--empty">未上传</span>
               </template>
               <template #column-IsValid="{ row }">
                 <YzhStatusBadge
@@ -416,5 +427,15 @@ onMounted(async () => {
 .sm-page__table-area :deep(.el-table) {
   flex: 1;
   overflow: auto;
+}
+
+.md-badge {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-primary, #409eff);
+  cursor: default;
+}
+
+.md-badge--empty {
+  color: var(--yzh-color-text-secondary, #909399);
 }
 </style>

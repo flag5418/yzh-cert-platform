@@ -72,7 +72,14 @@ public static class CertTaskAggregator
             }
             else if (pending > 0)
             {
-                task.Status = "running";
+                // ★ 2026-11-11：只有真正投过队列的任务才允许进入 running。
+                //   手工单项分析（analyze-item）也会调本方法刷新计数，但它从不入队；
+                //   旧实现无脑写 running ⇒ 页面锁（按 Status=running 判定）在第一次
+                //   手工分析后永久锁死，「自动分析」按钮变灰点不动。
+                if (!string.IsNullOrWhiteSpace(task.QueueCode))
+                {
+                    task.Status = "running";
+                }
                 task.Message = Truncate(
                     $"进行中：已完成 {done} / 失败 {failed} / 跳过 {skipped}，共 {total}", 500);
             }
