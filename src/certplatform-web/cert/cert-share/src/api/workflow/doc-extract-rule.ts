@@ -159,21 +159,34 @@ export interface DocExtractTestResult {
   Truncated: boolean
   MarkdownHead: string
   FileName: string
+  /** Section / Whole */
+  Mode?: string
+  AllClauseCount?: number
+  SkippedByDocCheckMode?: number
+  SectionTotal?: number
+  SectionSucceeded?: number
+  SectionFailed?: number
+  SectionTruncated?: number
+  MissingSections?: number
+  Note?: string | null
 }
 
 /**
  * 上传文档 → 转 Markdown → 用「页面当前正文」跑一次（不落库）。
  * @param params.template 页面上未保存的编辑内容（边改边试）
+ * @param params.mode Section=章节索引+小节并发（默认）；Whole=整篇一次大 JSON（仅对比）
  */
 export async function testDocExtractPrompt(params: {
   file: File
   standardCode: string
   template: string
+  mode?: 'Section' | 'Whole'
 }): Promise<DocExtractTestResult> {
   const fd = new FormData()
   fd.append('File', params.file, params.file.name)
   fd.append('StandardCode', params.standardCode)
   fd.append('Template', params.template)
+  fd.append('Mode', params.mode ?? 'Section')
 
   const res = await yzhApi.upload<ApiResponse<DocExtractTestResult>>(`${DOC_EXTRACT_RULE_BASE}/prompt/test`, fd)
   if (!res) throw new Error('试跑失败：无响应')

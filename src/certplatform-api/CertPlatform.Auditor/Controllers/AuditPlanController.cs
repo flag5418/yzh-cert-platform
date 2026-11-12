@@ -11,6 +11,8 @@ using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Entities.Expert;
+using CertPlatform.Shared.Domain.Clauses;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Auditor.Controllers;
 
@@ -30,18 +32,21 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
     private readonly EntityService<CertAuditPlanDetail> _detailSvc;
     private readonly EntityService<CertAuditMember> _memberSvc;
     private readonly EntityService<CertTask> _taskSvc;
+    private readonly ICoreResourceQuery _core;
 
     public AuditPlanController(
         EntityService<CertAuditPlan> entityService,
         IUserContext userContext,
         EntityService<CertAuditPlanDetail> detailSvc,
         EntityService<CertAuditMember> memberSvc,
-        EntityService<CertTask> taskSvc)
+        EntityService<CertTask> taskSvc,
+        ICoreResourceQuery core)
         : base(entityService, userContext)
     {
         _detailSvc = detailSvc;
         _memberSvc = memberSvc;
         _taskSvc = taskSvc;
+        _core = core;
     }
 
     /// <summary>缺 EntityConfig 时直接抛错（开发期暴露）</summary>
@@ -159,6 +164,11 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
         public string Departments { get; set; } = string.Empty;
         public string DeptNames { get; set; } = string.Empty;
         public string ClauseNumbers { get; set; } = string.Empty;
+        /// <summary>
+        /// 条款业务键 JSON（可选）：<c>[{"StandardNo":"iso9001","ClauseNumber":"4.1"}]</c>。
+        /// <para>前端不传时由后端按 <see cref="Clauses"/> 的 Code 反查条款号补全。</para>
+        /// </summary>
+        public string? ClauseRefsJson { get; set; }
         /// <summary>负责审核员（专家组成员 Code，可空 = 后续在准备阶段分配）</summary>
         public string? OwnerCode { get; set; }
         public string? Remark { get; set; }
@@ -258,13 +268,15 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             {
                 var d = dto.Details[i];
                 var ownerCode = d.OwnerCode?.Trim();
+                var resolved = await ResolveDetailRefsAsync(d);
                 var detail = new CertAuditPlanDetail
                 {
                     PlanCode = plan.Code!,
-                    Clauses = d.Clauses,
+                    Clauses = resolved.Clauses,
                     Departments = d.Departments,
                     DeptNames = d.DeptNames,
                     ClauseNumbers = d.ClauseNumbers,
+                    ClauseRefsJson = resolved.RefsJson,
                     OwnerCode = string.IsNullOrEmpty(ownerCode) ? null : ownerCode,
                     OwnerName = string.IsNullOrEmpty(ownerCode) ? null : ownerNames[ownerCode],
                     Sort = i,
@@ -287,6 +299,105 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
         }
     }
 
+    /// <summary>
+    /// 过滤无正文父级标题：只保留 <c>cert_iso_clause.Description</c> 非空的条款。
+    /// <para>4（组织环境）只有标题没有正文，真实审核报告不会把它列成条款。</para>
+    /// </summary>
+    private async Task<List<ClauseRef>> FilterContentRefsAsync(List<ClauseRef> refs)
+    {
+        var valid = new List<ClauseRef>();
+        foreach (var group in refs.GroupBy(r => r.StandardNo, StringComparer.Ordinal))
+        {
+            var clauses = await _core.GetClausesByNumbersAsync(
+                group.Key, group.Select(r => r.ClauseNumber));
+            var contentNos = clauses
+                .Where(c => !string.IsNullOrWhiteSpace(c.Description))
+                .Select(c => ClauseRefs.NormalizeNumber(c.ClauseNumber))
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var r in group)
+            {
+                if (contentNos.Contains(ClauseRefs.NormalizeNumber(r.ClauseNumber)))
+                    valid.Add(r);
+            }
+        }
+        return valid;
+    }
+
+    /// <summary>
+    /// 解析计划明细的条款业务键：
+    /// ① 前端已传 <c>ClauseRefsJson</c> ⇒ 直接归一；
+    /// ② 否则按 <c>Clauses</c> 的旧 Code 反查条款号与标准短码；
+    /// ③ 再按业务键解析当前有效 Code 回填 <c>Clauses</c>（ClauseCode 只作缓存）。
+    /// </summary>
+    private async Task<(string? Clauses, string? RefsJson)> ResolveDetailRefsAsync(PlanDetailDto d)
+    {
+        var refs = ClauseRefs.Parse(d.ClauseRefsJson);
+        if (refs.Count == 0)
+        {
+            var codes = SplitCodes(d.Clauses);
+            if (codes.Count > 0)
+            {
+                var clauses = await _core.GetClausesByCodesAsync(codes);
+                var clauseByCode = clauses
+                    .Where(c => !string.IsNullOrEmpty(c.Code))
+                    .ToDictionary(c => c.Code!, c => c, StringComparer.Ordinal);
+                var standards = await _core.GetValidStandardsAsync();
+                var stdByGuid = standards
+                    .Where(s => !string.IsNullOrEmpty(s.Code))
+                    .ToDictionary(s => s.Code!, s => s, StringComparer.Ordinal);
+
+                foreach (var code in codes)
+                {
+                    var clause = clauseByCode.GetValueOrDefault(code);
+                    if (clause == null) continue;
+                    var std = stdByGuid.GetValueOrDefault(clause.StandardCode ?? string.Empty);
+                    if (std == null) continue;
+                    refs.Add(new ClauseRef
+                    {
+                        StandardNo = std.StandardCode,
+                        ClauseNumber = ClauseRefs.NormalizeNumber(clause.ClauseNumber)
+                    });
+                }
+                refs = ClauseRefs.Clean(refs);
+            }
+        }
+
+        if (refs.Count == 0) return (d.Clauses, null);
+
+        // 按业务键重新解析当前 Code：标准重建后旧 Code 失效，这一步是把计划拉回可用状态。
+        // ★ 只保留有正文的条款：父级标题（如 4 组织环境）Description 为空，不能进计划/检查，
+        //   否则真实审核报告里的条款会被章标题污染。
+        var currentByKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var group in refs.GroupBy(r => r.StandardNo, StringComparer.Ordinal))
+        {
+            var clauses = await _core.GetClausesByNumbersAsync(
+                group.Key, group.Select(r => r.ClauseNumber));
+            foreach (var c in clauses)
+            {
+                if (string.IsNullOrEmpty(c.Code)) continue;
+                if (string.IsNullOrWhiteSpace(c.Description)) continue;
+                currentByKey[group.Key + "|" + ClauseRefs.NormalizeNumber(c.ClauseNumber)] = c.Code;
+            }
+        }
+
+        var currentCodes = new List<string>();
+        var validRefs = new List<ClauseRef>();
+        foreach (var r in refs)
+        {
+            var code = currentByKey.GetValueOrDefault(r.StandardNo + "|" + ClauseRefs.NormalizeNumber(r.ClauseNumber));
+            if (!string.IsNullOrEmpty(code) && !currentCodes.Contains(code))
+            {
+                currentCodes.Add(code);
+                validRefs.Add(r);
+            }
+        }
+
+        if (validRefs.Count == 0)
+            return (null, null);
+
+        return (string.Join(",", currentCodes), ClauseRefs.ToJson(validRefs));
+    }
+
     /// <summary>查询某计划的明细列表</summary>
     [HttpGet("details")]
     public async Task<ActionResult<ApiResponse<object?>>> GetDetails([FromQuery] string planCode)
@@ -298,7 +409,21 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
         if (!list.Success)
             return Ok(ApiResponse<object?>.Fail(list.Error ?? "查询明细失败"));
 
-        return Ok(ApiResponse<object?>.Ok(list.Data ?? new List<CertAuditPlanDetail>()));
+        // 读侧兜底：历史计划明细可能把 4 这类无正文父级标题也存进了 refs。
+        // 计划页按 refs 找回条款 Code，若不清理，界面仍会显示“4.1 + 4”。
+        var details = list.Data ?? new List<CertAuditPlanDetail>();
+        foreach (var d in details)
+        {
+            var refs = ClauseRefs.Parse(d.ClauseRefsJson);
+            if (refs.Count == 0) continue;
+            var valid = await FilterContentRefsAsync(refs);
+            if (valid.Count == 0) continue;
+            d.ClauseRefsJson = ClauseRefs.ToJson(valid);
+            d.ClauseNumbers = string.Join(",", valid.Select(r =>
+                ClauseRefs.NormalizeNumber(r.ClauseNumber)));
+        }
+
+        return Ok(ApiResponse<object?>.Ok(details));
     }
 
     /// <summary>关闭计划请求</summary>

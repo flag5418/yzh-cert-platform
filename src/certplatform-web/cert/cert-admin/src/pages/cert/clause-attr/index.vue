@@ -288,7 +288,7 @@ const treeReady = computed(() => logic.treeData.length > 0)
       @saved="logic.onPromptSaved()"
     />
 
-    <!-- AI 预生成（P4）：服务端逐条串行跑，必须让用户看见进度 -->
+    <!-- AI 预生成（P4）：服务端 5 条并发跑，必须让用户看见进度 -->
     <YzhDialog
       v-model="logic.genVisible.value"
       title="AI 预生成条款属性"
@@ -374,7 +374,7 @@ const treeReady = computed(() => logic.treeData.length > 0)
         </div>
 
         <p class="clause-gen__tip">
-          服务端逐条串行调用 AI（单条约数秒）；超过 50 条会自动分批连续跑，可随时停止，已写入的保留。
+          服务端按 5 条并发调用 AI（整波约 3 秒）；前端按 5 条一批连续跑，可随时停止，已写入的保留。
           生成结果只写属性值，不改属性池。
           <span v-if="logic.genSelectedCodes.value.length > 0">
             本次只跑指定的 {{ logic.genSelectedCodes.value.length }} 条条款。

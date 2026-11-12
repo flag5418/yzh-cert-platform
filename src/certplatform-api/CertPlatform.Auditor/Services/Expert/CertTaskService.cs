@@ -5,7 +5,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Auditor.Entities.Expert;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -244,6 +246,8 @@ namespace CertPlatform.Auditor.Services.Expert
         public string? LockedBy { get; set; }
         public DateTime? LockedAt { get; set; }
         public List<CertEvidenceRow> RawEvidences { get; set; } = new();
+        /// <summary>审核发现：从企业原始文档中提取到的事实（只读，供审核员判断“文档里写了什么”）</summary>
+        public List<CertEvidenceRow> AuditFindings { get; set; } = new();
         public List<CertEvidenceRow> CheckEvidences { get; set; } = new();
         public string? DoubtsJson { get; set; }
         /// <summary>自动分析状态：none（未分析）/ done（已完成）/ failed（失败）</summary>
@@ -1535,6 +1539,14 @@ namespace CertPlatform.Auditor.Services.Expert
                     deptList, membersByDept, taskList, itemList);
             }).ToList();
 
+            // 列表「条款」列同样只显示有正文的条款：计划明细里可能残留 4 这类父级标题。
+            foreach (var row in rows)
+            {
+                var detail = details.FirstOrDefault(d => d.Code == row.DetailCode);
+                if (detail != null)
+                    row.ClauseNumbers = await ResolveContentClauseNumbersAsync(detail);
+            }
+
             // ★ 页面锁的「唯一真相」出口（F12）：前端不自己维护「我点了开始所以只读」，
             //   而是每轮轮询都问后端「现在有没有 running 任务」—— 刷新页面 / 换个人打开
             //   / 队列在后台跑完，前端都能立刻跟上（本地状态做不到）。
@@ -1713,6 +1725,25 @@ namespace CertPlatform.Auditor.Services.Expert
                 e.CapturedIn == "onsite" || e.CapturedIn == "manual")
                 .OrderBy(e => e.Sort).ToList();
 
+            // ★ 审核发现：企业文档提取结果投影为只读事实行。
+            //   ⛔ 不再混进「证据」—— 证据只允许现场/审核员补录。
+            var auditFindings = await LoadDocSliceRowsAsync(detail);
+            var rawRows = rawEvis.Select(e => new CertEvidenceRow
+            {
+                Code = e.Code,
+                CheckItemCode = e.CheckItemCode,
+                ClauseCode = e.ClauseCode,
+                CapturedIn = e.CapturedIn,
+                EvidenceKind = e.EvidenceKind,
+                SourceName = e.SourceName,
+                SourceCode = e.SourceCode,
+                Anchor = e.Anchor,
+                Snippet = e.Snippet,
+                LlmSummary = e.LlmSummary,
+                Status = e.Status,
+                Sort = e.Sort
+            }).ToList();
+
             // 最新结论：★ 两个分支各取各的当前分析（§4.5.7）
             var currentAnalyses = (await _db.GetListAsync<CertCheckAnalysis>(a =>
                 a.CheckItemCode == detail.Code && a.IsCurrent == 1 && !a.IsDeleted)).Data
@@ -1818,7 +1849,7 @@ namespace CertPlatform.Auditor.Services.Expert
                 ResultCode = r?.Code,
                 AnalysisCode = r?.AnalysisCode,
                 StageKind = r?.StageKind,
-                ClauseNumbers = detail.ClauseNumbers,
+                ClauseNumbers = await ResolveContentClauseNumbersAsync(detail),
                 DeptNames = detail.DeptNames,
                 DeptContactsJson = deptContacts.Count > 0 ? JsonSerializer.Serialize(deptContacts) : null,
                 PrepState = rPrep?.PrepState,
@@ -1829,7 +1860,7 @@ namespace CertPlatform.Auditor.Services.Expert
                 AiConclusion = CertVerdictMapper.ToConclusion(rOnsite?.AiConclusion),
                 AiSeverity = CertVerdictMapper.NormalizeSeverity(rOnsite?.AiSeverity),
                 Severity = CertVerdictMapper.ToSeverity(rOnsite?.Conclusion, rOnsite?.Severity),
-                Reason = r?.Reason,
+                Reason = BuildAuditEvidence(currentResults, r?.StageKind, r?.Reason),
                 ConclusionBy = rOnsite?.ConclusionBy,
                 ConclusionByName = rOnsite?.ConclusionBy == null
                     ? null
@@ -1842,20 +1873,8 @@ namespace CertPlatform.Auditor.Services.Expert
                 IsLocked = lk != null,
                 LockedBy = lk?.LockedBy,
                 LockedAt = lk?.LockedAt,
-                RawEvidences = rawEvis.Select(e => new CertEvidenceRow
-                {
-                    Code = e.Code,
-                    CheckItemCode = e.CheckItemCode,
-                    CapturedIn = e.CapturedIn,
-                    EvidenceKind = e.EvidenceKind,
-                    SourceName = e.SourceName,
-                    SourceCode = e.SourceCode,
-                    Anchor = e.Anchor,
-                    Snippet = e.Snippet,
-                    LlmSummary = e.LlmSummary,
-                    Status = e.Status,
-                    Sort = e.Sort
-                }).ToList(),
+                RawEvidences = rawRows,
+                AuditFindings = auditFindings,
                 CheckEvidences = checkEvis.Select(e => new CertEvidenceRow
                 {
                     Code = e.Code,
@@ -1873,6 +1892,182 @@ namespace CertPlatform.Auditor.Services.Expert
                 DoubtsJson = doubts.Count > 0 ? JsonSerializer.Serialize(doubts) : null,
                 Message = $"详情已加载"
             });
+        }
+
+        /// <summary>
+        /// 逐条款审核证据聚合：详情只有一个「审核证据」块，多个条款时按条款分节展示，
+        /// ⛔ 不能只取第一条结果（父条款往往只有一句总结，会把真正的审核证据盖掉）。
+        /// </summary>
+        private static string? BuildAuditEvidence(
+            List<CertCheckResult> results, string? stageKind, string? fallback)
+        {
+            if (string.IsNullOrWhiteSpace(stageKind))
+                return fallback;
+
+            var rows = results
+                .Where(r => r.StageKind == stageKind && !string.IsNullOrWhiteSpace(r.Reason))
+                .OrderBy(r => r.ClauseNumber ?? "")
+                .ToList();
+            if (rows.Count == 0)
+                return fallback;
+
+            // 父条款（如 4）只是章标题：同一批结果里有 4.1 时，父条款的一句话总结
+            // 不应当成审核证据展示，否则会把真正的条款证据盖掉。
+            var leafRows = rows
+                .Where(r => !rows.Any(o => IsChildClause(o.ClauseNumber, r.ClauseNumber)))
+                .ToList();
+            if (leafRows.Count > 0)
+                rows = leafRows;
+
+            if (rows.Count == 1)
+                return rows[0].Reason;
+
+            return string.Join("\n\n", rows.Select(r =>
+                $"**条款 {r.ClauseNumber ?? r.ClauseCode}**\n{r.Reason!.Trim()}"));
+        }
+
+        /// <summary>child 是否为 parent 的下级条款（4.1 是 4 的下级；4.10 不是 4.1 的下级）。</summary>
+        private static bool IsChildClause(string? child, string? parent)
+        {
+            if (string.IsNullOrWhiteSpace(child) || string.IsNullOrWhiteSpace(parent))
+                return false;
+            return child.Trim().StartsWith(parent.Trim() + ".", StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// 审核发现：按计划标准 + 条款号，从企业文档提取结果投影只读事实行。
+        /// <para>⛔ 它回答「文档里写了什么」，不是审核证据；不写库、不进 cert_evidence。</para>
+        /// </summary>
+        private async Task<List<CertEvidenceRow>> LoadDocSliceRowsAsync(CertAuditPlanDetail detail)
+        {
+            var rows = new List<CertEvidenceRow>();
+            try
+            {
+                var plan = (await _db.GetOneAsync<CertAuditPlan>(p =>
+                    p.Code == detail.PlanCode && !p.IsDeleted)).Data;
+                if (plan == null || string.IsNullOrWhiteSpace(plan.Standards)) return rows;
+
+                var clauseNos = ResolveDetailClauseNumbers(detail);
+                if (clauseNos.Count == 0) return rows;
+
+                var stdCodes = plan.Standards.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim()).Where(s => s.Length > 0).Distinct().ToList();
+                var extractions = (await _db.GetListAsync<DocumentExtraction>(x =>
+                    stdCodes.Contains(x.StandardCode)
+                    && x.EnterpriseCode == plan.EnterpriseCode
+                    && !x.IsDeleted && x.IsValid == 1)).Data ?? new List<DocumentExtraction>();
+
+                foreach (var ext in extractions.OrderBy(x => x.Sort))
+                    rows.AddRange(ProjectDocSlices(ext, detail.Code, clauseNos, rows.Count));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "投影企业文档切片失败，detail={DetailCode}", detail.Code);
+            }
+            return rows;
+        }
+
+        /// <summary>
+        /// 详情展示的条款号：只保留有正文的条款，剔除只有标题的父级（如 4）。
+        /// <para>计划明细里的 <c>ClauseNumbers</c> 是历史展示串，不能直接当权威。</para>
+        /// </summary>
+        private async Task<string> ResolveContentClauseNumbersAsync(CertAuditPlanDetail detail)
+        {
+            var refs = ClauseRefs.Parse(detail.ClauseRefsJson);
+            if (refs.Count == 0)
+                return detail.ClauseNumbers ?? "";
+
+            var keep = new List<string>();
+            foreach (var group in refs.GroupBy(r => r.StandardNo, StringComparer.Ordinal))
+            {
+                var clauses = await _core.GetClausesByNumbersAsync(
+                    group.Key, group.Select(r => r.ClauseNumber));
+                var byNo = clauses
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Description))
+                    .Select(c => ClauseRefs.NormalizeNumber(c.ClauseNumber))
+                    .ToHashSet(StringComparer.Ordinal);
+                foreach (var r in group)
+                {
+                    var no = ClauseRefs.NormalizeNumber(r.ClauseNumber);
+                    if (byNo.Contains(no) && !keep.Contains(no)) keep.Add(no);
+                }
+            }
+
+            return keep.Count > 0 ? string.Join(",", keep) : (detail.ClauseNumbers ?? "");
+        }
+
+        /// <summary>检查项条款号：优先业务键 ClauseRefsJson，旧数据退回展示串 ClauseNumbers。</summary>
+        private static HashSet<string> ResolveDetailClauseNumbers(CertAuditPlanDetail detail)
+        {
+            var refs = ClauseRefs.Parse(detail.ClauseRefsJson);
+            var list = refs.Count > 0
+                ? refs.Select(r => ClauseRefs.NormalizeNumber(r.ClauseNumber))
+                : (detail.ClauseNumbers ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(ClauseRefs.NormalizeNumber);
+            return list.Where(x => x.Length > 0).ToHashSet(StringComparer.Ordinal);
+        }
+
+        /// <summary>把一份文档提取结果里属于这些条款的摘录投影成证据行。</summary>
+        private static List<CertEvidenceRow> ProjectDocSlices(
+            DocumentExtraction ext, string checkItemCode, HashSet<string> clauseNos, int sortBase)
+        {
+            var rows = new List<CertEvidenceRow>();
+            if (string.IsNullOrWhiteSpace(ext.ContentJson)) return rows;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(ext.ContentJson);
+                var root = doc.RootElement;
+                var fileName = root.TryGetProperty("DocMeta", out var meta)
+                                && meta.ValueKind == JsonValueKind.Object
+                    ? GetJsonString(meta, "FileName")
+                    : string.Empty;
+                if (!root.TryGetProperty("Clauses", out var clauses)
+                    || clauses.ValueKind != JsonValueKind.Array) return rows;
+
+                foreach (var c in clauses.EnumerateArray())
+                {
+                    var no = ClauseRefs.NormalizeNumber(GetJsonString(c, "ClauseNumber"));
+                    if (!clauseNos.Contains(no)) continue;
+                    if (!c.TryGetProperty("Excerpts", out var ex)
+                        || ex.ValueKind != JsonValueKind.Array) continue;
+
+                    foreach (var item in ex.EnumerateArray())
+                    {
+                        if (item.ValueKind != JsonValueKind.String) continue;
+                        var text = item.GetString();
+                        if (string.IsNullOrWhiteSpace(text)) continue;
+
+                        rows.Add(new CertEvidenceRow
+                        {
+                            Code = $"doc-{ext.Code}-{rows.Count}",
+                            CheckItemCode = checkItemCode,
+                            ClauseCode = null,
+                            CapturedIn = "doc",
+                            EvidenceKind = "doc_slice",
+                            SourceCode = ext.FileCode,
+                            SourceName = string.IsNullOrWhiteSpace(fileName) ? ext.FileCode : fileName,
+                            Anchor = no,
+                            Snippet = text.Length > 3000 ? text.Substring(0, 3000) : text,
+                            LlmSummary = text.Length > 3000 ? text.Substring(0, 3000) : text,
+                            Status = "collected",
+                            Sort = sortBase + rows.Count
+                        });
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // 旧提取结果损坏按空处理，不阻断详情
+            }
+            return rows;
+        }
+
+        private static string GetJsonString(JsonElement element, string name)
+        {
+            if (!element.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.String)
+                return string.Empty;
+            return p.GetString() ?? string.Empty;
         }
 
         /// <summary>

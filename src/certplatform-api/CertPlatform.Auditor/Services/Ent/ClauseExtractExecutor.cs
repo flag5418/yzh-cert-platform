@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Storage;
@@ -438,16 +439,25 @@ namespace CertPlatform.Auditor.Services.Ent
                     $"标准【{standard.StandardCode}】的条款还没配 DocCheckMode，本次按全部叶子条款提取（建议先跑条款属性预生成）");
             }
 
-            var modeByClause = new Dictionary<string, string>(StringComparer.Ordinal);
+            // ★ 业务键：同一标准内按条款号匹配 DocCheckMode；ClauseCode 只作旧数据兜底。
+            var modeByNumber = new Dictionary<string, string>(StringComparer.Ordinal);
+            var modeByCode = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var a in attrs)
             {
-                if (string.IsNullOrEmpty(a.ClauseCode)) continue;
-                modeByClause[a.ClauseCode] = (a.AttrValue ?? string.Empty).Trim().ToLowerInvariant();
+                var mode = (a.AttrValue ?? string.Empty).Trim().ToLowerInvariant();
+                var no = ClauseRefs.NormalizeNumber(a.ClauseNumber);
+                if (no.Length > 0) modeByNumber[no] = mode;
+                if (!string.IsNullOrEmpty(a.ClauseCode)) modeByCode[a.ClauseCode] = mode;
             }
 
             // 未配 DocCheckMode 的条款按「要查」处理（保守：宁可多查，不静默漏条款）
             var kept = leaves.Where(c =>
-                !modeByClause.TryGetValue(c.Code ?? string.Empty, out var mode) || mode != "none").ToList();
+            {
+                var no = ClauseRefs.NormalizeNumber(c.ClauseNumber);
+                var mode = modeByNumber.GetValueOrDefault(no)
+                           ?? modeByCode.GetValueOrDefault(c.Code ?? string.Empty);
+                return mode == null || mode != "none";
+            }).ToList();
 
             return (Order(kept), null);
         }
@@ -460,6 +470,27 @@ namespace CertPlatform.Auditor.Services.Ent
         // ========================================================
         // 模型输出 → ExtractedClause
         // ========================================================
+
+        /// <summary>
+        /// 模型输出的条款号 → 标准清单里的规范条款号。
+        /// <para><b>规则</b>：先 <see cref="ClauseRefs.NormalizeNumber"/> 抽纯编号；精确命中优先；
+        /// 未命中时逐级去掉最后一段，回退到最近的长父级（如手册把 4.1 写成 4.1.1 ⇒ 归到 4.1）。
+        /// ⛔ 不允许把完全不相干的编号猜成某个条款。</para>
+        /// </summary>
+        private static string ResolveAllowedNumber(string number, HashSet<string> allowed)
+        {
+            if (number.Length == 0) return string.Empty;
+            if (allowed.Contains(number)) return number;
+
+            var candidate = number;
+            while (true)
+            {
+                var dot = candidate.LastIndexOf('.');
+                if (dot <= 0) return string.Empty;
+                candidate = candidate[..dot];
+                if (allowed.Contains(candidate)) return candidate;
+            }
+        }
 
         /// <summary>
         /// 读 <c>{ clauses: [...] }</c>。<b>编号不在清单内的一律丢弃</b>（⛔ 模型自造编号会污染下游
@@ -489,12 +520,13 @@ namespace CertPlatform.Auditor.Services.Ent
             {
                 if (item.ValueKind != JsonValueKind.Object) { dropped++; continue; }
 
-                var num = Str(item, "ClauseNumber").Trim();
-                if (num.Length == 0 || !allowed.Contains(num)) { dropped++; continue; }
+                var num = ClauseRefs.NormalizeNumber(Str(item, "ClauseNumber"));
+                var canonical = ResolveAllowedNumber(num, allowed);
+                if (canonical.Length == 0) { dropped++; continue; }
 
                 var c = new ExtractedClause
                 {
-                    ClauseNumber = num,
+                    ClauseNumber = canonical,
                     Title = Str(item, "Title").Trim(),
                     Anchor = Str(item, "Anchor").Trim(),
                     Confidence = Num(item, "Confidence"),

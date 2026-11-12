@@ -43,6 +43,8 @@ export interface ClauseAttrRow {
   Code: string
   StandardCode: string
   ClauseCode: string
+  /** 条款编号（业务键；标准重建后 Code 会变，编号不变） */
+  ClauseNumber?: string | null
   AttrCode: string
   AttrValue?: string | null
   ValueSource?: 'fixed' | 'reference' | string
@@ -95,6 +97,7 @@ export async function getClauseAttrCounts(): Promise<Record<string, number>> {
  */
 export async function listClauseAttrs(params: {
   ClauseCode: string
+  ClauseNumber?: string
   StandardCode: string
 }): Promise<ClauseAttrRow[]> {
   const res = await yzhApi.post<
@@ -106,7 +109,10 @@ export async function listClauseAttrs(params: {
     SortField: 'Sort',
     SortOrder: 'asc',
     Filters: [
-      { Field: 'ClauseCode', Operator: 'eq', Value: params.ClauseCode },
+      // ★ 业务键优先：标准短码 + 条款号；标准重建后 ClauseCode 会变，条款号不变。
+      ...(params.ClauseNumber
+        ? [{ Field: 'ClauseNumber', Operator: 'eq', Value: params.ClauseNumber }]
+        : [{ Field: 'ClauseCode', Operator: 'eq', Value: params.ClauseCode }]),
       { Field: 'StandardCode', Operator: 'eq', Value: params.StandardCode },
     ],
   })

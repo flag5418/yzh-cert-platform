@@ -41,6 +41,13 @@ namespace CertPlatform.Auditor.Entities.Expert
         [StringLength(1000)]
         public string? ClauseNumbers { get; set; }
 
+        /// <summary>
+        /// ★ 条款业务键 JSON：<c>[{"StandardNo":"iso9001","ClauseNumber":"4.1"}]</c>。
+        /// <para><b>权威关联键</b>：标准条款重建后 <see cref="Clauses"/> 的 Code 会失效，
+        /// 检查 / 准备按本字段重新解析当前条款；<see cref="ClauseNumbers"/> 只作展示。</para>
+        /// </summary>
+        public string? ClauseRefsJson { get; set; }
+
         /// <summary>排序号（计划内顺序）</summary>
         public int Sort { get; set; }
 

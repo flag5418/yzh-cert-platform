@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.DocExtraction;
 using YZH.Core.DataBase.Interfaces;
 
 namespace CertPlatform.Auditor.Services.Ent;
@@ -327,151 +328,9 @@ public static class EnterpriseDocProfileBuilder
     public static string BuildSectionIndex(
         string markdown, IReadOnlyList<ISOClause> clauses,
         string standardCode, string standardName)
-    {
-        var text = markdown ?? string.Empty;
-        var headings = ParseHeadings(text);
-
-        // 每个标题：条款号 + 祖先路径
-        var infos = new List<HeadingInfo>();
-        var stack = new SortedDictionary<int, string>();
-        foreach (var h in headings)
-        {
-            var clauseNo = ExtractClauseNo(h.Title);
-
-            // 章节号顶层变化 ⇒ 清空祖先栈（手册 9.1 前面没有 9 标题，
-            // 否则 HeadingPath 会错挂到上一章 8.4 下）
-            if (clauseNo != null && stack.Count > 0)
-            {
-                var top = clauseNo.Split('.')[0];
-                var parentTop = ExtractClauseNo(stack.First().Value)?.Split('.')[0];
-                if (!string.IsNullOrEmpty(parentTop) && parentTop != top)
-                    stack.Clear();
-            }
-
-            var keysToRemove = stack.Keys.Where(k => k >= h.Level).ToList();
-            foreach (var k in keysToRemove) stack.Remove(k);
-            stack[h.Level] = h.Title;
-            infos.Add(new HeadingInfo
-            {
-                Heading = h,
-                ClauseNo = clauseNo,
-                HeadingPath = string.Join(" / ", stack.Values),
-            });
-        }
-
-        var exactByNo = new Dictionary<string, HeadingInfo>();
-        foreach (var info in infos.Where(x => !string.IsNullOrWhiteSpace(x.ClauseNo)))
-            exactByNo.TryAdd(info.ClauseNo!, info);
-
-        var sections = new List<SectionItem>();
-
-        foreach (var clause in clauses.OrderBy(x => x.Sort).ThenBy(x => x.ClauseNumber))
-        {
-            var no = NormalizeClauseNumber(clause.ClauseNumber);
-            HeadingInfo? hit = null;
-            var mode = "missing";
-            int? virtualEnd = null;
-            var virtualChildren = new List<string>();
-
-            if (exactByNo.TryGetValue(no, out var exact))
-            {
-                hit = exact;
-                mode = "exact";
-            }
-            else
-            {
-                // folded：找最长的祖先标题（4.4.1 没标题 ⇒ 4.4）
-                hit = infos
-                    .Where(x => !string.IsNullOrWhiteSpace(x.ClauseNo))
-                    .Where(x => no.StartsWith(x.ClauseNo + ".", StringComparison.Ordinal))
-                    .OrderByDescending(x => x.ClauseNo!.Length)
-                    .FirstOrDefault();
-                if (hit != null) mode = "folded";
-
-                // 父条款本身没有标题、但子条款有（如标准 9 绩效评价 ⇒ 手册只有 9.1/9.2/9.3）
-                // ⇒ 建一个跨子节的虚拟小节，别把父条款判成 missing
-                if (hit == null)
-                {
-                    var children = infos
-                        .Where(x => !string.IsNullOrWhiteSpace(x.ClauseNo))
-                        .Where(x => x.ClauseNo.StartsWith(no + ".", StringComparison.Ordinal))
-                        .OrderBy(x => x.Heading.CharStart)
-                        .ToList();
-                    if (children.Count > 0)
-                    {
-                        hit = children[0];
-                        mode = "folded";
-                        virtualEnd = children
-                            .Select(x => FindSectionEnd(text, headings, x.Heading))
-                            .Max();
-                        virtualChildren = children.Select(x => x.ClauseNo!).ToList();
-                    }
-                }
-            }
-
-            var section = new SectionItem
-            {
-                ClauseNo = no,
-                ClauseCode = clause.Code ?? string.Empty,
-                ClauseTitle = clause.Title ?? string.Empty,
-                CoverageMode = mode,
-                ChildrenCovered = new List<string>(),
-            };
-
-            if (hit != null)
-            {
-                var h = hit.Heading;
-                var end = virtualEnd ?? FindSectionEnd(text, headings, h);
-                var lineEnd = FindLineEnd(text.Substring(h.CharStart));
-                var bodyStart = h.CharStart + lineEnd;
-                var body = bodyStart < end ? text.Substring(bodyStart, end - bodyStart) : string.Empty;
-
-                section.HeadingTitle = virtualChildren.Count > 0
-                    ? $"{h.Title}（合并 {virtualChildren.Count} 节）"
-                    : h.Title;
-                section.HeadingPath = hit.HeadingPath;
-                section.Level = h.Level;
-                section.CharStart = h.CharStart;
-                section.CharEnd = end;
-                section.TextLength = end - h.CharStart;
-                section.BodyHead = Truncate(CleanText(body), 300);
-                section.IsNa = body.Length > 0 && NaRx.IsMatch(body);
-                section.ChildrenCovered.AddRange(virtualChildren);
-            }
-
-            sections.Add(section);
-        }
-
-        // 汇总 folded 子条款到父节
-        foreach (var s in sections.Where(x => x.CoverageMode == "folded"))
-        {
-            // 取最长的精确父节
-            var best = sections
-                .Where(x => x.CoverageMode == "exact"
-                            && s.ClauseNo.StartsWith(x.ClauseNo + ".", StringComparison.Ordinal))
-                .OrderByDescending(x => x.ClauseNo.Length)
-                .FirstOrDefault();
-            if (best != null) best.ChildrenCovered.Add(s.ClauseNo);
-        }
-
-        var result = new SectionMap
-        {
-            StandardCode = standardCode ?? string.Empty,
-            StandardName = standardName ?? string.Empty,
-            GeneratedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-            TotalClauses = sections.Count,
-            ExactCount = sections.Count(x => x.CoverageMode == "exact"),
-            FoldedCount = sections.Count(x => x.CoverageMode == "folded"),
-            MissingCount = sections.Count(x => x.CoverageMode == "missing"),
-            Sections = sections,
-        };
-
-        return JsonSerializer.Serialize(result, new JsonSerializerOptions
-        {
-            WriteIndented = false,
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        });
-    }
+        // ★ 2026-11-12：构建逻辑已迁到 CertPlatform.Shared.DocExtraction.DocSectionIndex，
+        //   Admin 试跑与 Auditor 线上提取共用同一份；此处仅保留兼容入口。
+        => DocSectionIndex.BuildJson(markdown, clauses, standardCode, standardName);
 
     private static int FindSectionEnd(string text, List<Heading> headings, Heading current)
     {

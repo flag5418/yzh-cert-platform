@@ -431,10 +431,6 @@ async function removeSupplement(idx: number) {
 // 原始证据预览（新窗口）
 // ════════════════════════════════════════════════════════════
 
-function openEvidencePreview(evidenceCode: string, anchor?: string | null) {
-  const url = `/audit-task/doc-preview?evidenceCode=${encodeURIComponent(evidenceCode)}${anchor ? '&anchor=' + encodeURIComponent(anchor) : ''}`
-  window.open(url, '_blank')
-}
 
 // ════════════════════════════════════════════════════════════
 // 队列轮询
@@ -675,9 +671,9 @@ onBeforeUnmount(() => {
             <el-empty v-else description="暂无部门" :image-size="40" />
           </div>
 
-          <!-- 检查证据 -->
+          <!-- 现场证据：审核员补录 -->
           <div class="wb-zone">
-            <div class="wb-zone-title">检查证据</div>
+            <div class="wb-zone-title">现场证据</div>
             <div v-if="detail.CheckEvidences.length" class="wb-evidence-list">
               <div v-for="e in detail.CheckEvidences" :key="e.Code" class="wb-evidence">
                 <div class="wb-ev-head">
@@ -687,28 +683,22 @@ onBeforeUnmount(() => {
                 <div class="wb-ev-snippet">{{ e.Snippet || e.LlmSummary || '(空)' }}</div>
               </div>
             </div>
-            <el-empty v-else description="暂无检查证据" :image-size="40" />
+            <el-empty v-else description="暂无现场证据" :image-size="40" />
           </div>
 
-          <!-- 原始证据（可跳转预览） -->
+          <!-- 审核发现：企业原始文档提取事实，只读 -->
           <div class="wb-zone">
-            <div class="wb-zone-title">原始证据（{{ detail.RawEvidences.length }}）</div>
-            <div v-if="detail.RawEvidences.length" class="wb-evidence-list">
-              <div v-for="e in detail.RawEvidences" :key="e.Code" class="wb-evidence raw">
+            <div class="wb-zone-title">审核发现（{{ detail.AuditFindings.length }}）</div>
+            <div v-if="detail.AuditFindings.length" class="wb-evidence-list">
+              <div v-for="e in detail.AuditFindings" :key="e.Code" class="wb-evidence raw">
                 <div class="wb-ev-head">
-                  <span class="wb-ev-kind">{{ e.EvidenceKind }}</span>
-                  <a
-                    v-if="e.Code"
-                    class="wb-ev-link"
-                    href="#"
-                    @click.prevent="openEvidencePreview(e.Code, e.Anchor)"
-                  >{{ e.SourceName || '查看原文' }}</a>
-                  <span v-else class="wb-ev-source">{{ e.SourceName || '-' }}</span>
+                  <span class="wb-ev-kind">{{ e.Anchor || e.EvidenceKind }}</span>
+                  <span class="wb-ev-source">{{ e.SourceName || '-' }}</span>
                 </div>
                 <div class="wb-ev-snippet">{{ e.Snippet ? e.Snippet.slice(0, 100) + '...' : e.LlmSummary?.slice(0, 100) || '' }}</div>
               </div>
             </div>
-            <el-empty v-else description="暂无原始证据" :image-size="40" />
+            <el-empty v-else description="暂无审核发现" :image-size="40" />
           </div>
 
           <!-- 疑点 -->

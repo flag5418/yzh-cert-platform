@@ -500,8 +500,9 @@ public class StandardSourceService
             var line = raw ?? "";
 
             // 附录 / 前言 / 参考文献是条款正文的硬边界：遇到就收口，
-            // ⛔ 不能继续把附录表格、参考文献灌进最后一条条款（9001 的 10.3 曾因此吞掉整个附录 A）。
-            if (Regex.IsMatch(line.Trim(), @"^#{0,6}\s*(附录|前言|参考文献)"))
+            // ⛔ 不能继续把附录表格、参考文献灌进最后一条条款（9001 的 10.3、14001 的 10.3 都踩过）。
+            // PDF 里这些字常被拆成「附 录 A」，所以先去掉空白再判断。
+            if (IsBoundaryHeading(line))
             {
                 Flush();
                 current = null;
@@ -529,8 +530,8 @@ public class StandardSourceService
 
                 // 过滤：目录点线（…… / ...）、误命中年份、引言（0.x）、附录（A.x）
                 //   引言与附录不是审核对象，⛔ 不进条款树（否则「按原文生成」会多出一批不可审核条款）
-                if (num.Contains("--") || title.Length == 0 || title.StartsWith("－") || IsYearLike(num)
-                    || title.Contains("……") || title.Contains("...")
+                if (num == "0" || num.Contains("--") || title.Length == 0 || title.StartsWith("－") || IsYearLike(num)
+                    || IsTocTitle(title)
                     || num.StartsWith("0.", StringComparison.Ordinal)
                     || Regex.IsMatch(num, @"^[A-Z]\."))
                 {
@@ -545,11 +546,13 @@ public class StandardSourceService
                 }
 
                 Flush();
+                SplitClauseTitle(title, out var clauseTitle, out var inlineBody);
                 current = new ParsedClause
                 {
                     ClauseNumber = num,
-                    Title = title.Length > 200 ? title.Substring(0, 200) : title,
+                    Title = clauseTitle.Length > 200 ? clauseTitle.Substring(0, 200) : clauseTitle,
                 };
+                if (inlineBody.Length > 0) body.AppendLine(inlineBody);
                 continue;
             }
 
@@ -564,6 +567,47 @@ public class StandardSourceService
             .Where(c => c.ClauseNumber.Length > 0 && seen.Add(c.ClauseNumber))
             .OrderBy(c => c.ClauseNumber, ClauseNumberComparer.Instance)
             .ToList();
+    }
+
+    /// <summary>附录 / 前言 / 参考文献标题（允许字间夹空格，如「附 录 A」）。</summary>
+    private static bool IsBoundaryHeading(string line)
+    {
+        var t = Regex.Replace((line ?? "").Trim(), @"\s+", "");
+        t = Regex.Replace(t, @"^#{1,6}", "");
+        return Regex.IsMatch(t, @"^(附录|前言|参考文献)");
+    }
+
+    /// <summary>
+    /// 把「标题 + 同行的正文」拆开。anydoc 常把标题和正文挤在同一行：
+    /// <c>10.1 总则 组织应确定改进的机会…</c>。只取前面的短标题，后面的内容当正文。
+    /// </summary>
+    private static void SplitClauseTitle(string title, out string clauseTitle, out string inlineBody)
+    {
+        clauseTitle = (title ?? "").Trim();
+        inlineBody = "";
+        if (clauseTitle.Length <= 24 && !clauseTitle.Contains("。") && !clauseTitle.Contains("：")
+            && !clauseTitle.Contains(":") && !clauseTitle.Contains("；") && !clauseTitle.Contains(";")) return;
+
+        var m = Regex.Match(clauseTitle, @"\s+");
+        if (!m.Success || m.Index == 0) return;
+
+        var head = clauseTitle.Substring(0, m.Index).Trim();
+        var rest = clauseTitle.Substring(m.Index).Trim();
+        if (head.Length == 0 || head.Length > 30 || rest.Length < 8) return;
+
+        clauseTitle = head;
+        inlineBody = rest;
+    }
+
+    /// <summary>
+    /// 判断标题是否是「目录行」。PDF 的目录会被 anydoc 升成标题，形如
+    /// <c>### 10.1 总则 … … … … 13</c>；点线中间可能夹空格，不能用 Contains("……")。
+    /// 规则：去掉空白后仍出现 2 个以上连续的点线字符（<c>…</c> / <c>.</c>）。
+    /// </summary>
+    private static bool IsTocTitle(string? title)
+    {
+        var t = Regex.Replace(title ?? "", @"\s+", "");
+        return Regex.IsMatch(t, @"[.…]{2,}");
     }
 
     private static bool IsCrossReferenceRow(string? title)
@@ -614,6 +658,8 @@ public class StandardSourceService
             if (Regex.IsMatch(line, @"^[&|]+$")) continue;
             if (Regex.IsMatch(line, @"^(?:&\s*)?(?:\d+(?:\.\d+)*|[A-Z]+(?:\.\d+)+)(?:\s|$)")) continue;
             if (Regex.IsMatch(line, @"^\d{1,3}$")) continue;
+            // PDF 两端对齐会把中文拆成「组 织 应」，中文与中文之间的空格不是语义空格，直接收掉。
+            line = Regex.Replace(line, @"(?<=[\u4e00-\u9fa5])\s+(?=[\u4e00-\u9fa5])", "");
             kept.Add(line);
         }
 

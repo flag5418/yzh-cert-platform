@@ -410,6 +410,8 @@ export interface CertPlanCheckItemDetail {
   LockedBy: string | null
   LockedAt: string | null
   RawEvidences: CertEvidenceRow[]
+  /** 审核发现：企业原始文档中提取到的事实（只读） */
+  AuditFindings: CertEvidenceRow[]
   CheckEvidences: CertEvidenceRow[]
   DoubtsJson: string | null
   /** 自动分析状态：none（未分析）/ done（已完成）/ failed（失败） */

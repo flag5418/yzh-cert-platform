@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Auditor.Entities.Expert;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -93,25 +94,8 @@ public sealed class CertCheckContext
     /// <summary>条款原文上限（最长的一条 15011 字，整段塞进去会淹掉其他所有信息）</summary>
     private const int MaxDescriptionChars = 1200;
 
-    /// <summary><c>Artifacts</c> / <c>EvidenceChain</c> 上限（值类型是 prompt，平均 520 字）</summary>
-    private const int MaxPromptAttrChars = 800;
-
-    /// <summary>条款属性显示顺序与标签（对齐 <c>cert_clause_attr_def.Sort</c>）</summary>
-    private static readonly (string Code, string Label)[] AttrOrder =
-    {
-        ("ClauseIntent", "管什么"),
-        ("Obligation", "约束强度"),
-        ("Applicability", "适用性"),
-        ("ApplicabilityCondition", "适用条件"),
-        ("Severity", "严重度"),
-        ("DocCheckMode", "资料核对方式"),
-        ("Process", "涉及过程"),
-        ("Artifacts", "企业应提供的资料"),
-        ("EvidenceChain", "取证要求")
-    };
-
     /// <summary>
-    /// 渲染 <c>{{clause_blocks}}</c>：<b>条款正文 → 9 类属性 → 命中摘录</b>，最后附输出契约。
+    /// 渲染 <c>{{clause_blocks}}</c>：<b>条款正文 → 命中摘录</b>，最后附输出契约。
     /// <para>顺序由程序固定，⛔ 不交给模型自己拼 —— 顺序一乱，模型的注意力分配就跟着乱。</para>
     /// </summary>
     public string RenderClauseBlocks(bool isPrep)
@@ -124,10 +108,8 @@ public sealed class CertCheckContext
     }
 
     /// <summary>
-    /// 渲染「条款清单」：条款标题 + 原文 + 9 类属性（<b>不含</b>文档命中与输出契约）。
-    /// <para>★ 单独拆出来是为了兼容旧占位符 <c>{{ClauseInfo}}</c> / <c>{{CheckRequirement}}</c> ——
-    /// 老的 <c>audit_check</c> 正文只认这三个名字，若只提供 <c>{{clause_blocks}}</c>，
-    /// 条款属性会整块丢失（2026-11-02 实测：onsite 分支因此判「无任何证据」）。</para>
+    /// 渲染「条款清单」：条款标题 + 原文（<b>不含</b>属性池、文档命中与输出契约）。
+    /// <para>★ 单独拆出来是为了兼容旧占位符 <c>{{ClauseInfo}}</c> / <c>{{CheckRequirement}}</c>。</para>
     /// </summary>
     public string RenderClauseInfo()
     {
@@ -149,29 +131,8 @@ public sealed class CertCheckContext
                 sb.AppendLine();
             }
 
-            // ② 9 类属性（有才写，⛔ 不写空行占位）
-            var attrLines = new List<string>();
-            foreach (var (code, label) in AttrOrder)
-            {
-                var v = c.Attr(code);
-                if (v == null) continue;
-                var text = code is "Artifacts" or "EvidenceChain"
-                    ? Truncate(v, MaxPromptAttrChars)!
-                    : v;
-                attrLines.Add($"- 【{label}】{text}");
-            }
-
-            if (attrLines.Count > 0)
-            {
-                sb.AppendLine("【条款属性】");
-                foreach (var line in attrLines) sb.AppendLine(line);
-                sb.AppendLine();
-            }
-            else
-            {
-                sb.AppendLine("【条款属性】（未配置 —— 本条无结构化要求，仅凭条款原文判断）");
-                sb.AppendLine();
-            }
+            // ② 条款属性池不再整块塞给模型：审核员/模型只关心条款正文。
+            //    需要严重度约束时由提示词按条款原文判断，不再依赖 9 类属性。
         }
 
         return sb.ToString();
@@ -342,49 +303,137 @@ public sealed class CertCheckContextBuilder
     public async Task<CertCheckContext> BuildAsync(
         IReadOnlyList<string> clauseCodes,
         string? enterpriseCode,
-        IReadOnlyList<CertEvidence>? evidences = null)
+        IReadOnlyList<CertEvidence>? evidences = null,
+        IReadOnlyList<ClauseRef>? clauseRefs = null)
     {
         var warnings = new List<string>();
         var evList = evidences?.ToList() ?? new List<CertEvidence>();
 
-        if (clauseCodes.Count == 0)
+        var codeList = new List<string>();
+        var clauseRows = new List<ISOClause>();
+
+        if (clauseRefs != null && clauseRefs.Count > 0)
         {
-            warnings.Add("检查项未配置条款（cert_audit_plan_detail.Clauses 为空）⇒ 无法装配条款块");
-            return new CertCheckContext
+            // ★ 业务键优先：按 (标准短码, 条款号) 解析当前有效条款。
+            // 标准重建后旧 Code 全部软删，只有这里能把计划拉回可用状态。
+            var refs = ClauseRefs.Clean(clauseRefs);
+            foreach (var group in refs.GroupBy(r => r.StandardNo, StringComparer.Ordinal))
             {
-                OrphanEvidences = evList.Where(e => string.IsNullOrEmpty(e.ClauseCode)).ToList(),
-                Warnings = warnings
-            };
+                var rows = await _core.GetClausesByNumbersAsync(
+                    group.Key, group.Select(r => r.ClauseNumber));
+                clauseRows.AddRange(rows);
+            }
+            clauseRows = clauseRows
+                .Where(c => !string.IsNullOrEmpty(c.Code))
+                .GroupBy(c => c.Code, StringComparer.Ordinal)
+                .Select(g => g.First())
+                .OrderBy(c => c.Sort)
+                .ToList();
+            codeList = clauseRows.Select(c => c.Code!).ToList();
+
+            if (clauseRows.Count == 0)
+            {
+                warnings.Add($"条款业务键在 cert_iso_clause 中全部查无此行：{ClauseRefs.ToJson(refs)}");
+                return new CertCheckContext { Warnings = warnings };
+            }
+        }
+        else
+        {
+            if (clauseCodes.Count == 0)
+            {
+                warnings.Add("检查项未配置条款（cert_audit_plan_detail.Clauses 为空）⇒ 无法装配条款块");
+                return new CertCheckContext
+                {
+                    OrphanEvidences = evList.Where(e => string.IsNullOrEmpty(e.ClauseCode)).ToList(),
+                    Warnings = warnings
+                };
+            }
+
+            codeList = clauseCodes.Distinct(StringComparer.Ordinal).ToList();
+            clauseRows = await _core.GetClausesByCodesAsync(codeList);
+
+            if (clauseRows.Count == 0)
+            {
+                warnings.Add($"条款 Code 在 cert_iso_clause 中全部查无此行：{string.Join(",", codeList)}");
+                return new CertCheckContext { Warnings = warnings };
+            }
+
+            if (clauseRows.Count < codeList.Count)
+            {
+                var missing = codeList.Except(clauseRows.Select(c => c.Code), StringComparer.Ordinal);
+                warnings.Add($"部分条款查无正文：{string.Join(",", missing)}");
+            }
         }
 
-        // ---- 1. 条款模型：正文（cert_iso_clause）----
-        var codeList = clauseCodes.Distinct(StringComparer.Ordinal).ToList();
-        var clauseRows = await _core.GetClausesByCodesAsync(codeList);
-
+        // ---- 1.5 剔除「无条款内容的父级标题」----
+        // 真实审核报告只列有要求的条款（如 4.1），不列只有章标题的 4。
+        // 父级条款 Description 为空，不能生成条款结果，也不能让模型拿它做判定。
+        var emptyClauses = clauseRows
+            .Where(c => string.IsNullOrWhiteSpace(c.Description))
+            .Select(c => c.ClauseNumber)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToList();
+        if (emptyClauses.Count > 0)
+        {
+            clauseRows = clauseRows
+                .Where(c => !string.IsNullOrWhiteSpace(c.Description))
+                .ToList();
+            warnings.Add($"已过滤无条款内容的父级标题：{string.Join(",", emptyClauses)}");
+        }
         if (clauseRows.Count == 0)
         {
-            warnings.Add($"条款 Code 在 cert_iso_clause 中全部查无此行：{string.Join(",", codeList)}");
+            warnings.Add("检查项条款均为无正文的父级标题 ⇒ 无法装配条款块");
             return new CertCheckContext { Warnings = warnings };
         }
 
-        if (clauseRows.Count < codeList.Count)
+        // ---- 2. 条款模型：9 类属性（cert_clause_attr，长表 → 按条款聚合）----
+        // ★ 按 (标准短码, 条款号) 取，不再按 ClauseCode：标准重建后属性行的旧 Code 会失效。
+        var standards = await _core.GetValidStandardsAsync();
+        var shortByGuid = standards
+            .Where(s => !string.IsNullOrEmpty(s.Code))
+            .ToDictionary(s => s.Code!, s => s.StandardCode, StringComparer.Ordinal);
+
+        var standardNos = clauseRows
+            .Select(c => shortByGuid.GetValueOrDefault(c.StandardCode ?? string.Empty))
+            .Where(x => !string.IsNullOrEmpty(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var attrRows = new List<ClauseAttrRow>();
+        if (standardNos.Count > 0)
         {
-            var missing = codeList.Except(clauseRows.Select(c => c.Code), StringComparer.Ordinal);
-            warnings.Add($"部分条款查无正文：{string.Join(",", missing)}");
+            attrRows = (await _db.GetListAsync<ClauseAttrRow>(a =>
+                standardNos.Contains(a.StandardCode) && !a.IsDeleted && a.IsValid == 1)).Data
+                ?? new List<ClauseAttrRow>();
         }
 
-        // ---- 2. 条款模型：9 类属性（cert_clause_attr，长表 → 按条款聚合）----
-        var attrRows = (await _db.GetListAsync<ClauseAttrRow>(a =>
-            codeList.Contains(a.ClauseCode) && !a.IsDeleted && a.IsValid == 1)).Data
-            ?? new List<ClauseAttrRow>();
-
-        var attrsByClause = attrRows
-            .GroupBy(a => a.ClauseCode, StringComparer.Ordinal)
+        // 同一标准同一条款号可能有多行历史数据：只保留与当前条款编号一致的。
+        var attrByKey = attrRows
+            .Select(a => new
+            {
+                Key = a.StandardCode + "|" + ClauseRefs.NormalizeNumber(a.ClauseNumber),
+                Row = a
+            })
+            .Where(x => !string.IsNullOrEmpty(x.Key))
+            .GroupBy(x => x.Key, StringComparer.Ordinal)
             .ToDictionary(
                 g => g.Key,
-                g => g.OrderBy(x => x.Sort).GroupBy(x => x.AttrCode, StringComparer.Ordinal)
+                g => g.Select(x => x.Row)
+                      .OrderBy(x => x.Sort)
+                      .GroupBy(x => x.AttrCode, StringComparer.Ordinal)
                       .ToDictionary(x => x.Key, x => x.First().AttrValue, StringComparer.Ordinal),
                 StringComparer.Ordinal);
+
+        var attrsByClause = new Dictionary<string, Dictionary<string, string?>>(StringComparer.Ordinal);
+        foreach (var c in clauseRows)
+        {
+            if (string.IsNullOrEmpty(c.Code)) continue;
+            var no = shortByGuid.GetValueOrDefault(c.StandardCode ?? string.Empty);
+            var key = no + "|" + ClauseRefs.NormalizeNumber(c.ClauseNumber);
+            attrsByClause[c.Code] = attrByKey.TryGetValue(key, out var a)
+                ? a
+                : new Dictionary<string, string?>(StringComparer.Ordinal);
+        }
 
         if (attrRows.Count == 0)
         {

@@ -36,10 +36,18 @@ namespace CertPlatform.Admin.Entities.Cert
         [StringLength(36)]
         public string StandardCode { get; set; } = string.Empty;
 
-        /// <summary>条款 Code（<c>cert_iso_clause.Code</c>，GUID）</summary>
+        /// <summary>条款 Code（<c>cert_iso_clause.Code</c>，GUID；仅作运行时缓存，标准重建后会变）</summary>
         [Required]
         [StringLength(36)]
         public string ClauseCode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// ★ 条款编号（4.1 / 7.1.2）—— <b>业务键成员</b>。
+        /// <para>标准条款重建后 <see cref="ClauseCode"/> 会失效，属性按
+        /// <c>(StandardCode, ClauseNumber, AttrCode)</c> 仍然能找回。</para>
+        /// </summary>
+        [StringLength(50)]
+        public string? ClauseNumber { get; set; }
 
         /// <summary>属性码（<c>cert_clause_attr_def.Code</c>）</summary>
         [Required]

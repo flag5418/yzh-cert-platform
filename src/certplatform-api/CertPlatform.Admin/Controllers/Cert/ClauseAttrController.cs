@@ -8,6 +8,7 @@ using YZH.Core.Stand.Models.Config;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Admin.Services.Cert;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 
@@ -85,11 +86,13 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
         var shape = await ValidateShapeAsync(entity);
         if (!shape.ok) return shape;
 
-        var dup = await _db.Client.Queryable<ClauseAttr>()
-            .Where(p => p.StandardCode == entity.StandardCode
-                        && p.ClauseCode == entity.ClauseCode
-                        && p.AttrCode == entity.AttrCode)
-            .FirstAsync();
+        var number = ClauseRefs.NormalizeNumber(entity.ClauseNumber);
+        var dupRows = await _db.Client.Queryable<ClauseAttr>()
+            .Where(p => p.StandardCode == entity.StandardCode && p.AttrCode == entity.AttrCode)
+            .ToListAsync();
+        var dup = dupRows.FirstOrDefault(p =>
+            (number.Length > 0 && string.Equals(ClauseRefs.NormalizeNumber(p.ClauseNumber), number, StringComparison.Ordinal))
+            || (!string.IsNullOrEmpty(p.ClauseCode) && string.Equals(p.ClauseCode, entity.ClauseCode, StringComparison.Ordinal)));
 
         if (dup != null)
             return (false, dup.IsDeleted
@@ -100,7 +103,7 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
         {
             var maxSort = await _db.Client.Queryable<ClauseAttr>()
                 .Where(p => p.StandardCode == entity.StandardCode
-                            && p.ClauseCode == entity.ClauseCode
+                            && p.ClauseNumber == number
                             && !p.IsDeleted)
                 .MaxAsync(p => (int?)p.Sort) ?? 0;
             entity.Sort = maxSort + 10;
@@ -118,11 +121,14 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
         var current = await Entity.GetOne(p => p.Code == entity.Code);
         if (current.Success && current.Data != null)
         {
-            // 三键是唯一索引成员，改了等于"换一条记录"，会让已配数据静默变成另一条款的属性
+            // 业务键是唯一索引成员，改了等于"换一条记录"，会让已配数据静默变成另一条款的属性。
+            // 条款号是关键：标准重建后 Code 会变，条款号不变；两处都非空且不一致才拒绝。
+            var currentNo = ClauseRefs.NormalizeNumber(current.Data.ClauseNumber);
+            var nextNo = ClauseRefs.NormalizeNumber(entity.ClauseNumber);
             if (!string.Equals(current.Data.StandardCode, entity.StandardCode, StringComparison.Ordinal)
-                || !string.Equals(current.Data.ClauseCode, entity.ClauseCode, StringComparison.Ordinal)
-                || !string.Equals(current.Data.AttrCode, entity.AttrCode, StringComparison.Ordinal))
-                return (false, "标准 / 条款 / 属性 三键不可修改；要换请删除后重新新增");
+                || !string.Equals(current.Data.AttrCode, entity.AttrCode, StringComparison.Ordinal)
+                || (currentNo.Length > 0 && nextNo.Length > 0 && !string.Equals(currentNo, nextNo, StringComparison.Ordinal)))
+                return (false, "标准 / 条款号 / 属性 三键不可修改；要换请删除后重新新增");
         }
 
         return await ValidateShapeAsync(entity);
@@ -231,11 +237,17 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
     {
         var rows = await _db.Client.Queryable<ClauseAttr>()
             .Where(p => !p.IsDeleted)
-            .GroupBy(p => p.ClauseCode)
-            .Select(p => new { ClauseCode = p.ClauseCode, Cnt = SqlSugar.SqlFunc.AggregateCount(p.Id) })
             .ToListAsync();
 
-        var map = rows.ToDictionary(r => r.ClauseCode, r => r.Cnt);
+        // 业务键口径：同一标准 + 同一条款号算一条；同时保留 ClauseCode 键兼容旧前端。
+        var map = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var r in rows)
+        {
+            var key = r.StandardCode + "|" + ClauseRefs.NormalizeNumber(r.ClauseNumber);
+            map[key] = map.TryGetValue(key, out var c) ? c + 1 : 1;
+            if (!string.IsNullOrEmpty(r.ClauseCode))
+                map[r.ClauseCode] = map.TryGetValue(r.ClauseCode, out var c2) ? c2 + 1 : 1;
+        }
         return Ok(ApiResponse<Dictionary<string, int>>.Ok(map));
     }
 
@@ -303,6 +315,7 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
     {
         entity.StandardCode = (entity.StandardCode ?? string.Empty).Trim();
         entity.ClauseCode = (entity.ClauseCode ?? string.Empty).Trim();
+        entity.ClauseNumber = ClauseRefs.NormalizeNumber(entity.ClauseNumber);
         entity.AttrCode = (entity.AttrCode ?? string.Empty).Trim();
 
         if (entity.StandardCode.Length == 0) return (false, "标准不能为空");
@@ -323,14 +336,28 @@ public class ClauseAttrController : YzhControllerBase<ClauseAttr>
             return (false, $"属性【{entity.AttrCode}】不在属性池中或已停用，请先在「条款属性池」维护");
 
         var clause = await _core.GetClauseByCodeAsync(entity.ClauseCode);
+        if (clause == null && entity.ClauseNumber.Length > 0)
+        {
+            // ★ 标准重建后旧 ClauseCode 已软删：按业务键 (标准短码, 条款号) 解析当前条款，
+            //   并把 Code 缓存回写到本条属性，用户仍可正常编辑。
+            var resolved = await _core.GetClausesByNumbersAsync(
+                entity.StandardCode, new[] { entity.ClauseNumber });
+            clause = resolved.FirstOrDefault();
+            if (clause != null) entity.ClauseCode = clause.Code ?? entity.ClauseCode;
+        }
         if (clause == null)
-            return (false, "条款不存在或已删除");
+            return (false, "条款不存在或已删除，且按条款号也找不到当前条款；请先刷新标准条款");
 
         // cert_iso_clause.StandardCode 存的是 ISO 标准行的 GUID；本表存短码 ⇒ 需要一次换算
         var std = await _core.GetStandardByCodeAsync(clause.StandardCode);
 
         if (std == null || !string.Equals(std.StandardCode, entity.StandardCode, StringComparison.Ordinal))
             return (false, $"条款【{clause.ClauseNumber}】不属于标准【{entity.StandardCode}】");
+
+        // ★ 条款号是业务键：以条款行权威值为准，前端传错/不传都纠正
+        entity.ClauseNumber = ClauseRefs.NormalizeNumber(clause.ClauseNumber);
+        if (entity.ClauseNumber.Length == 0)
+            return (false, "条款编号为空，无法建立稳定关联；请先在标准库修复该条款");
 
         return (true, null);
     }

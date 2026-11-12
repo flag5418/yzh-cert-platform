@@ -407,6 +407,7 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
     try {
       const rows = await listClauseAttrs({
         ClauseCode: node.Code,
+        ClauseNumber: String(node.Extra?.ClauseNumber ?? ''),
         StandardCode: this.standardCode,
       })
       const byAttr = new Map(rows.map((r) => [String(r.AttrCode), r]))
@@ -544,6 +545,7 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
           await createClauseAttr({
             StandardCode: this.standardCode,
             ClauseCode: node.Code,
+            ClauseNumber: String(node.Extra?.ClauseNumber ?? ''),
             AttrCode: row.AttrCode,
             AttrValue: row.AttrValue ?? '',
             ValueSource: row.ValueSource,
@@ -594,12 +596,18 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
 
   /** 预生成弹窗可见 */
   genVisible = ref(false)
-  /** 正在跑（服务端串行，单批 50 条可能要几分钟） */
+  /** 正在跑（服务端按 5 条合并一次 LLM，单批 5 条约十余秒） */
   genRunning = ref(false)
   /** 目标标准短码（默认 = 当前选中条款所属标准） */
   genStandardCode = ref('')
-  /** 服务端单次硬上限（前端自动按此切片分批，⛔ 不再让用户自己数） */
-  readonly genChunkSize = 50
+  /**
+   * 前端每批条数 = 服务端「5 条合并一次 LLM」的批大小。
+   *
+   * <p>★ 2026-11-12：以前 50 条一批 ⇒ 服务端逐条调用 50 次 ≈150s，
+   * 一次 HTTP 还要扛住全部耗时；现在 5 条一批 ⇒ 一次 LLM 调用，
+   * 每批十余秒返回，进度可见，也不会撞网关超时。</p>
+   */
+  readonly genChunkSize = 5
   /** 本轮目标条款总数 */
   genTotal = ref(0)
   /** 已返回的条款数 */
@@ -756,11 +764,11 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
   }
 
   /**
-   * 执行预生成：**前端按 50 条自动分批**，一批跑完接着跑下一批。
+   * 执行预生成：**前端按 5 条自动分批**，一批跑完接着跑下一批。
    *
-   * <p>★ 为什么不把上限放开到服务端：一次 HTTP 请求跑 60 条要好几钟，
-   * 网关/浏览器超时 + 中途失败全丢。切片后每批 50 条独立返回，进度可见、可停止、
-   * 已写入的不会被后面的失败回滚。</p>
+   * <p>★ 服务端会把同一批 5 条合并成一次 LLM 调用（不是 5 次），
+   * 50 条从 50 次调用降到 10 次；前端 5 条一批是为了让进度、停止和
+   * 「已写入不回滚」都成立，同时避免单个 HTTP 请求跑几分钟。</p>
    */
   async runGenerate(): Promise<void> {
     if (!this.genStandardCode.value) {
@@ -771,7 +779,7 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
 
     const all = this.genClauseOptions.map((o) => o.value)
     const picked = this.genSelectedCodes.value
-    // 勾了条款 ⇒ 只跑这些；没勾 ⇒ 跑该标准全部叶子条款（50 条一批自动分批）
+    // 勾了条款 ⇒ 只跑这些；没勾 ⇒ 跑该标准全部叶子条款（5 条一批自动分批）
     const targets = picked.length > 0 ? [...picked] : all
     if (targets.length === 0) {
       ElMessage.warning('该标准下没有可执行的条款')

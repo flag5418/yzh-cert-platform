@@ -41,7 +41,16 @@ interface DeptItem { Code: string; DeptName: string; ParentCode: string | null }
 interface DeptNode { Code: string; Name: string; ParentCode: string | null; NodeType?: string; IsLeaf?: boolean; Extra?: Record<string, any> }
 interface ClauseItem { Code: string; StandardCode: string; ClauseNumber: string; Title: string; ParentCode: string | null }
 interface PlanRow { Code: string; Name: string; EnterpriseCode: string; StageCode: string; Standards: string; IsValid: number; Status?: string; CreateTime?: string }
-interface Selection { deptCodes: string[]; deptNames: string[]; clauseCodes: string[]; clauseNumbers: string[]; ownerCode: string; ownerName: string }
+interface Selection {
+  deptCodes: string[]
+  deptNames: string[]
+  clauseCodes: string[]
+  clauseNumbers: string[]
+  /** 条款业务键：标准短码 + 条款号（稳定关联，后端以此为真源） */
+  clauseRefs: Array<{ StandardNo: string; ClauseNumber: string }>
+  ownerCode: string
+  ownerName: string
+}
 
 const plans = ref<PlanRow[]>([])
 const enterprises = ref<EnterpriseItem[]>([])
@@ -236,7 +245,20 @@ async function openEdit(row: PlanRow) {
   const res = await yzhApi.get('/api/Auditor/AuditPlan/details', { planCode: row.Code })
   const details: any[] = res?.data || []
   selections.value = details.map(d => {
-    const clauseCodes = splitCsv(d.Clauses)
+    // ★ 业务键优先：按 (标准短码, 条款号) 找回当前条款 Code；旧数据没有 refs 时才用 Clauses。
+    let refs: Array<{ StandardNo: string; ClauseNumber: string }> = []
+    try {
+      const raw = d.ClauseRefsJson ? JSON.parse(d.ClauseRefsJson) : []
+      if (Array.isArray(raw)) refs = raw.filter((r: any) => r?.StandardNo && r?.ClauseNumber)
+    } catch { refs = [] }
+    const clauseByRef: Record<string, string> = {}
+    Object.values(clausesByStd.value).forEach(arr => arr.forEach(c => {
+      const std = stdMap.value[c.StandardCode]
+      if (std) clauseByRef[`${std.StandardCode}|${c.ClauseNumber}`] = c.Code
+    }))
+    const clauseCodes = refs.length
+      ? refs.map(r => clauseByRef[`${r.StandardNo}|${r.ClauseNumber}`]).filter(Boolean) as string[]
+      : splitCsv(d.Clauses)
     // 旧数据可能只有 ClauseNumbers 没有 Clauses —— 此时按编号标签原样展示，避免组合凭空消失
     const clauseNumbers = clauseCodes.length
       ? clauseCodes.map(c => { const cl = clauseMap.value[c]; return cl ? `${stdAbbrev(cl.StandardCode)} ${cl.ClauseNumber}` : c })
@@ -246,6 +268,11 @@ async function openEdit(row: PlanRow) {
       deptNames: splitCsv(d.DeptNames),
       clauseCodes,
       clauseNumbers,
+      clauseRefs: refs.length ? refs : clauseCodes.map(c => {
+        const cl = clauseMap.value[c]
+        const std = cl ? stdMap.value[cl.StandardCode] : undefined
+        return { StandardNo: std?.StandardCode || '', ClauseNumber: cl?.ClauseNumber || '' }
+      }).filter(r => r.StandardNo && r.ClauseNumber),
       ownerCode: d.OwnerCode || '',
       ownerName: d.OwnerName || '',
     }
@@ -301,8 +328,14 @@ function addSelection() {
     const cl = clauseMap.value[c]
     return cl ? `${stdAbbrev(cl.StandardCode)} ${cl.ClauseNumber}` : c
   })
+  // ★ 业务键：标准短码（iso9001）+ 条款号，标准条款重建后仍可解析
+  const clauseRefs = clauseCodes.map(c => {
+    const cl = clauseMap.value[c]
+    const std = cl ? stdMap.value[cl.StandardCode] : undefined
+    return { StandardNo: std?.StandardCode || '', ClauseNumber: cl?.ClauseNumber || '' }
+  }).filter(r => r.StandardNo && r.ClauseNumber)
   selections.value.push({
-    deptCodes, deptNames, clauseCodes, clauseNumbers,
+    deptCodes, deptNames, clauseCodes, clauseNumbers, clauseRefs,
     ownerCode: ownerCode.value,
     ownerName: member?.Name || '',
   })
@@ -329,6 +362,7 @@ async function savePlan() {
         Departments: s.deptCodes.join(','),
         DeptNames: s.deptNames.join(','),
         ClauseNumbers: s.clauseNumbers.join(','),
+        ClauseRefsJson: JSON.stringify(s.clauseRefs || []),
         OwnerCode: s.ownerCode || null,
       })),
     }

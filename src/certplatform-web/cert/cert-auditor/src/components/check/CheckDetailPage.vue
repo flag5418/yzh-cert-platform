@@ -126,6 +126,16 @@ const autoRunning = ref(false)
 const autoDone = ref(0)
 const autoTotal = ref(0)
 
+/** 顶部进度：批量分析时按本次批次走，避免“已经 7/7 了，重跑 2 项却纹丝不动” */
+const progressPercent = computed(() =>
+  autoRunning.value && autoTotal.value > 0
+    ? percent(autoDone.value, autoTotal.value)
+    : percent(summary.value.Analyzed, summary.value.ItemTotal))
+const progressLabel = computed(() =>
+  autoRunning.value
+    ? `分析中 ${autoDone.value}/${autoTotal.value}`
+    : `已分析 ${summary.value.Analyzed}/${summary.value.ItemTotal}`)
+
 /** 页面锁：队列在跑 ⇒ 整页只读（唯一真相来自后端） */
 const pageLocked = computed(() => planInfo.value?.TaskRunning === true)
 /** 计划已关闭：对应的认证准备 / 认证检查已作废，整页只读（只能查看） */
@@ -484,11 +494,19 @@ async function doAnalyze(row: CertWorklistRow) {
     row.TaskItemCode = fresh.TaskItemCode
   }
 
-  const res = await analyzeCheckItem(row.TaskItemCode!)
-  flash(res, '分析完成', '分析失败')
-  if (res.success) {
-    await reloadOnly()
-    if (drawer.value && currentRow.value?.DetailCode === row.DetailCode) await openDetail(row)
+  autoRunning.value = true
+  autoDone.value = 0
+  autoTotal.value = 1
+  try {
+    const res = await analyzeCheckItem(row.TaskItemCode!)
+    flash(res, '分析完成', '分析失败')
+    autoDone.value = 1
+    if (res.success) {
+      await reloadOnly()
+      if (drawer.value && currentRow.value?.DetailCode === row.DetailCode) await openDetail(row)
+    }
+  } finally {
+    autoRunning.value = false
   }
 }
 
@@ -682,15 +700,11 @@ async function removeEvidence(e: CertEvidenceRow) {
   }
 }
 
-/** 抽屉内的证据表：原始证据（来自企业资料）+ 检查证据（审核员补录） */
-const allEvidences = computed<Array<CertEvidenceRow & { __raw: boolean }>>(() => {
-  const d = detail.value
-  if (!d) return []
-  return [
-    ...(d.RawEvidences ?? []).map(e => ({ ...e, __raw: true })),
-    ...(d.CheckEvidences ?? []).map(e => ({ ...e, __raw: false })),
-  ]
-})
+/** 审核发现：从企业原始文档提取到的事实（只读，不是证据） */
+const auditFindings = computed<CertEvidenceRow[]>(() => detail.value?.AuditFindings ?? [])
+
+/** 现场证据表：只展示审核员在准备/现场补录的证据（⛔ 文档切片不进证据表） */
+const allEvidences = computed<CertEvidenceRow[]>(() => detail.value?.CheckEvidences ?? [])
 
 // ─── 条款详情弹窗（点条款编号） ───
 const clausePopup = reactive<{ loading: boolean; items: CertClauseContentRow[]; error: string }>({
@@ -779,7 +793,7 @@ async function submitEdit() {
     return
   }
   if (!editForm.Reason.trim()) {
-    ElMessage.warning('判定依据不能为空')
+    ElMessage.warning('审核证据不能为空')
     return
   }
   editLoading.value = true
@@ -1158,12 +1172,12 @@ onMounted(loadAll)
     <!-- 进度 -->
     <div class="cd-prog">
       <el-progress
-        :percentage="percent(summary.Analyzed, summary.ItemTotal)"
+        :percentage="progressPercent"
         :stroke-width="10"
-        :color="progressColor(percent(summary.Analyzed, summary.ItemTotal))"
+        :color="progressColor(progressPercent)"
         class="cd-prog__bar"
       />
-      <span class="cd-prog__num">已分析 {{ summary.Analyzed }}/{{ summary.ItemTotal }}</span>
+      <span class="cd-prog__num">{{ progressLabel }}</span>
     </div>
 
     <!-- 筛选 -->
@@ -1453,10 +1467,10 @@ onMounted(loadAll)
             </div>
           </div>
 
-          <!-- 判定依据 -->
+          <!-- 审核证据（判定依据）：对应审核报告 Audit Evidence 列，审核员可改 -->
           <div class="cd-block">
             <div class="cd-block__title">
-              {{ isPrep ? '准备期判定依据 / 疑点提示' : '判定依据（检查证据）' }}
+              {{ isPrep ? '准备期判定依据 / 疑点提示' : '审核证据（判定依据）' }}
               <el-button
                 v-if="detail.ResultCode && !detail.IsLocked"
                 type="primary"
@@ -1466,7 +1480,7 @@ onMounted(loadAll)
               >{{ isPrep ? '编辑' : '判定 / 修改判定' }}</el-button>
             </div>
             <div v-if="detail.Reason" class="cd-reason" v-html="mdToHtml(detail.Reason)"></div>
-            <div v-else class="cd-muted">暂无判定依据</div>
+            <div v-else class="cd-muted">暂无审核证据</div>
           </div>
 
           <!-- 疑点分析（可多条；无疑点 ⇒ 系统建议该检查项合格） -->
@@ -1586,10 +1600,35 @@ onMounted(loadAll)
             </el-table>
           </div>
 
-          <!-- 证据区：新增按钮与证据表格同属一个区域；新增 / 编辑走弹窗，行内可改可删 -->
+          <!-- 审核发现：从企业原始文档提取到的事实，只读；用于解释审核证据的事实来源 -->
           <div class="cd-evi-panel">
             <div class="cd-evi-panel__head">
-              <div class="cd-block__title">证据（{{ allEvidences.length }}）</div>
+              <div class="cd-block__title">审核发现（{{ auditFindings.length }}）</div>
+            </div>
+            <div class="cd-evi-panel__tip">
+              系统从企业原始文档中提取到的原文事实，只读；它回答“文档里写了什么”，不是现场证据。
+            </div>
+            <el-table :data="auditFindings" border size="small" empty-text="暂无审核发现">
+              <el-table-column label="条款" width="76" align="center">
+                <template #default="{ row }">{{ row.Anchor || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="来源 / 标题" min-width="150" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <div class="cd-evi-name">{{ row.SourceName || '未命名来源' }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="原文事实" min-width="280" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <span class="cd-evi-body">{{ row.LlmSummary || row.Snippet || '（无内容）' }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <!-- 现场证据：只允许审核员在准备/现场补录，不混入文档切片 -->
+          <div class="cd-evi-panel">
+            <div class="cd-evi-panel__head">
+              <div class="cd-block__title">现场证据（{{ allEvidences.length }}）</div>
               <el-button
                 type="primary"
                 plain
@@ -1600,15 +1639,10 @@ onMounted(loadAll)
             </div>
             <div class="cd-evi-panel__tip">
               {{ isPrep
-                ? '原始证据来自企业资料；审核员补充的检查证据同样参与系统分析，已补证据可修改、可删除。'
-                : '原始证据来自企业资料与入场计划；现场补录的证据是分析主依据，可修改、可删除。' }}
+                ? '审核员补充的现场/访谈/记录事实，参与系统分析；文档提取结果不在此处。'
+                : '仅审核员现场补录的事实（面谈、观察、记录、抽样等），与审核发现一起参与系统分析。' }}
             </div>
-            <el-table :data="allEvidences" border size="small" empty-text="暂无证据">
-              <el-table-column label="分类" width="76" align="center">
-                <template #default="{ row }">
-                  <YzhStatusBadge :type="row.__raw ? 'info' : 'success'" :text="row.__raw ? '原始' : '检查'" />
-                </template>
-              </el-table-column>
+            <el-table :data="allEvidences" border size="small" empty-text="暂无现场证据">
               <el-table-column label="类型" width="110">
                 <template #default="{ row }">
                   {{ EVIDENCE_KIND_LABELS[row.EvidenceKind] || row.EvidenceKind || '—' }}
@@ -1627,24 +1661,20 @@ onMounted(loadAll)
               </el-table-column>
               <el-table-column label="操作" width="110" align="center">
                 <template #default="{ row }">
-                  <!-- 原始证据来自企业资料 / 切片，只读；审核员补录的检查证据可改可删 -->
-                  <template v-if="!row.__raw">
-                    <el-button
-                      type="primary"
-                      link
-                      size="small"
-                      :disabled="editLocked || detail?.IsLocked"
-                      @click="openEvidenceEdit(row as CertEvidenceRow)"
-                    >编辑</el-button>
-                    <el-button
-                      type="danger"
-                      link
-                      size="small"
-                      :disabled="editLocked || detail?.IsLocked"
-                      @click="removeEvidence(row as CertEvidenceRow)"
-                    >删除</el-button>
-                  </template>
-                  <span v-else class="cd-muted">只读</span>
+                  <el-button
+                    type="primary"
+                    link
+                    size="small"
+                    :disabled="editLocked || detail?.IsLocked"
+                    @click="openEvidenceEdit(row as CertEvidenceRow)"
+                  >编辑</el-button>
+                  <el-button
+                    type="danger"
+                    link
+                    size="small"
+                    :disabled="editLocked || detail?.IsLocked"
+                    @click="removeEvidence(row as CertEvidenceRow)"
+                  >删除</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -1810,7 +1840,7 @@ onMounted(loadAll)
     <!-- 审核员判定（认证结论 + 不符合程度 + 判定依据） -->
     <YzhDialog
       v-model="editDialog"
-      :title="isPrep ? '编辑准备期判定依据' : '审核员判定（认证结论）'"
+      :title="isPrep ? '编辑准备期审核证据' : '审核员判定（认证结论）'"
       width="720px"
       confirm-text="保存"
       :confirm-loading="editLoading"
@@ -1822,9 +1852,9 @@ onMounted(loadAll)
         show-icon
         class="cd-nc-alert"
         title="系统只给建议，最终结论由审核员判定"
-        description="系统分析出的建议结论、疑点与判定依据仅作参考，可以直接改写。是否符合、不符合到什么程度（一般 / 严重），必须由审核员在这里确认。"
+        description="系统分析出的建议结论、疑点与审核证据仅作参考，可以直接改写。是否符合、不符合到什么程度（一般 / 严重），必须由审核员在这里确认。"
       />
-      <el-form :model="editForm" label-width="88px" size="small">
+      <el-form :model="editForm" label-width="96px" size="small">
         <el-form-item v-if="!isPrep" label="认证结论" required>
           <el-select v-model="editForm.Conclusion" class="cd-evi-form__sel" placeholder="请选择结论">
             <el-option
@@ -1845,12 +1875,12 @@ onMounted(loadAll)
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="判定依据" required>
+        <el-form-item label="审核证据" required>
           <el-input
             v-model="editForm.Reason"
             type="textarea"
             :rows="14"
-            placeholder="按真实认证报告的写法组织：先结论，再证据支持，再证据缺口 / 风险，分段书写"
+            placeholder="按真实审核报告 Audit Evidence 写法：分条款、分点，写清查阅的文件/记录、面谈对象、现场观察与抽样事实"
           />
         </el-form-item>
       </el-form>

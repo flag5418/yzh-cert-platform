@@ -20,9 +20,17 @@ namespace CertPlatform.Auditor.Entities.Expert
         [StringLength(50)]
         public string CheckItemCode { get; set; } = string.Empty;
 
-        /// <summary>条款 Code（可空 = 检查项级）</summary>
+        /// <summary>条款 Code（可空 = 检查项级；仅作运行时缓存，标准重建后会变）</summary>
         [StringLength(50)]
         public string? ClauseCode { get; set; }
+
+        /// <summary>标准短码（iso9001）—— 条款业务键成员</summary>
+        [StringLength(50)]
+        public string? StandardNo { get; set; }
+
+        /// <summary>条款编号（4.1 / 7.1.2）—— 条款业务键成员</summary>
+        [StringLength(50)]
+        public string? ClauseNumber { get; set; }
 
         /// <summary>谁提供的：prep / onsite / manual / doc / pq</summary>
         [StringLength(20)]

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Domain.Scope;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
@@ -31,8 +32,8 @@ namespace CertPlatform.Admin.Services.Cert;
 ///         ⇒ 池子增删属性，预生成自动跟上（⛔ 写死清单 = 新属性静默不产出）。</item>
 /// </list>
 ///
-/// <para><b>⚠️ 串行执行</b>：LLM 端点并发必 429（见「运行期排查坑与沙箱铁律」）。
-/// 本服务逐条串行，靠 <c>MaxCount</c> 控制单次批量，⛔ 不做并行。</para>
+/// <para><b>⚠️ 执行方式</b>：LLM 调用 5 条并发、每波等全部返回再跑下一波；
+/// 落库串行（SqlSugarClient 非线程安全）。⛔ 不做无限并发，端点会 429。</para>
 ///
 /// <para><b>⚠️ 直插必须显式赋 <c>Code</c></b>：<c>YzhControllerBase.AddCore</c> 才自动生成 Code，
 /// 这里走 <c>IDbOrm.InsertAsync</c> ⇒ 必须自己给 <c>Guid.NewGuid().ToString("N")</c>；
@@ -57,8 +58,20 @@ public sealed class ClauseAttrGenerateService
     /// </summary>
     private readonly ClauseAttrPromptService _prompt;
 
+    /// <summary>落库串行锁：LLM 并发 5，但 SqlSugar 客户端不是线程安全的，写库必须排队</summary>
+    private readonly SemaphoreSlim _dbLock = new(1, 1);
+
     /// <summary>单次请求最多跑多少条条款（防误点全量把 AI 额度烧光）</summary>
     public const int MaxBatchSize = 50;
+
+    /// <summary>
+    /// 同时在跑的 LLM 调用数。
+    /// <para>★ 2026-11-12 实测：单条 2.5–2.7s；5 条并发整组 2.6s（无 429），
+    /// 50 条从 50 次串行 ≈150s 降到 10 波 × 约 3s ≈ 30s。</para>
+    /// <para>⚠️ 合批（1 次调用塞 5 条）实测反而更慢（14.2s vs 12.8s）：
+    /// 延迟由**输出 token 串行生成**决定，合批并没有减少总输出量，只是省了少量输入。</para>
+    /// </summary>
+    private const int ClauseConcurrency = 5;
 
     /// <summary>
     /// 「值来源」判定：<b>池内 9 条全部由标准或工程师当场定死（fixed）</b>。
@@ -236,21 +249,33 @@ public sealed class ClauseAttrGenerateService
         //    ⛔ 不许在循环里调 RenderAsync：N 条条款 = N 次重复查库 + 重复渲染
         var poolSection = await _prompt.BuildPoolSectionAsync(ct);
 
-        // ── ③ 逐条串行（⛔ 不并发：LLM 端点并发必 429） ──
-        foreach (var clause in todo)
+        // ── ③ 5 条并发、每波等全部返回再跑下一波（⛔ 不做无限并发：端点会 429） ──
+        //    ★ 2026-11-12 实测：单条 2.5–2.7s；5 条并发整组 2.6s（未触发 429）。
+        //    50 条 = 10 波 × 约 3s ≈ 30s，替代原来 50 次串行 ≈150s。
+        //    ⚠️ LLM 并发，但落库串行（SqlSugar 客户端非线程安全，见 _dbLock）。
+        for (var offset = 0; offset < todo.Count; offset += ClauseConcurrency)
         {
             ct.ThrowIfCancellationRequested();
+            var batch = todo.Skip(offset).Take(ClauseConcurrency).ToList();
 
-            // 渲染 = 条款占位符 + 属性池注入段（⛔ 不在这里拼属性名：拼了就与池子脱钩）
-            var renderedPrompt = ClauseAttrPromptService.RenderWithSection(
-                template, standard, clause, poolSection);
+            var tasks = new List<Task<ClauseAttrGenerateItem>>(batch.Count);
+            foreach (var clause in batch)
+            {
+                // 渲染是纯内存操作，放在并发前完成；LLM 调用在任务里并发
+                var renderedPrompt = ClauseAttrPromptService.RenderWithSection(
+                    template, standard, clause, poolSection);
+                tasks.Add(GenerateOneSafeAsync(
+                    standard, clause, renderedPrompt, settings, result.Model, pool, request.Overwrite, ct));
+            }
 
-            var item = await GenerateOneAsync(
-                standard, clause, renderedPrompt, settings, result.Model, pool, request.Overwrite, ct);
-            result.Items.Add(item);
-            if (item.Success) result.Succeeded++; else result.Failed++;
-            result.Written += item.Written;
-            result.Skipped += item.Skipped;
+            var batchItems = await Task.WhenAll(tasks);
+            foreach (var item in batchItems)
+            {
+                result.Items.Add(item);
+                if (item.Success) result.Succeeded++; else result.Failed++;
+                result.Written += item.Written;
+                result.Skipped += item.Skipped;
+            }
         }
 
         result.Success = result.Failed == 0;
@@ -322,24 +347,10 @@ public sealed class ClauseAttrGenerateService
         bool overwrite,
         CancellationToken ct)
     {
-        var item = new ClauseAttrGenerateItem
-        {
-            ClauseCode = clause.Code,
-            ClauseNumber = clause.ClauseNumber ?? string.Empty,
-            Title = clause.Title ?? string.Empty,
-        };
+        var item = NewItem(clause);
 
         // ① 调模型（ForceJson ⇒ 输出必须是 JSON；Temperature 压低求稳定）
-        var resp = await _llm.CompleteAsync(new LlmInvokeRequest
-        {
-            BaseUrl = settings.BaseUrl,
-            ApiKey = settings.ApiKey,
-            Model = model,
-            Temperature = 0.2f,
-            MaxTokens = 8192,
-            Prompt = prompt,
-            ForceJson = true,
-        });
+        var resp = await CallModelAsync(prompt, settings, model);
 
         if (!resp.Success || resp.Json == null)
         {
@@ -362,13 +373,7 @@ public sealed class ClauseAttrGenerateService
             return item;
         }
 
-        var values = new Dictionary<string, string?>(StringComparer.Ordinal);
-        foreach (var attr in pool)
-        {
-            if (!doc.RootElement.TryGetProperty(attr.Code, out var node)) continue;
-            values[attr.Code] = Flatten(node, attr.ValueType);
-        }
-
+        var values = ExtractAttrValues(doc.RootElement, pool);
         if (values.Count == 0)
         {
             item.Success = false;
@@ -377,17 +382,114 @@ public sealed class ClauseAttrGenerateService
         }
 
         // ④ 落库（三键唯一：StandardCode + ClauseCode + AttrCode）
+        //    ⚠️ LLM 是 5 并发，落库必须串行：SqlSugarClient 不是线程安全的
+        await _dbLock.WaitAsync(ct);
+        try
+        {
+            return await ApplyValuesAsync(standard, clause, values, pool, overwrite, item);
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
+    }
+
+    /// <summary>并发任务的安全壳：单条抛异常只失败这一条，⛔ 不让整波任务一起炸</summary>
+    private async Task<ClauseAttrGenerateItem> GenerateOneSafeAsync(
+        CertPlatform.Shared.Entities.Cert.ISOStandard standard,
+        CertPlatform.Shared.Entities.Cert.ISOClause clause,
+        string prompt,
+        AiFillSettings settings,
+        string model,
+        List<ClauseAttrDef> pool,
+        bool overwrite,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await GenerateOneAsync(standard, clause, prompt, settings, model, pool, overwrite, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // 取消不是「这条失败」，必须让整波停下来；⛔ 不要吞掉当成普通错误
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var item = NewItem(clause);
+            item.Success = false;
+            item.Message = $"生成异常：{ex.Message}";
+            return item;
+        }
+    }
+
+    private static ClauseAttrGenerateItem NewItem(
+        CertPlatform.Shared.Entities.Cert.ISOClause clause)
+        => new()
+        {
+            ClauseCode = clause.Code,
+            ClauseNumber = clause.ClauseNumber ?? string.Empty,
+            Title = clause.Title ?? string.Empty,
+        };
+
+    private Task<LlmInvokeResponse> CallModelAsync(
+        string prompt, AiFillSettings settings, string model)
+        => _llm.CompleteAsync(new LlmInvokeRequest
+        {
+            BaseUrl = settings.BaseUrl,
+            ApiKey = settings.ApiKey,
+            Model = model,
+            Temperature = 0.2f,
+            MaxTokens = 8192,
+            Prompt = prompt,
+            ForceJson = true,
+        });
+
+    /// <summary>从模型 JSON 里取属性池字段（字段名按池子 Code 精确匹配）</summary>
+    private static Dictionary<string, string?> ExtractAttrValues(
+        JsonElement root, List<ClauseAttrDef> pool)
+    {
+        var values = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var attr in pool)
+        {
+            var node = FindProperty(root, attr.Code);
+            if (node == null) continue;
+            values[attr.Code] = Flatten(node.Value, attr.ValueType);
+        }
+        return values;
+    }
+
+    private static JsonElement? FindProperty(JsonElement obj, string name)
+    {
+        if (obj.ValueKind != JsonValueKind.Object) return null;
+        foreach (var p in obj.EnumerateObject())
+            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                return p.Value;
+        return null;
+    }
+
+    /// <summary>写属性行（三键唯一；单条与批量共用一个口径）</summary>
+    private async Task<ClauseAttrGenerateItem> ApplyValuesAsync(
+        CertPlatform.Shared.Entities.Cert.ISOStandard standard,
+        CertPlatform.Shared.Entities.Cert.ISOClause clause,
+        Dictionary<string, string?> values,
+        List<ClauseAttrDef> pool,
+        bool overwrite,
+        ClauseAttrGenerateItem item)
+    {
         var sort = 0;
         foreach (var attr in pool.OrderBy(p => p.Sort))
         {
             if (!values.TryGetValue(attr.Code, out var value)) continue;
             sort += 10;
 
-            var existing = await _db.Client.Queryable<ClauseAttr>()
-                .Where(p => p.StandardCode == standard.StandardCode
-                            && p.ClauseCode == clause.Code
-                            && p.AttrCode == attr.Code)
-                .FirstAsync();
+            var clauseNo = ClauseRefs.NormalizeNumber(clause.ClauseNumber);
+            var candidates = await _db.Client.Queryable<ClauseAttr>()
+                .Where(p => p.StandardCode == standard.StandardCode && p.AttrCode == attr.Code)
+                .ToListAsync();
+            var existing = candidates.FirstOrDefault(p =>
+                string.Equals(ClauseRefs.NormalizeNumber(p.ClauseNumber), clauseNo, StringComparison.Ordinal)
+                || string.Equals(p.ClauseCode, clause.Code, StringComparison.Ordinal));
 
             if (existing != null)
             {
@@ -404,12 +506,16 @@ public sealed class ClauseAttrGenerateService
                     continue;
                 }
                 existing.AttrValue = value;
+                existing.ClauseNumber = clauseNo;
+                existing.ClauseCode = clause.Code;
                 existing.UpdateBy = _user.UserCode;
                 existing.UpdateTime = DateTime.Now;
                 // ⚠️ 必须列级写回（守卫 R-A / 陷阱 ㉑）：全列写回会把别的列一并覆盖
                 var up = await _db.UpdateAsync(
                     existing,
                     nameof(ClauseAttr.AttrValue),
+                    nameof(ClauseAttr.ClauseNumber),
+                    nameof(ClauseAttr.ClauseCode),
                     nameof(ClauseAttr.UpdateBy),
                     nameof(ClauseAttr.UpdateTime));
                 if (!up.Success)
@@ -428,6 +534,7 @@ public sealed class ClauseAttrGenerateService
                 Code = Guid.NewGuid().ToString("N"),
                 StandardCode = standard.StandardCode,
                 ClauseCode = clause.Code,
+                ClauseNumber = ClauseRefs.NormalizeNumber(clause.ClauseNumber),
                 AttrCode = attr.Code,
                 ValueSource = ReferenceAttrs.Contains(attr.Code) ? "reference" : "fixed",
                 AttrValue = value,

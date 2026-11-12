@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Entities.Dir;
 using CertPlatform.Shared.Entities.Doc;
@@ -85,6 +86,14 @@ public interface ICoreResourceQuery
     /// 端内 ⛔ 不准为这个场景直接 <c>_db.GetListAsync&lt;ISOClause&gt;</c>（违铁律 L5 / 守卫 A-R6）。</para>
     /// </summary>
     Task<List<ISOClause>> GetClausesByCodesAsync(IEnumerable<string> clauseCodes);
+
+    /// <summary>
+    /// 按 <b>条款业务键</b>取当前有效条款：<paramref name="standardNo"/> 为标准短码
+    /// （<c>iso9001</c> 等），<paramref name="clauseNumbers"/> 为纯条款号（4.1 / 7.1.2）。
+    /// <para>★ 用途：标准条款重建后，计划 / 属性 / 检查 / 准备不再依赖易变的 <c>ClauseCode</c>，
+    /// 而是按稳定业务键重新解析当前条款。</para>
+    /// </summary>
+    Task<List<ISOClause>> GetClausesByNumbersAsync(string standardNo, IEnumerable<string> clauseNumbers);
 
     // ──────────────────────────── 企业 ────────────────────────────
 
@@ -470,6 +479,27 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
         var rows = await _db.GetListAsync<ISOClause>(x => codes.Contains(x.Code!));
         return rows.Data ?? new List<ISOClause>();
+    }
+
+    public async Task<List<ISOClause>> GetClausesByNumbersAsync(
+        string standardNo, IEnumerable<string> clauseNumbers)
+    {
+        if (string.IsNullOrWhiteSpace(standardNo)) return new List<ISOClause>();
+
+        var numbers = (clauseNumbers ?? Enumerable.Empty<string>())
+            .Select(ClauseRefs.NormalizeNumber)
+            .Where(x => x.Length > 0)
+            .ToHashSet(StringComparer.Ordinal);
+        if (numbers.Count == 0) return new List<ISOClause>();
+
+        // 标准短码在 cert_iso_standard.StandardCode（iso9001），条款表存的是标准 GUID。
+        // 标准只有个位级，取全部有效标准后内存匹配，避免端内再造一个查询入口。
+        var standard = (await GetValidStandardsAsync())
+            .FirstOrDefault(s => string.Equals(s.StandardCode, standardNo.Trim(), StringComparison.Ordinal));
+        if (standard == null) return new List<ISOClause>();
+
+        var all = await GetClausesAsync(standard.Code);
+        return all.Where(c => numbers.Contains(ClauseRefs.NormalizeNumber(c.ClauseNumber))).ToList();
     }
 
     // ──────────────────────────── 企业 ────────────────────────────

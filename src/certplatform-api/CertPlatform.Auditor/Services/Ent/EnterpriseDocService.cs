@@ -1582,27 +1582,9 @@ namespace CertPlatform.Auditor.Services.Ent
         private static (int Start, int End, string Title, string Path, string Mode) ReadSectionRange(
             string sectionMapJson, string clauseNo)
         {
-            try
-            {
-                using var doc = JsonDocument.Parse(sectionMapJson);
-                if (!doc.RootElement.TryGetProperty("Sections", out var sections)
-                    || sections.ValueKind != JsonValueKind.Array)
-                    return (-1, -1, "", "", "missing");
-
-                foreach (var s in sections.EnumerateArray())
-                {
-                    var no = s.TryGetProperty("ClauseNo", out var n) ? n.GetString() : null;
-                    if (NormalizeClauseNo(no) != clauseNo) continue;
-                    var start = s.TryGetProperty("CharStart", out var st) ? st.GetInt32() : -1;
-                    var end = s.TryGetProperty("CharEnd", out var en) ? en.GetInt32() : -1;
-                    var title = s.TryGetProperty("HeadingTitle", out var t) ? t.GetString() : "";
-                    var path = s.TryGetProperty("HeadingPath", out var p) ? p.GetString() : "";
-                    var mode = s.TryGetProperty("CoverageMode", out var m) ? m.GetString() : "missing";
-                    return (start, end, title ?? "", path ?? "", mode ?? "missing");
-                }
-            }
-            catch (JsonException) { /* 落到 missing */ }
-            return (-1, -1, "", "", "missing");
+            // ★ 2026-11-12：读取逻辑与 Admin 试跑共用 Shared 版本，避免两套 JSON 解析漂移。
+            var r = DocSectionIndex.ReadRange(sectionMapJson, clauseNo);
+            return (r.Start, r.End, r.Title, r.Path, r.Mode);
         }
 
         /// <summary>Anchor 核验：去空白、统一破折号/引号，避免模型把换行写成空格导致「找不到」。</summary>

@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Expert;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Services.Workflow;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -43,6 +44,10 @@ public class CertCheckConclusionDto
 {
     public string Conclusion { get; set; } = "conformant"; // conformant / minor_nc / major_nc / observation
     public string Summary { get; set; } = "";
+    /// <summary>审核证据正文（对应审核报告 Audit Evidence；可多条、按条款分点）</summary>
+    public string AuditEvidence { get; set; } = "";
+    /// <summary>逐条款审核证据（clause_evidence）</summary>
+    public List<CertClauseEvidenceDto> ClauseEvidences { get; set; } = new();
     public string Recommendation { get; set; } = "";
     public int Confidence { get; set; } = 0;
     public List<string> EvidenceCodes { get; set; } = new();
@@ -73,6 +78,15 @@ public class CertCheckConclusionDto
 
     /// <summary>准备期"建议开 NC 吗" + 理由（只是给现场的建议）</summary>
     public string? PrepNcHint { get; set; }
+}
+
+/// <summary>逐条款审核证据</summary>
+public class CertClauseEvidenceDto
+{
+    /// <summary>条款号（4.1 / 7.1.2）</summary>
+    public string ClauseNumber { get; set; } = "";
+    /// <summary>该条款的审核证据正文</summary>
+    public string AuditEvidence { get; set; } = "";
 }
 
 /// <summary>疑点（一条 = 一个可独立审阅的可疑点）</summary>
@@ -258,8 +272,10 @@ public class CertCheckEngineService
         // 按条款聚合摘录 → 作为原始证据交给 LLM。一个检查项一次推理，信息量天然有界。
         var planClauseCodes = SplitClauses(detail?.Clauses, detail?.ClauseNumbers)
             .Select(c => c.ClauseCode).ToList();
+        var clauseRefs = ClauseRefs.Parse(detail?.ClauseRefsJson);
         var context = await _ctxBuilder.BuildAsync(
-            planClauseCodes, task?.EnterpriseCode, evidences);
+            planClauseCodes, task?.EnterpriseCode, evidences,
+            clauseRefs.Count > 0 ? clauseRefs : null);
 
         foreach (var w in context.Warnings)
             _logger.LogWarning("[CertCheck] 装配告警 item={Item} {Warn}", item.CheckItemCode, w);
@@ -457,7 +473,9 @@ public class CertCheckEngineService
                     ConclusionBy = null,
                     ConclusionAt = null,
 
-                    Reason = conclusion?.Summary,
+                    // 审核证据：优先用该条款的 clause_evidence；回退整体 audit_evidence；再回退 summary。
+                    // ⛔ 审核发现（文档原文）不写在这里 —— 它是事实来源，不是审核员署名证据。
+                    Reason = ResolveAuditEvidence(conclusion, clauseNumber),
                     RollupTo = true,
                     CreateBy = userCode,
                     CreateTime = now
@@ -625,6 +643,8 @@ public class CertCheckEngineService
             {
                 Conclusion = root.TryGetProperty("conclusion", out var c) ? c.GetString() ?? "unknown" : "unknown",
                 Summary = root.TryGetProperty("summary", out var s) ? s.GetString() ?? "" : "",
+                AuditEvidence = GetStr(root, "audit_evidence") ?? "",
+                ClauseEvidences = ParseClauseEvidences(root),
                 Recommendation = root.TryGetProperty("recommendation", out var r) ? r.GetString() ?? "" : "",
                 Confidence = root.TryGetProperty("confidence", out var f) ? f.GetInt32() : 0,
                 NcSuggestion = root.TryGetProperty("nc_suggestion", out var n) ? n.GetString() : null,
@@ -647,6 +667,49 @@ public class CertCheckEngineService
             _logger.LogWarning(ex, "解析 LLM 结论 JSON 失败");
             return null;
         }
+    }
+
+    /// <summary>解析逐条款审核证据 <c>clause_evidence</c>。</summary>
+    private static List<CertClauseEvidenceDto> ParseClauseEvidences(JsonElement root)
+    {
+        var list = new List<CertClauseEvidenceDto>();
+        if (!root.TryGetProperty("clause_evidence", out var arr)
+            || arr.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            var no = GetStr(item, "clause_number") ?? GetStr(item, "ClauseNumber") ?? "";
+            var text = GetStr(item, "audit_evidence") ?? GetStr(item, "AuditEvidence") ?? "";
+            if (string.IsNullOrWhiteSpace(no) || string.IsNullOrWhiteSpace(text)) continue;
+            list.Add(new CertClauseEvidenceDto
+            {
+                ClauseNumber = no.Trim(),
+                AuditEvidence = text.Trim()
+            });
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// 取该条款的审核证据：clause_evidence → audit_evidence → summary。
+    /// <para>条款号按业务键归一（去掉 e/m 前缀），避免模型输出 <c>e 4.1</c> 匹配不上。</para>
+    /// </summary>
+    private static string ResolveAuditEvidence(CertCheckConclusionDto? conclusion, string? clauseNumber)
+    {
+        if (conclusion == null) return "";
+
+        var no = ClauseRefs.NormalizeNumber(clauseNumber);
+        var hit = conclusion.ClauseEvidences
+            .FirstOrDefault(x => ClauseRefs.NormalizeNumber(x.ClauseNumber) == no
+                                 && !string.IsNullOrWhiteSpace(x.AuditEvidence));
+        if (hit != null) return hit.AuditEvidence.Trim();
+
+        if (!string.IsNullOrWhiteSpace(conclusion.AuditEvidence))
+            return conclusion.AuditEvidence.Trim();
+
+        return conclusion.Summary ?? "";
     }
 
     /// <summary>
@@ -753,7 +816,8 @@ public class CertCheckEngineService
 
         var clauseCodes = SplitClauses(detail.Clauses, detail.ClauseNumbers)
             .Select(c => c.ClauseCode).ToList();
-        if (clauseCodes.Count == 0)
+        var detailRefs = ClauseRefs.Parse(detail.ClauseRefsJson);
+        if (clauseCodes.Count == 0 && detailRefs.Count == 0)
             return Result<List<CertOnsitePlanItem>>.Fail("该检查项未配置条款，无法生成检查内容");
 
         var promptType = PromptTypes.OnsitePlan;
@@ -762,7 +826,9 @@ public class CertCheckEngineService
         if (promptView?.Template == null)
             return Result<List<CertOnsitePlanItem>>.Fail("未找到入场检查内容提示词模板（onsite_plan）");
 
-        var context = await _ctxBuilder.BuildAsync(clauseCodes, plan.EnterpriseCode, new List<CertEvidence>());
+        var context = await _ctxBuilder.BuildAsync(
+            clauseCodes, plan.EnterpriseCode, new List<CertEvidence>(),
+            detailRefs.Count > 0 ? detailRefs : null);
         var prompt = BuildPrompt(promptView.Template, StagePrep, detail, context, new List<CertEvidence>());
 
         var aiSettings = await GetAiSettingsAsync();
@@ -823,6 +889,9 @@ public class CertCheckEngineService
             .Where(p => !string.IsNullOrWhiteSpace(p.ClauseNumber))
             .GroupBy(p => p.ClauseNumber!)
             .ToDictionary(g => g.Key, g => g.First().ClauseCode);
+        var detailRefsByNumber = detailRefs
+            .GroupBy(r => r.ClauseNumber, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
         var created = new List<CertOnsitePlanItem>();
         foreach (var item in items)
@@ -850,6 +919,11 @@ public class CertCheckEngineService
                 SampleRequirement = Truncate(item.SampleRequirement, 200),
                 ExpectedFinding = Truncate(item.ExpectedFinding, 500),
                 ClauseCodes = Truncate(string.IsNullOrWhiteSpace(mappedCodes) ? clauseNumbers : mappedCodes, 500),
+                ClauseRefsJson = ClauseRefs.ToJson(
+                    (clauseNumbers ?? string.Empty)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(n => detailRefsByNumber.GetValueOrDefault(ClauseRefs.NormalizeNumber(n)))
+                        .Where(r => r != null)),
                 Source = "ai",
                 Status = "planned",
                 CreateBy = userCode,

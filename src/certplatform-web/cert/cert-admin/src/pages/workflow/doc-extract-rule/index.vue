@@ -176,6 +176,7 @@ const testFile = ref<File | null>(null)
 const testLoading = ref(false)
 const testMeta = ref<DocExtractTestResult | null>(null)
 const testError = ref('')
+const testMode = ref<'Section' | 'Whole'>('Section')
 
 function onFileChange(e: Event) {
   const target = e.target as HTMLInputElement
@@ -207,6 +208,7 @@ async function runTest() {
       file: testFile.value,
       standardCode: detail.value.StandardCode,
       template: promptEditing.value,
+      mode: testMode.value,
     })
     testMeta.value = r
     if (!r.Success) testError.value = r.Message || '试跑失败'
@@ -313,23 +315,33 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
             </div>
             <div class="doc-extract-rule__test-bar">
               <input type="file" :accept="buildAcceptAttribute(['document', 'pdf'])" @change="onFileChange" />
+              <el-select v-model="testMode" size="small" :disabled="testLoading" class="doc-extract-rule__mode-select">
+                <el-option label="小节模式（推荐）" value="Section" />
+                <el-option label="整篇模式（对比）" value="Whole" />
+              </el-select>
               <el-button type="primary" :loading="testLoading" :disabled="!testFile || testLoading" @click="runTest">
                 {{ testLoading ? '试跑中…' : '运行测试' }}
               </el-button>
               <span v-if="testMeta" class="doc-extract-rule__test-meta">
                 {{ testMeta.Model }} · {{ testMeta.DurationMs }}ms ·
                 {{ testMeta.PromptTokens + testMeta.CompletionTokens }} tokens ·
-                条款 {{ testMeta.ClauseCount }} 条 ·
+                提取 {{ testMeta.ClauseCount }}<template v-if="testMeta.AllClauseCount"> / 清单 {{ testMeta.AllClauseCount }}</template> 条<template v-if="testMeta.SkippedByDocCheckMode">（跳过 {{ testMeta.SkippedByDocCheckMode }} 条 DocCheckMode=none）</template> ·
                 正文 {{ testMeta.MarkdownLength }} 字<template v-if="testMeta.Truncated">（已截断至 3 万字）</template>
+                <template v-if="testMeta.Mode === 'Section' && testMeta.SectionTotal">
+                  · 小节 {{ testMeta.SectionSucceeded }}/{{ testMeta.SectionTotal }} 段
+                  <template v-if="testMeta.SectionFailed">（失败 {{ testMeta.SectionFailed }} 段）</template>
+                </template>
+                <template v-if="testMeta.SectionTruncated"> · {{ testMeta.SectionTruncated }} 节截断至 6000 字</template>
                 <template v-if="!testMeta.JsonValid"> · 输出不是合法 JSON</template>
               </span>
             </div>
+            <el-alert v-if="testMeta?.Note" type="info" :closable="false" show-icon class="doc-extract-rule__test-alert" :title="testMeta.Note" />
             <el-alert v-if="testError" type="error" :closable="false" show-icon class="doc-extract-rule__test-alert" :title="testError" />
             <div v-if="testResult" class="doc-extract-rule__test-result">
               <pre>{{ testResult }}</pre>
             </div>
             <div v-else-if="!testLoading" class="doc-extract-rule__test-tip">
-              上传测试文档后点击“运行测试”，将返回 profile / clauses / doubts 三段 JSON（不落库）
+              默认小节模式：先按标准条款解析文档章节，只把对应小节送给模型，5 路并发；整篇模式仅用于对比旧结果。
             </div>
           </section>
         </template>
@@ -469,6 +481,10 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
   align-items: center;
   gap: var(--yzh-space-3, 12px);
   margin-bottom: var(--yzh-space-3, 12px);
+}
+
+.doc-extract-rule__mode-select {
+  width: 160px;
 }
 
 .doc-extract-rule__test-result {

@@ -313,10 +313,7 @@ onMounted(async () => {
       title="按标准原文生成条款"
       width="760px"
       top="4vh"
-      confirm-text="写入条款"
-      :confirm-loading="applyLoading"
       append-to-body
-      @confirm="confirmApply"
     >
       <div v-if="sourcePreview" class="src-dialog">
         <div class="src-dialog__meta">
@@ -351,8 +348,8 @@ onMounted(async () => {
       </div>
 
       <template #footer>
+        <!-- 写入按钮已放到表格上方并吸顶；这里只保留取消，避免两个“写入条款” -->
         <el-button type="default" @click="sourceDialog = false">取消</el-button>
-        <el-button type="primary" :loading="applyLoading" @click="confirmApply">写入条款</el-button>
       </template>
     </YzhDialog>
 

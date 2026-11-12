@@ -31,9 +31,13 @@ public class ClauseAttrRow
     [SugarColumn(Length = 36)]
     public string StandardCode { get; set; } = string.Empty;
 
-    /// <summary>条款 Code（<c>cert_iso_clause.Code</c>，GUID）</summary>
+    /// <summary>条款 Code（<c>cert_iso_clause.Code</c>，GUID；仅作缓存，标准重建后会变）</summary>
     [SugarColumn(Length = 36)]
     public string ClauseCode { get; set; } = string.Empty;
+
+    /// <summary>条款编号（<c>4.1</c>）—— 稳定业务键成员</summary>
+    [SugarColumn(Length = 50, IsNullable = true)]
+    public string? ClauseNumber { get; set; }
 
     /// <summary>属性码（<c>cert_clause_attr_def.Code</c>，如 <c>DocCheckMode</c>）</summary>
     [SugarColumn(Length = 50)]

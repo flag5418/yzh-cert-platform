@@ -62,9 +62,15 @@ namespace CertPlatform.Auditor.Entities.Expert
         [StringLength(500)]
         public string? ExpectedFinding { get; set; }
 
-        /// <summary>对应条款 Code（逗号分隔）</summary>
+        /// <summary>对应条款 Code（逗号分隔；仅作运行时缓存）</summary>
         [StringLength(500)]
         public string? ClauseCodes { get; set; }
+
+        /// <summary>
+        /// ★ 对应条款业务键 JSON：<c>[{"StandardNo":"iso9001","ClauseNumber":"4.1"}]</c>。
+        /// <para>权威关联键；标准重建后按本字段重新解析当前条款。</para>
+        /// </summary>
+        public string? ClauseRefsJson { get; set; }
 
         /// <summary>来源：manual 人工 / ai 系统生成</summary>
         [StringLength(20)]
