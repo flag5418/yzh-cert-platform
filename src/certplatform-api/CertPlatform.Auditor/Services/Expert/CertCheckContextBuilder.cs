@@ -6,10 +6,13 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Auditor.Entities.Expert;
+using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
+using CertPlatform.Shared.Storage;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
+using YZH.Core.Stand.Interfaces;
 
 namespace CertPlatform.Auditor.Services.Expert;
 
@@ -58,6 +61,7 @@ public sealed class ClauseDocSlice
     public string FileName { get; init; } = string.Empty;
     public string? Anchor { get; init; }
     public List<string> Excerpts { get; init; } = new();
+    public List<string> ExcerptStatuses { get; init; } = new();
     public decimal? Confidence { get; init; }
 }
 
@@ -89,11 +93,6 @@ public sealed class CertCheckContext
     /// <summary>条款属性命中条数（0 ⇒ 条款模型没进装配，必须告警）</summary>
     public int AttrHitCount => Clauses.Sum(c => c.Attrs.Count);
 
-    // ── 渲染上限（与装配器一致；⛔ 改这里就是改 token 预算）──
-
-    /// <summary>条款原文上限（最长的一条 15011 字，整段塞进去会淹掉其他所有信息）</summary>
-    private const int MaxDescriptionChars = 1200;
-
     /// <summary>
     /// 渲染 <c>{{clause_blocks}}</c>：<b>条款正文 → 命中摘录</b>，最后附输出契约。
     /// <para>顺序由程序固定，⛔ 不交给模型自己拼 —— 顺序一乱，模型的注意力分配就跟着乱。</para>
@@ -108,7 +107,7 @@ public sealed class CertCheckContext
     }
 
     /// <summary>
-    /// 渲染「条款清单」：条款标题 + 原文（<b>不含</b>属性池、文档命中与输出契约）。
+    /// 渲染「条款清单」：条款标题、原文及属性线索，不含文档命中与输出契约。
     /// <para>★ 单独拆出来是为了兼容旧占位符 <c>{{ClauseInfo}}</c> / <c>{{CheckRequirement}}</c>。</para>
     /// </summary>
     public string RenderClauseInfo()
@@ -126,13 +125,34 @@ public sealed class CertCheckContext
             // ① 条款正文
             if (!string.IsNullOrWhiteSpace(c.Description))
             {
-                sb.AppendLine("【条款原文】");
-                sb.AppendLine(Truncate(c.Description!.Trim(), MaxDescriptionChars));
+                sb.AppendLine("【条款 Markdown】以下内容由条款表生成，完整性需与原始标准核对。");
+                sb.AppendLine(c.Description);
                 sb.AppendLine();
             }
 
-            // ② 条款属性池不再整块塞给模型：审核员/模型只关心条款正文。
-            //    需要严重度约束时由提示词按条款原文判断，不再依赖 9 类属性。
+            var attributeLabels = new (string Code, string Label)[]
+            {
+                ("ClauseIntent", "条款意图"),
+                ("Obligation", "义务"),
+                ("Applicability", "适用性"),
+                ("ApplicabilityCondition", "适用条件"),
+                ("Process", "过程"),
+                ("Severity", "严重度线索"),
+                ("EvidenceForm", "证据形式"),
+                ("EvidenceFamily", "证据类别"),
+                ("Role", "角色")
+            };
+            var attributes = attributeLabels
+                .Select(a => (a.Label, Value: c.Attr(a.Code)))
+                .Where(a => a.Value != null)
+                .ToList();
+            if (attributes.Count > 0)
+            {
+                sb.AppendLine("【条款属性线索】以标准原文为准；属性不能直接决定适用性、证据范围或审核结论。");
+                foreach (var attribute in attributes)
+                    sb.AppendLine($"- {attribute.Label}：{attribute.Value}");
+                sb.AppendLine();
+            }
         }
 
         return sb.ToString();
@@ -146,7 +166,9 @@ public sealed class CertCheckContext
     public string RenderDocHits()
     {
         var sb = new StringBuilder();
-        sb.AppendLine("## 企业文档命中（按条款聚合的原始证据）");
+        sb.AppendLine("## 企业文档命中（按条款聚合的提取内容）");
+        foreach (var warning in Warnings)
+            sb.AppendLine($"注意：{warning}");
 
         if (Clauses.Count == 0)
         {
@@ -165,15 +187,20 @@ public sealed class CertCheckContext
                     sb.AppendLine($"· 《{s.FileName}》{conf}");
                     if (!string.IsNullOrWhiteSpace(s.Anchor))
                         sb.AppendLine($"  位置：{Truncate(s.Anchor, 200)}");
-                    foreach (var ex in s.Excerpts)
-                        sb.AppendLine($"  摘录：{ex}");
+                    for (var i = 0; i < s.Excerpts.Count; i++)
+                    {
+                        var status = i < s.ExcerptStatuses.Count ? s.ExcerptStatuses[i] : "unverified";
+                        var label = status == "section_candidate" ? "章节原文候选，已定位转换文本，相关性需核实"
+                            : status == "matched" ? "已逐字匹配转换文本" : "未经逐字核验，需核实";
+                        sb.AppendLine($"  摘录（{label}）：{s.Excerpts[i]}");
+                    }
                 }
             }
             else
             {
                 // ⛔ 这句必须写清楚：模型要能区分「企业没有这份资料」和「我们没给它看」
                 sb.AppendLine($"### 条款 {c.ClauseNumber} · {c.Title}");
-                sb.AppendLine("（该条款在企业已提交资料中未提取到对应内容）");
+                sb.AppendLine("（本次可用提取结果中未找到对应内容，不代表企业未提供资料）");
             }
             sb.AppendLine();
         }
@@ -186,9 +213,9 @@ public sealed class CertCheckContext
             {
                 sb.AppendLine($"- [{ev.Code}] {ev.SourceName ?? ev.Code}（{ev.EvidenceKind}）");
                 if (!string.IsNullOrEmpty(ev.LlmSummary))
-                    sb.AppendLine($"  摘要：{Truncate(ev.LlmSummary, 500)}");
+                    sb.AppendLine($"  摘要：{ev.LlmSummary}");
                 if (!string.IsNullOrEmpty(ev.TranscriptText))
-                    sb.AppendLine($"  转录：{Truncate(ev.TranscriptText, 500)}");
+                    sb.AppendLine($"  转录：{ev.TranscriptText}");
             }
             sb.AppendLine();
         }
@@ -208,7 +235,7 @@ public sealed class CertCheckContext
             sb.AppendLine("## 判定口径（严格按此执行）");
             sb.AppendLine("- found   ：所需资料齐全，且互相不矛盾");
             sb.AppendLine("- partial ：有资料但缺关键要素，或不同文档之间互相矛盾");
-            sb.AppendLine("- missing ：完全找不到所需资料");
+            sb.AppendLine("- missing ：仅在已核实所需资料确实缺失时使用；未检索到不等于企业没有");
             sb.AppendLine("- unknown ：无法判断（资料不足以下判断）—— ⛔ 不要猜，不要当成不符合");
             sb.AppendLine("- na      ：该条款不适用于本企业/本阶段");
             sb.AppendLine("⛔ 你**不能**输出 pass / ofi / nc —— 那是现场检查阶段的事，现在还没到现场。");
@@ -218,6 +245,7 @@ public sealed class CertCheckContext
         else
         {
             sb.AppendLine("## 判定口径（严格按此执行）");
+            sb.AppendLine("资料未检索到或存在疑点只表示需要审核员核实，不可单凭疑点认定不符合；输出仅为建议。");
             sb.AppendLine("- conformant ：符合");
             sb.AppendLine("- minor_nc   ：一般不符合（局部、未影响体系有效性）");
             sb.AppendLine("- major_nc   ：严重不符合（系统性缺失或影响体系有效性）");
@@ -262,32 +290,24 @@ public sealed class CertCheckContext
 /// </summary>
 public sealed class CertCheckContextBuilder
 {
-    // ── 裁剪上限：控制单次推理的 token（用户口径「一个检查项需要的信息是有限的」）──
-
-    /// <summary>单条摘录上限</summary>
-    private const int MaxExcerptChars = 400;
-
-    /// <summary>单份文档对单条款最多取几条摘录</summary>
-    private const int MaxExcerptsPerDoc = 3;
-
-    /// <summary>单条款最多引用几份文档</summary>
-    private const int MaxDocsPerClause = 6;
-
     private readonly IDbOrm _db;
 
     /// <summary>核心资源（条款 / 标准 / 企业）的唯一读入口 —— 铁律 L5，守卫 A-R6。</summary>
     private readonly CertPlatform.Shared.Domain.Scope.ICoreResourceQuery _core;
 
     private readonly ILogger<CertCheckContextBuilder> _logger;
+    private readonly IObjectStorage _storage;
 
     public CertCheckContextBuilder(
         IDbOrm db,
         CertPlatform.Shared.Domain.Scope.ICoreResourceQuery core,
-        ILogger<CertCheckContextBuilder> logger)
+        ILogger<CertCheckContextBuilder> logger,
+        IObjectStorage storage)
     {
         _db = db;
         _core = core;
         _logger = logger;
+        _storage = storage;
     }
 
     // ================================================================
@@ -317,12 +337,24 @@ public sealed class CertCheckContextBuilder
             // ★ 业务键优先：按 (标准短码, 条款号) 解析当前有效条款。
             // 标准重建后旧 Code 全部软删，只有这里能把计划拉回可用状态。
             var refs = ClauseRefs.Clean(clauseRefs);
-            foreach (var group in refs.GroupBy(r => r.StandardNo, StringComparer.Ordinal))
+            var hasMissing = false;
+            foreach (var group in refs.GroupBy(r => (r.StandardNo, r.VersionYear)))
             {
                 var rows = await _core.GetClausesByNumbersAsync(
-                    group.Key, group.Select(r => r.ClauseNumber));
+                    group.Key.StandardNo, group.Key.VersionYear, group.Select(r => r.ClauseNumber));
+                var foundNumbers = rows.Select(c => ClauseRefs.NormalizeNumber(c.ClauseNumber))
+                    .ToHashSet(StringComparer.Ordinal);
+                var missing = group.Select(r => ClauseRefs.NormalizeNumber(r.ClauseNumber))
+                    .Where(n => !foundNumbers.Contains(n)).ToList();
+                if (missing.Count > 0)
+                {
+                    warnings.Add($"标准【{group.Key.StandardNo}】版本【{group.Key.VersionYear?.ToString() ?? "未指定"}】条款未找到或版本不明确：{string.Join(",", missing)}");
+                    hasMissing = true;
+                }
                 clauseRows.AddRange(rows);
             }
+            if (hasMissing)
+                return new CertCheckContext { Warnings = warnings };
             clauseRows = clauseRows
                 .Where(c => !string.IsNullOrEmpty(c.Code))
                 .GroupBy(c => c.Code, StringComparer.Ordinal)
@@ -362,10 +394,36 @@ public sealed class CertCheckContextBuilder
             {
                 var missing = codeList.Except(clauseRows.Select(c => c.Code), StringComparer.Ordinal);
                 warnings.Add($"部分条款查无正文：{string.Join(",", missing)}");
+                return new CertCheckContext { Warnings = warnings };
             }
         }
 
-        // ---- 1.5 剔除「无条款内容的父级标题」----
+        // ---- 1.5 读取条款 Markdown 并核对当前条款 ----
+        var clauseSections = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var group in clauseRows.GroupBy(c => c.StandardCode, StringComparer.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(group.Key))
+            {
+                warnings.Add("条款缺少所属标准，无法读取条款 Markdown");
+                return new CertCheckContext { Warnings = warnings };
+            }
+            try
+            {
+                var standard = await _core.GetStandardByCodeAsync(group.Key);
+                if (standard == null)
+                    throw new InvalidOperationException("所属标准不存在或已停用");
+                var markdown = await ClauseMarkdownInput.LoadAsync(_storage, standard);
+                foreach (var clause in group)
+                    clauseSections.Add(clause.Code!, ClauseMarkdownInput.ReadSection(markdown, clause));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                warnings.Add($"标准【{group.Key}】条款 Markdown 不可用：{ex.Message}");
+                return new CertCheckContext { Warnings = warnings };
+            }
+        }
+
+        // ---- 无正文条款不能参与分析 ----
         // 真实审核报告只列有要求的条款（如 4.1），不列只有章标题的 4。
         // 父级条款 Description 为空，不能生成条款结果，也不能让模型拿它做判定。
         var emptyClauses = clauseRows
@@ -375,10 +433,8 @@ public sealed class CertCheckContextBuilder
             .ToList();
         if (emptyClauses.Count > 0)
         {
-            clauseRows = clauseRows
-                .Where(c => !string.IsNullOrWhiteSpace(c.Description))
-                .ToList();
-            warnings.Add($"已过滤无条款内容的父级标题：{string.Join(",", emptyClauses)}");
+            warnings.Add($"所选条款缺少正文，无法完整分析：{string.Join(",", emptyClauses)}");
+            return new CertCheckContext { Warnings = warnings };
         }
         if (clauseRows.Count == 0)
         {
@@ -387,52 +443,33 @@ public sealed class CertCheckContextBuilder
         }
 
         // ---- 2. 条款模型：9 类属性（cert_clause_attr，长表 → 按条款聚合）----
-        // ★ 按 (标准短码, 条款号) 取，不再按 ClauseCode：标准重建后属性行的旧 Code 会失效。
-        var standards = await _core.GetValidStandardsAsync();
-        var shortByGuid = standards
-            .Where(s => !string.IsNullOrEmpty(s.Code))
-            .ToDictionary(s => s.Code!, s => s.StandardCode, StringComparer.Ordinal);
-
-        var standardNos = clauseRows
-            .Select(c => shortByGuid.GetValueOrDefault(c.StandardCode ?? string.Empty))
+        var currentClauseCodes = clauseRows
+            .Select(c => c.Code)
             .Where(x => !string.IsNullOrEmpty(x))
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
         var attrRows = new List<ClauseAttrRow>();
-        if (standardNos.Count > 0)
+        if (currentClauseCodes.Count > 0)
         {
             attrRows = (await _db.GetListAsync<ClauseAttrRow>(a =>
-                standardNos.Contains(a.StandardCode) && !a.IsDeleted && a.IsValid == 1)).Data
+                currentClauseCodes.Contains(a.ClauseCode) && !a.IsDeleted && a.IsValid == 1)).Data
                 ?? new List<ClauseAttrRow>();
         }
-
-        // 同一标准同一条款号可能有多行历史数据：只保留与当前条款编号一致的。
-        var attrByKey = attrRows
-            .Select(a => new
-            {
-                Key = a.StandardCode + "|" + ClauseRefs.NormalizeNumber(a.ClauseNumber),
-                Row = a
-            })
-            .Where(x => !string.IsNullOrEmpty(x.Key))
-            .GroupBy(x => x.Key, StringComparer.Ordinal)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(x => x.Row)
-                      .OrderBy(x => x.Sort)
-                      .GroupBy(x => x.AttrCode, StringComparer.Ordinal)
-                      .ToDictionary(x => x.Key, x => x.First().AttrValue, StringComparer.Ordinal),
-                StringComparer.Ordinal);
 
         var attrsByClause = new Dictionary<string, Dictionary<string, string?>>(StringComparer.Ordinal);
         foreach (var c in clauseRows)
         {
             if (string.IsNullOrEmpty(c.Code)) continue;
-            var no = shortByGuid.GetValueOrDefault(c.StandardCode ?? string.Empty);
-            var key = no + "|" + ClauseRefs.NormalizeNumber(c.ClauseNumber);
-            attrsByClause[c.Code] = attrByKey.TryGetValue(key, out var a)
-                ? a
-                : new Dictionary<string, string?>(StringComparer.Ordinal);
+            var groups = attrRows.Where(a => string.Equals(a.ClauseCode, c.Code, StringComparison.Ordinal))
+                .GroupBy(a => a.AttrCode, StringComparer.Ordinal).ToList();
+            var duplicates = groups.Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+            if (duplicates.Count > 0)
+                warnings.Add($"条款【{c.ClauseNumber}】存在重复属性，已忽略：{string.Join(",", duplicates)}");
+            attrsByClause[c.Code] = groups.Where(g => g.Count() == 1)
+                .ToDictionary(g => g.Key, g => g.Single().AttrValue, StringComparer.Ordinal);
+            if (groups.Count == 0)
+                warnings.Add($"条款【{c.ClauseNumber}】未配置有效属性");
         }
 
         if (attrRows.Count == 0)
@@ -450,7 +487,7 @@ public sealed class CertCheckContextBuilder
                 ClauseCode = c.Code,
                 ClauseNumber = c.ClauseNumber,
                 Title = c.Title,
-                Description = c.Description,
+                Description = clauseSections[c.Code!],
                 StandardCode = c.StandardCode ?? string.Empty,
                 Attrs = attrsByClause.TryGetValue(c.Code, out var a)
                     ? a
@@ -523,12 +560,26 @@ public sealed class CertCheckContextBuilder
         if (staleCount > 0)
             warnings.Add($"{staleCount} 份文档的提取产物已过期（IsStale=1），内容可能与企业当前文件不一致");
 
+        var fileCodes = extractions.Select(e => e.FileCode).Distinct().ToList();
+        var files = (await _db.GetListAsync<EnterpriseDoc>(d =>
+            fileCodes.Contains(d.Code) && !d.IsDeleted && d.IsValid == 1)).Data
+            ?? new List<EnterpriseDoc>();
+        var currentFiles = files.GroupBy(d => d.Code, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
         foreach (var ex in extractions)
         {
+            if (ex.IsStale) continue;
+            if (!currentFiles.TryGetValue(ex.FileCode, out var matchingFiles) || matchingFiles.Count != 1
+                || string.IsNullOrWhiteSpace(ex.SourceSha256)
+                || !string.Equals(ex.SourceSha256, matchingFiles[0].Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add($"文档【{ex.FileCode}】当前文件不存在、重复或与提取来源不一致，已排除该产物");
+                continue;
+            }
             if (string.IsNullOrWhiteSpace(ex.ContentJson)) continue;
             if (!wanted.TryGetValue(ex.StandardCode, out var numbers)) continue;
 
-            var slices = ParseClauseSlices(ex.ContentJson!, numbers);
+            var slices = ParseClauseSlices(ex.ContentJson!, numbers, warnings);
             if (slices.Count == 0) continue;
 
             foreach (var (clauseNumber, slice) in slices)
@@ -538,19 +589,13 @@ public sealed class CertCheckContextBuilder
                     && string.Equals(c.StandardCode, ex.StandardCode, StringComparison.Ordinal));
                 if (target == null) continue;
 
-                // 单条款文档份数上限：超出只留前 N 份，且记告警（⛔ 不静默丢）
-                if (target.Slices.Count >= MaxDocsPerClause)
-                {
-                    warnings.Add($"条款 {clauseNumber} 命中文档超过 {MaxDocsPerClause} 份，已截断（丢 {ex.Code}）");
-                    continue;
-                }
-
                 target.Slices.Add(new ClauseDocSlice
                 {
                     FileCode = ex.FileCode,
                     FileName = slice.FileName,
                     Anchor = slice.Anchor,
                     Excerpts = slice.Excerpts,
+                    ExcerptStatuses = slice.ExcerptStatuses,
                     Confidence = slice.Confidence
                 });
             }
@@ -563,7 +608,7 @@ public sealed class CertCheckContextBuilder
 
     /// <summary>解析 <c>ContentJson</c>，只挑出 <paramref name="wantedNumbers"/> 里的条款切片。</summary>
     private List<(string ClauseNumber, ParsedSlice Slice)> ParseClauseSlices(
-        string contentJson, HashSet<string> wantedNumbers)
+        string contentJson, HashSet<string> wantedNumbers, List<string> warnings)
     {
         var result = new List<(string, ParsedSlice)>();
         try
@@ -583,15 +628,33 @@ public sealed class CertCheckContextBuilder
                 if (string.IsNullOrWhiteSpace(number) || !wantedNumbers.Contains(number!)) continue;
 
                 var excerpts = new List<string>();
+                var statuses = new List<string>();
                 if (TryGetArray(el, out var exEl, "Excerpts", "excerpts"))
                 {
+                    var locations = new Dictionary<int, string>();
+                    if (TryGetArray(el, out var locEl, "ExcerptLocations", "excerptLocations"))
+                    {
+                        foreach (var location in locEl.EnumerateArray())
+                        {
+                            if (location.ValueKind != JsonValueKind.Object) continue;
+                            if ((!location.TryGetProperty("ExcerptIndex", out var idx)
+                                && !location.TryGetProperty("excerptIndex", out idx))
+                                || idx.ValueKind != JsonValueKind.Number || !idx.TryGetInt32(out var position)) continue;
+                            var status = GetString(location, "Status", "status") ?? "unverified";
+                            var kind = GetString(location, "Kind", "kind");
+                            locations[position] = status == "matched" && kind == "section_candidate"
+                                ? "section_candidate" : status;
+                        }
+                    }
+                    var index = -1;
                     foreach (var x in exEl.EnumerateArray())
                     {
+                        index++;
                         if (x.ValueKind != JsonValueKind.String) continue;
                         var s = x.GetString();
                         if (string.IsNullOrWhiteSpace(s)) continue;
-                        excerpts.Add(Truncate(s.Trim(), MaxExcerptChars)!);
-                        if (excerpts.Count >= MaxExcerptsPerDoc) break;
+                        excerpts.Add(s);
+                        statuses.Add(locations.GetValueOrDefault(index, "unverified"));
                     }
                 }
                 if (excerpts.Count == 0) continue;
@@ -605,6 +668,7 @@ public sealed class CertCheckContextBuilder
                     FileName = fileName,
                     Anchor = GetString(el, "Anchor", "anchor"),
                     Excerpts = excerpts,
+                    ExcerptStatuses = statuses,
                     Confidence = conf
                 }));
             }
@@ -629,6 +693,7 @@ public sealed class CertCheckContextBuilder
         public string FileName { get; init; } = string.Empty;
         public string? Anchor { get; init; }
         public List<string> Excerpts { get; init; } = new();
+        public List<string> ExcerptStatuses { get; init; } = new();
         public decimal? Confidence { get; init; }
     }
 

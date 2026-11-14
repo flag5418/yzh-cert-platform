@@ -1,5 +1,6 @@
 
 using Microsoft.AspNetCore.Mvc;
+using CertPlatform.Admin.Services.StandardDirectory;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
@@ -42,11 +43,15 @@ namespace CertPlatform.Admin.Controllers.Foundation;
 [Route("api/Admin/Foundation/[controller]")]
 public class ISOClauseController : YzhControllerBase<ISOClause>
 {
+    private readonly StandardSourceService _source;
+
     public ISOClauseController(
         EntityService<ISOClause> entityService,
-        IUserContext userContext)
+        IUserContext userContext,
+        StandardSourceService source)
         : base(entityService, userContext)
     {
+        _source = source;
     }
 
     // ========================================================
@@ -73,6 +78,9 @@ public class ISOClauseController : YzhControllerBase<ISOClause>
         if (string.IsNullOrWhiteSpace(entity.StandardCode))
             return (false, "所属标准编码不能为空");
 
+        var identity = await _source.PrepareManualClauseAsync(entity);
+        if (!identity.ok) return identity;
+
         var exists = await Entity.ExistsAsync(c =>
             c.StandardCode == entity.StandardCode &&
             c.ClauseNumber == entity.ClauseNumber);
@@ -86,6 +94,9 @@ public class ISOClauseController : YzhControllerBase<ISOClause>
     /// <summary>修改前校验：同标准下条款编号唯一（排除自身）+ 父条款合法/防环</summary>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(ISOClause entity)
     {
+        var identity = await _source.ValidateManualClauseUpdateAsync(entity);
+        if (!identity.ok) return identity;
+
         var exists = await Entity.ExistsAsync(c =>
             c.Code != entity.Code &&
             c.StandardCode == entity.StandardCode &&

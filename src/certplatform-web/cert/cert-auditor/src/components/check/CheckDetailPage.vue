@@ -1606,7 +1606,7 @@ onMounted(loadAll)
               <div class="cd-block__title">审核发现（{{ auditFindings.length }}）</div>
             </div>
             <div class="cd-evi-panel__tip">
-              系统从企业原始文档中提取到的原文事实，只读；它回答“文档里写了什么”，不是现场证据。
+              系统提取的文档内容，只读；匹配状态仅表示与提取时的转换文本逐字比对结果，不代表审核结论。
             </div>
             <el-table :data="auditFindings" border size="small" empty-text="暂无审核发现">
               <el-table-column label="条款" width="76" align="center">
@@ -1615,6 +1615,8 @@ onMounted(loadAll)
               <el-table-column label="来源 / 标题" min-width="150" show-overflow-tooltip>
                 <template #default="{ row }">
                   <div class="cd-evi-name">{{ row.SourceName || '未命名来源' }}</div>
+                  <div>{{ row.SourceMatchStatus === 'section_candidate' ? '章节原文候选，相关性待核实' : row.SourceMatchStatus === 'matched' ? '已匹配转换文本' : row.SourceMatchStatus === 'ambiguous' ? '原文位置不唯一，待核实' : '未核验原文，待核实' }}</div>
+                  <div v-if="row.SourceAnchor">定位片段：{{ row.SourceAnchor }}</div>
                 </template>
               </el-table-column>
               <el-table-column label="原文事实" min-width="280" show-overflow-tooltip>

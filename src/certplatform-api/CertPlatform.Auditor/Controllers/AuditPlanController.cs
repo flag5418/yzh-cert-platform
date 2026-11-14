@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Controllers;
@@ -214,6 +215,48 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             ownerNames[oc] = hit.Name;
         }
 
+        var standards = await _core.GetValidStandardsAsync();
+        var resolvedDetails = new List<(string? Clauses, string? RefsJson)>();
+        foreach (var d in dto.Details)
+        {
+            List<ClauseRef> refs;
+            try
+            {
+                var rawRefs = string.IsNullOrWhiteSpace(d.ClauseRefsJson)
+                    ? new List<ClauseRef>()
+                    : JsonSerializer.Deserialize<List<ClauseRef>>(d.ClauseRefsJson,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (rawRefs == null || rawRefs.Any(r => r == null))
+                    return Ok(ApiResponse<object?>.Fail("条款引用格式不正确，请重新选择条款"));
+                refs = ClauseRefs.Clean(rawRefs);
+                if (refs.Count != rawRefs.Count)
+                    return Ok(ApiResponse<object?>.Fail("条款引用不完整或重复，请重新选择条款"));
+            }
+            catch (JsonException)
+            {
+                return Ok(ApiResponse<object?>.Fail("条款引用格式不正确，请重新选择条款"));
+            }
+
+            foreach (var r in refs)
+            {
+                var matches = standards.Where(s =>
+                    string.Equals(s.StandardCode, r.StandardNo, StringComparison.OrdinalIgnoreCase)
+                    && (!r.VersionYear.HasValue || s.VersionYear == r.VersionYear.Value)).ToList();
+                if (matches.Count != 1)
+                    return Ok(ApiResponse<object?>.Fail(
+                        $"标准【{r.StandardNo}】版本不明确或不存在，请重新选择条款"));
+            }
+
+            var resolved = await ResolveDetailRefsAsync(d);
+            var inputCodes = SplitCodes(d.Clauses);
+            var resolvedCodes = SplitCodes(resolved.Clauses);
+            if ((refs.Count > 0 && ClauseRefs.Parse(resolved.RefsJson).Count != refs.Count)
+                || (inputCodes.Count > 0 && !inputCodes.ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(resolvedCodes)))
+                return Ok(ApiResponse<object?>.Fail("部分条款不存在、无正文或标识已变化，请重新选择条款"));
+            resolvedDetails.Add(resolved);
+        }
+
         try
         {
             if (!isUpdate)
@@ -268,7 +311,7 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             {
                 var d = dto.Details[i];
                 var ownerCode = d.OwnerCode?.Trim();
-                var resolved = await ResolveDetailRefsAsync(d);
+                var resolved = resolvedDetails[i];
                 var detail = new CertAuditPlanDetail
                 {
                     PlanCode = plan.Code!,
@@ -306,10 +349,10 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
     private async Task<List<ClauseRef>> FilterContentRefsAsync(List<ClauseRef> refs)
     {
         var valid = new List<ClauseRef>();
-        foreach (var group in refs.GroupBy(r => r.StandardNo, StringComparer.Ordinal))
+        foreach (var group in refs.GroupBy(r => (r.StandardNo, r.VersionYear)))
         {
             var clauses = await _core.GetClausesByNumbersAsync(
-                group.Key, group.Select(r => r.ClauseNumber));
+                group.Key.StandardNo, group.Key.VersionYear, group.Select(r => r.ClauseNumber));
             var contentNos = clauses
                 .Where(c => !string.IsNullOrWhiteSpace(c.Description))
                 .Select(c => ClauseRefs.NormalizeNumber(c.ClauseNumber))
@@ -355,6 +398,7 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
                     refs.Add(new ClauseRef
                     {
                         StandardNo = std.StandardCode,
+                        VersionYear = std.VersionYear,
                         ClauseNumber = ClauseRefs.NormalizeNumber(clause.ClauseNumber)
                     });
                 }
@@ -362,21 +406,26 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
             }
         }
 
-        if (refs.Count == 0) return (d.Clauses, null);
+        if (refs.Count == 0) return (null, null);
 
         // 按业务键重新解析当前 Code：标准重建后旧 Code 失效，这一步是把计划拉回可用状态。
         // ★ 只保留有正文的条款：父级标题（如 4 组织环境）Description 为空，不能进计划/检查，
         //   否则真实审核报告里的条款会被章标题污染。
-        var currentByKey = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var group in refs.GroupBy(r => r.StandardNo, StringComparer.Ordinal))
+        var standardsByCode = (await _core.GetValidStandardsAsync())
+            .Where(s => !string.IsNullOrWhiteSpace(s.Code))
+            .ToDictionary(s => s.Code!, s => s, StringComparer.Ordinal);
+        var currentByKey = new Dictionary<(string, int?, string), (string Code, int VersionYear)>();
+        foreach (var group in refs.GroupBy(r => (r.StandardNo, r.VersionYear)))
         {
             var clauses = await _core.GetClausesByNumbersAsync(
-                group.Key, group.Select(r => r.ClauseNumber));
+                group.Key.StandardNo, group.Key.VersionYear, group.Select(r => r.ClauseNumber));
             foreach (var c in clauses)
             {
                 if (string.IsNullOrEmpty(c.Code)) continue;
                 if (string.IsNullOrWhiteSpace(c.Description)) continue;
-                currentByKey[group.Key + "|" + ClauseRefs.NormalizeNumber(c.ClauseNumber)] = c.Code;
+                if (!standardsByCode.TryGetValue(c.StandardCode, out var standard)) continue;
+                currentByKey[(group.Key.StandardNo, group.Key.VersionYear, ClauseRefs.NormalizeNumber(c.ClauseNumber))] =
+                    (c.Code, standard.VersionYear);
             }
         }
 
@@ -384,11 +433,16 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
         var validRefs = new List<ClauseRef>();
         foreach (var r in refs)
         {
-            var code = currentByKey.GetValueOrDefault(r.StandardNo + "|" + ClauseRefs.NormalizeNumber(r.ClauseNumber));
-            if (!string.IsNullOrEmpty(code) && !currentCodes.Contains(code))
+            if (currentByKey.TryGetValue((r.StandardNo, r.VersionYear, ClauseRefs.NormalizeNumber(r.ClauseNumber)), out var resolved)
+                && !currentCodes.Contains(resolved.Code))
             {
-                currentCodes.Add(code);
-                validRefs.Add(r);
+                currentCodes.Add(resolved.Code);
+                validRefs.Add(new ClauseRef
+                {
+                    StandardNo = r.StandardNo,
+                    VersionYear = resolved.VersionYear,
+                    ClauseNumber = r.ClauseNumber
+                });
             }
         }
 
@@ -409,20 +463,7 @@ public class AuditPlanController : YzhControllerBase<CertAuditPlan>
         if (!list.Success)
             return Ok(ApiResponse<object?>.Fail(list.Error ?? "查询明细失败"));
 
-        // 读侧兜底：历史计划明细可能把 4 这类无正文父级标题也存进了 refs。
-        // 计划页按 refs 找回条款 Code，若不清理，界面仍会显示“4.1 + 4”。
         var details = list.Data ?? new List<CertAuditPlanDetail>();
-        foreach (var d in details)
-        {
-            var refs = ClauseRefs.Parse(d.ClauseRefsJson);
-            if (refs.Count == 0) continue;
-            var valid = await FilterContentRefsAsync(refs);
-            if (valid.Count == 0) continue;
-            d.ClauseRefsJson = ClauseRefs.ToJson(valid);
-            d.ClauseNumbers = string.Join(",", valid.Select(r =>
-                ClauseRefs.NormalizeNumber(r.ClauseNumber)));
-        }
-
         return Ok(ApiResponse<object?>.Ok(details));
     }
 

@@ -1799,7 +1799,11 @@ namespace CertPlatform.Auditor.Services.Expert
             // ★ 空数组 `[]` 不算疑点：直接透出会让抽屉里出现一条内容为「[]」的假疑点
             if (rPrep != null && !IsEmptyJsonArray(rPrep.ConflictsJson))
                 doubts.Add(new { kind = "conflict", point = "资料冲突", detail = rPrep.ConflictsJson, text = rPrep.ConflictsJson });
-            foreach (var dt in ParseDoubtList(rOnsite?.DoubtsJson))
+            var onsiteDoubts = ParseDoubtList(rOnsite?.DoubtsJson);
+            if (onsiteDoubts.Count == 0)
+                onsiteDoubts = ParseAnalysisDoubts(currentAnalyses
+                    .FirstOrDefault(a => a.StageKind == CertCheckEngineService.StageOnsite)?.ResultSummaryJson);
+            foreach (var dt in onsiteDoubts)
             {
                 doubts.Add(new
                 {
@@ -1947,18 +1951,49 @@ namespace CertPlatform.Auditor.Services.Expert
                     p.Code == detail.PlanCode && !p.IsDeleted)).Data;
                 if (plan == null || string.IsNullOrWhiteSpace(plan.Standards)) return rows;
 
-                var clauseNos = ResolveDetailClauseNumbers(detail);
-                if (clauseNos.Count == 0) return rows;
-
                 var stdCodes = plan.Standards.Split(',', StringSplitOptions.RemoveEmptyEntries)
                     .Select(s => s.Trim()).Where(s => s.Length > 0).Distinct().ToList();
+                var clausesByStandard = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+                var refs = ClauseRefs.Parse(detail.ClauseRefsJson);
+                var clauses = new List<ISOClause>();
+                if (refs.Count > 0)
+                {
+                    foreach (var group in refs.GroupBy(r => (r.StandardNo, r.VersionYear)))
+                        clauses.AddRange(await _core.GetClausesByNumbersAsync(
+                            group.Key.StandardNo, group.Key.VersionYear, group.Select(r => r.ClauseNumber)));
+                }
+                else
+                {
+                    var codes = (detail.Clauses ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    clauses = await _core.GetClausesByCodesAsync(codes);
+                }
+                foreach (var clause in clauses.Where(c => stdCodes.Contains(c.StandardCode)))
+                {
+                    var number = ClauseRefs.NormalizeNumber(clause.ClauseNumber);
+                    if (number.Length == 0) continue;
+                    if (!clausesByStandard.TryGetValue(clause.StandardCode, out var numbers))
+                        clausesByStandard[clause.StandardCode] = numbers = new HashSet<string>(StringComparer.Ordinal);
+                    numbers.Add(number);
+                }
+                if (clausesByStandard.Count == 0) return rows;
                 var extractions = (await _db.GetListAsync<DocumentExtraction>(x =>
                     stdCodes.Contains(x.StandardCode)
                     && x.EnterpriseCode == plan.EnterpriseCode
-                    && !x.IsDeleted && x.IsValid == 1)).Data ?? new List<DocumentExtraction>();
+                    && !x.IsDeleted && x.IsValid == 1
+                    && !x.IsStale && x.ExtractStatus == "done")).Data ?? new List<DocumentExtraction>();
 
+                var fileCodes = extractions.Select(x => x.FileCode).Distinct().ToList();
+                var files = (await _db.GetListAsync<EnterpriseDoc>(x =>
+                    fileCodes.Contains(x.Code) && !x.IsDeleted && x.IsValid == 1)).Data
+                    ?? new List<EnterpriseDoc>();
+                var currentFiles = files.GroupBy(x => x.Code, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
                 foreach (var ext in extractions.OrderBy(x => x.Sort))
-                    rows.AddRange(ProjectDocSlices(ext, detail.Code, clauseNos, rows.Count));
+                    if (currentFiles.TryGetValue(ext.FileCode, out var matchingFiles)
+                        && matchingFiles.Count == 1 && !string.IsNullOrWhiteSpace(ext.SourceSha256)
+                        && string.Equals(ext.SourceSha256, matchingFiles[0].Sha256, StringComparison.OrdinalIgnoreCase)
+                        && clausesByStandard.TryGetValue(ext.StandardCode, out var clauseNos))
+                        rows.AddRange(ProjectDocSlices(ext, detail.Code, clauseNos, rows.Count));
             }
             catch (Exception ex)
             {
@@ -1978,10 +2013,10 @@ namespace CertPlatform.Auditor.Services.Expert
                 return detail.ClauseNumbers ?? "";
 
             var keep = new List<string>();
-            foreach (var group in refs.GroupBy(r => r.StandardNo, StringComparer.Ordinal))
+            foreach (var group in refs.GroupBy(r => (r.StandardNo, r.VersionYear)))
             {
                 var clauses = await _core.GetClausesByNumbersAsync(
-                    group.Key, group.Select(r => r.ClauseNumber));
+                    group.Key.StandardNo, group.Key.VersionYear, group.Select(r => r.ClauseNumber));
                 var byNo = clauses
                     .Where(c => !string.IsNullOrWhiteSpace(c.Description))
                     .Select(c => ClauseRefs.NormalizeNumber(c.ClauseNumber))
@@ -2012,7 +2047,8 @@ namespace CertPlatform.Auditor.Services.Expert
             DocumentExtraction ext, string checkItemCode, HashSet<string> clauseNos, int sortBase)
         {
             var rows = new List<CertEvidenceRow>();
-            if (string.IsNullOrWhiteSpace(ext.ContentJson)) return rows;
+            if (ext.IsStale || ext.ExtractStatus != "done" || string.IsNullOrWhiteSpace(ext.ContentJson))
+                return rows;
 
             try
             {
@@ -2022,22 +2058,55 @@ namespace CertPlatform.Auditor.Services.Expert
                                 && meta.ValueKind == JsonValueKind.Object
                     ? GetJsonString(meta, "FileName")
                     : string.Empty;
+                var markdownHash = meta.ValueKind == JsonValueKind.Object
+                    ? GetJsonString(meta, "MarkdownSha256")
+                    : string.Empty;
                 if (!root.TryGetProperty("Clauses", out var clauses)
                     || clauses.ValueKind != JsonValueKind.Array) return rows;
 
                 foreach (var c in clauses.EnumerateArray())
                 {
                     var no = ClauseRefs.NormalizeNumber(GetJsonString(c, "ClauseNumber"));
-                    if (!clauseNos.Contains(no)) continue;
+                    // ★ 2026-11-13：检查项是父条款（8.5）时，提取结果通常是子条款
+                    //   （8.5.1–8.5.6）；精确 Contains 会导致 AuditFindings=0。
+                    //   这里改为「自身或后代」匹配：8.5 命中 8.5.1，4.1 命中 4.1.4。
+                    //   不做祖先回退，避免父条款整章内容污染子条款检查项。
+                    if (!IsClauseOrDescendantMatch(no, clauseNos)) continue;
                     if (!c.TryGetProperty("Excerpts", out var ex)
                         || ex.ValueKind != JsonValueKind.Array) continue;
 
+                    var excerptIndex = -1;
                     foreach (var item in ex.EnumerateArray())
                     {
+                        excerptIndex++;
                         if (item.ValueKind != JsonValueKind.String) continue;
                         var text = item.GetString();
                         if (string.IsNullOrWhiteSpace(text)) continue;
 
+                        var status = "unverified";
+                        int? start = null;
+                        int? end = null;
+                        if (c.TryGetProperty("ExcerptLocations", out var locations)
+                            && locations.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var location in locations.EnumerateArray())
+                            {
+                                if (location.ValueKind != JsonValueKind.Object
+                                    || !location.TryGetProperty("ExcerptIndex", out var indexEl)
+                                    || indexEl.ValueKind != JsonValueKind.Number
+                                    || !indexEl.TryGetInt32(out var index) || index != excerptIndex) continue;
+                                status = GetJsonString(location, "Status");
+                                if (status == "matched" && GetJsonString(location, "Kind") == "section_candidate")
+                                    status = "section_candidate";
+                                if (location.TryGetProperty("Start", out var startEl)
+                                    && startEl.ValueKind == JsonValueKind.Number
+                                    && startEl.TryGetInt32(out var startValue)) start = startValue;
+                                if (location.TryGetProperty("End", out var endEl)
+                                    && endEl.ValueKind == JsonValueKind.Number
+                                    && endEl.TryGetInt32(out var endValue)) end = endValue;
+                                break;
+                            }
+                        }
                         rows.Add(new CertEvidenceRow
                         {
                             Code = $"doc-{ext.Code}-{rows.Count}",
@@ -2048,8 +2117,13 @@ namespace CertPlatform.Auditor.Services.Expert
                             SourceCode = ext.FileCode,
                             SourceName = string.IsNullOrWhiteSpace(fileName) ? ext.FileCode : fileName,
                             Anchor = no,
-                            Snippet = text.Length > 3000 ? text.Substring(0, 3000) : text,
-                            LlmSummary = text.Length > 3000 ? text.Substring(0, 3000) : text,
+                            SourceAnchor = GetJsonString(c, "Anchor"),
+                            SourceMatchStatus = string.IsNullOrEmpty(status) ? "unverified" : status,
+                            SourceStart = start,
+                            SourceEnd = end,
+                            MarkdownSha256 = markdownHash,
+                            Snippet = text,
+                            LlmSummary = text,
                             Status = "collected",
                             Sort = sortBase + rows.Count
                         });
@@ -2061,6 +2135,24 @@ namespace CertPlatform.Auditor.Services.Expert
                 // 旧提取结果损坏按空处理，不阻断详情
             }
             return rows;
+        }
+
+        /// <summary>
+        /// 条款匹配：自身命中，或提取条款是请求条款的后代。
+        /// <para>例：请求 8.5 ⇒ 8.5.1/8.5.2 命中；请求 4.1 ⇒ 4.1.4/4.1.5 命中。</para>
+        /// <para>不做祖先回退：请求 8.5.1 时，不把 8.5 整章内容带进来。</para>
+        /// </summary>
+        private static bool IsClauseOrDescendantMatch(string clauseNumber, HashSet<string> requested)
+        {
+            if (clauseNumber.Length == 0) return false;
+            if (requested.Contains(clauseNumber)) return true;
+            foreach (var root in requested)
+            {
+                if (root.Length > 0 && clauseNumber.Length > root.Length
+                    && clauseNumber.StartsWith(root + ".", StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
         }
 
         private static string GetJsonString(JsonElement element, string name)
@@ -2132,6 +2224,23 @@ namespace CertPlatform.Auditor.Services.Expert
                 return list;
             }
             catch
+            {
+                return new List<CertDoubtDto>();
+            }
+        }
+
+        private static List<CertDoubtDto> ParseAnalysisDoubts(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return new List<CertDoubtDto>();
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                return doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("doubts", out var doubts)
+                    && doubts.ValueKind == JsonValueKind.Array
+                        ? ParseDoubtList(doubts.GetRawText()) : new List<CertDoubtDto>();
+            }
+            catch (JsonException)
             {
                 return new List<CertDoubtDto>();
             }
@@ -2389,6 +2498,9 @@ namespace CertPlatform.Auditor.Services.Expert
 
                 // 疑点：优先用 AI 的多条疑点分析；旧数据回退「NC 建议 / 结论」口径
                 var stageDoubts = ParseDoubtList(rStage?.DoubtsJson);
+                if (stageDoubts.Count == 0 && stageKind == CertCheckEngineService.StageOnsite)
+                    stageDoubts = ParseAnalysisDoubts(currentAnalyses
+                        .FirstOrDefault(a => a.CheckItemCode == d.Code && a.StageKind == stageKind)?.ResultSummaryJson);
                 var doubtCount = 0;
                 if (!string.IsNullOrEmpty(rOther?.PrepNcHint)) doubtCount++;
                 if (stageDoubts.Count > 0) doubtCount += stageDoubts.Count;

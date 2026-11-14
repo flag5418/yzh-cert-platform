@@ -109,10 +109,7 @@ export async function listClauseAttrs(params: {
     SortField: 'Sort',
     SortOrder: 'asc',
     Filters: [
-      // ★ 业务键优先：标准短码 + 条款号；标准重建后 ClauseCode 会变，条款号不变。
-      ...(params.ClauseNumber
-        ? [{ Field: 'ClauseNumber', Operator: 'eq', Value: params.ClauseNumber }]
-        : [{ Field: 'ClauseCode', Operator: 'eq', Value: params.ClauseCode }]),
+      { Field: 'ClauseCode', Operator: 'eq', Value: params.ClauseCode },
       { Field: 'StandardCode', Operator: 'eq', Value: params.StandardCode },
     ],
   })
@@ -201,8 +198,8 @@ export async function saveClausePrompt(template: string): Promise<void> {
 
 /** AI 预生成入参 */
 export interface ClauseAttrGenerateParams {
-  /** 标准短码（如 iso9001） */
-  StandardCode: string
+  /** 标准记录 Code，明确标准版本 */
+  StandardId: string
   /** 指定条款；为空 = 该标准全部叶子条款 */
   ClauseCodes?: string[]
   /** 已存在的属性是否覆盖（默认 false = 只补缺失） */

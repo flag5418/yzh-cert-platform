@@ -300,7 +300,7 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
     let cur: TreeNode | null = this.treeSide.findParent(node.Code)
     while (cur) {
       if (cur.NodeType === 'standard') {
-        parts.unshift(`[${cur.Code}]`)
+        parts.unshift(`[${String(cur.Extra?.StandardCode ?? '')}]`)
       } else {
         const number = String(cur.Extra?.ClauseNumber ?? '')
         const title = String(cur.Extra?.Title ?? '')
@@ -674,6 +674,10 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
       ElMessage.warning('请先在左侧选择一个具体条款')
       return
     }
+    if (String(node.Extra?.StandardId ?? '') !== this.genStandardCode.value) {
+      ElMessage.warning('当前条款不属于弹窗中选择的标准版本')
+      return
+    }
     this.genSelectedCodes.value = [node.Code]
   }
 
@@ -712,14 +716,14 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
     return walk(this.treeData)
   }
 
-  /** 可选标准（树根节点 Code 就是标准短码，Name 带叶子数） */
+  /** 可选标准（树根节点 Code 是具体标准记录的 Code） */
   get standardOptions(): Array<{ label: string; value: string }> {
     return this.treeData.map((n) => ({ label: n.Name, value: n.Code }))
   }
 
   /** 打开预生成弹窗（默认瞄准"当前选中条款所属标准"，没选就用第一个） */
   openGenerateDialog(): void {
-    const std = this.standardCode || this.treeData[0]?.Code || ''
+    const std = String(this.selectedNode?.Extra?.StandardId ?? this.treeData[0]?.Code ?? '')
     this.genStandardCode.value = std
     this.genSelectedCodes.value = []
     this.genResult.value = null
@@ -739,7 +743,7 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
       return
     }
     this.openGenerateDialog()
-    this.genStandardCode.value = node.Extra?.StandardCode ? String(node.Extra.StandardCode) : (this.standardCode || this.treeData[0]?.Code || '')
+    this.genStandardCode.value = String(node.Extra?.StandardId ?? this.treeData[0]?.Code ?? '')
     // 用可见的多选来表达"只跑这一条"，⛔ 不再另留一条隐形的 genClauseCodes：
     //   隐身状态 + 界面显示 5 条 ⇒ 用户看到"条数 5"却只跑 1 条，必然困惑
     this.genSelectedCodes.value = [node.Code]
@@ -803,7 +807,7 @@ export class ClauseAttrLogic extends TreeTableCore<any> {
         if (this.genStopRequested.value) break
         const chunk = targets.slice(i, i + this.genChunkSize)
         const result = await generateClauseAttrs({
-          StandardCode: this.genStandardCode.value,
+          StandardId: this.genStandardCode.value,
           MaxCount: chunk.length,
           Overwrite: this.genOverwrite.value,
           ClauseCodes: chunk,

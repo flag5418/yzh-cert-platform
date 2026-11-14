@@ -95,6 +95,10 @@ public interface ICoreResourceQuery
     /// </summary>
     Task<List<ISOClause>> GetClausesByNumbersAsync(string standardNo, IEnumerable<string> clauseNumbers);
 
+    /// <summary>按标准短码、版本及条款编号查找；版本不明确或重复时不猜测。</summary>
+    Task<List<ISOClause>> GetClausesByNumbersAsync(
+        string standardNo, int? versionYear, IEnumerable<string> clauseNumbers);
+
     // ──────────────────────────── 企业 ────────────────────────────
 
     /// <summary>
@@ -483,6 +487,10 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
     public async Task<List<ISOClause>> GetClausesByNumbersAsync(
         string standardNo, IEnumerable<string> clauseNumbers)
+        => await GetClausesByNumbersAsync(standardNo, null, clauseNumbers);
+
+    public async Task<List<ISOClause>> GetClausesByNumbersAsync(
+        string standardNo, int? versionYear, IEnumerable<string> clauseNumbers)
     {
         if (string.IsNullOrWhiteSpace(standardNo)) return new List<ISOClause>();
 
@@ -494,11 +502,13 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
 
         // 标准短码在 cert_iso_standard.StandardCode（iso9001），条款表存的是标准 GUID。
         // 标准只有个位级，取全部有效标准后内存匹配，避免端内再造一个查询入口。
-        var standard = (await GetValidStandardsAsync())
-            .FirstOrDefault(s => string.Equals(s.StandardCode, standardNo.Trim(), StringComparison.Ordinal));
-        if (standard == null) return new List<ISOClause>();
+        var standards = (await GetValidStandardsAsync())
+            .Where(s => string.Equals(s.StandardCode, standardNo.Trim(), StringComparison.OrdinalIgnoreCase)
+                && (!versionYear.HasValue || s.VersionYear == versionYear.Value))
+            .ToList();
+        if (standards.Count != 1) return new List<ISOClause>();
 
-        var all = await GetClausesAsync(standard.Code);
+        var all = await GetClausesAsync(standards[0].Code!);
         return all.Where(c => numbers.Contains(ClauseRefs.NormalizeNumber(c.ClauseNumber))).ToList();
     }
 

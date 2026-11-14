@@ -109,6 +109,9 @@ public class ISOStandardController : YzhControllerBase<ISOStandard>
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
         ISOStandard entity)
     {
+        var identity = await _source.ValidateStandardIdentityUpdateAsync(entity);
+        if (!identity.ok) return identity;
+
         if (string.IsNullOrWhiteSpace(entity.StandardName))
             return (false, "标准名称不能为空");
 

@@ -77,6 +77,10 @@ namespace CertPlatform.Shared.DocExtraction
         public JsonDocument? Json { get; set; }
         public int? PromptTokens { get; set; }
         public int? CompletionTokens { get; set; }
+        /// <summary>模型返回的结束原因，例如 length 表示输出达到上限。</summary>
+        public string? FinishReason { get; set; }
+        /// <summary>JSON 是否由不完整输出修复得到，不能视为完整产物。</summary>
+        public bool JsonRepaired { get; set; }
         public long DurationMs { get; set; }
     }
 
@@ -201,7 +205,10 @@ namespace CertPlatform.Shared.DocExtraction
                 using var doc = JsonDocument.Parse(responseBody);
                 var root = doc.RootElement;
 
-                var content = root.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+                var choice = root.GetProperty("choices")[0];
+                var content = choice.GetProperty("message").GetProperty("content").GetString() ?? "";
+                var finishReason = choice.TryGetProperty("finish_reason", out var finish)
+                    && finish.ValueKind == JsonValueKind.String ? finish.GetString() : null;
                 int? promptTokens = root.TryGetProperty("usage", out var usage) && usage.TryGetProperty("prompt_tokens", out var pt) ? pt.GetInt32() : null;
                 int? completionTokens = root.TryGetProperty("usage", out var usage2) && usage2.TryGetProperty("completion_tokens", out var ct2) ? ct2.GetInt32() : null;
 
@@ -214,6 +221,7 @@ namespace CertPlatform.Shared.DocExtraction
                     Content = content,
                     PromptTokens = promptTokens,
                     CompletionTokens = completionTokens,
+                    FinishReason = finishReason,
                     DurationMs = sw.ElapsedMilliseconds
                 };
 
@@ -236,6 +244,7 @@ namespace CertPlatform.Shared.DocExtraction
                             try
                             {
                                 result.Json = JsonDocument.Parse(repaired);
+                                result.JsonRepaired = true;
                                 _logger.LogWarning("[LLM] 输出疑似被 max_tokens({Max}) 截断，已抢救解析（原文 {Len} 字符，抢救后 {New} 字符）",
                                     request.MaxTokens, content.Length, repaired.Length);
                             }

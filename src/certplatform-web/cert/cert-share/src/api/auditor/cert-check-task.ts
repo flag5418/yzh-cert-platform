@@ -218,6 +218,11 @@ export interface CertEvidenceRow {
   SourceCode: string | null
   SourceName: string | null
   Anchor: string | null
+  SourceAnchor?: string | null
+  SourceMatchStatus?: 'matched' | 'ambiguous' | 'unverified' | 'section_candidate' | null
+  SourceStart?: number | null
+  SourceEnd?: number | null
+  MarkdownSha256?: string | null
   Snippet: string | null
   LlmSummary: string | null
   ContentMD5: string | null

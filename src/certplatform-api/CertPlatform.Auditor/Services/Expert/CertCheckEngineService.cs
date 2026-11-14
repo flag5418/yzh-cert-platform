@@ -60,6 +60,8 @@ public class CertCheckConclusionDto
     /// <para>2026-11-03：系统只给建议，疑点是否成立、最终是否符合由审核员判定。</para>
     /// </summary>
     public List<CertDoubtDto> Doubts { get; set; } = new();
+    /// <summary>模型是否提供了疑点数组；缺失或格式错误不能视为无疑点。</summary>
+    public bool DoubtsProvided { get; set; }
 
     // ═══ 准备分支专用（StageKind=prep）═══
     // 准备问「资料齐不齐」，检查问「符不符合」—— 两个值域，⛔ 不要混用（46 号 F3）。
@@ -266,6 +268,8 @@ public class CertCheckEngineService
         var evidences = (await _db.GetListAsync<CertEvidence>(e =>
             e.CheckItemCode == item.CheckItemCode && !e.IsDeleted)).Data
             ?? new List<CertEvidence>();
+        var activeEvidences = evidences.Where(e =>
+            !string.Equals(e.Status, "dropped", StringComparison.OrdinalIgnoreCase)).ToList();
 
         // ---- L2.5：装配三模型（★ 条款模型 + 文档模型 → 原始证据）----
         // 用户口径（2026-11-02）：检查项 → 多个条款 Code → 按条款编号过滤企业文档 →
@@ -274,11 +278,16 @@ public class CertCheckEngineService
             .Select(c => c.ClauseCode).ToList();
         var clauseRefs = ClauseRefs.Parse(detail?.ClauseRefsJson);
         var context = await _ctxBuilder.BuildAsync(
-            planClauseCodes, task?.EnterpriseCode, evidences,
+            planClauseCodes, task?.EnterpriseCode, activeEvidences,
             clauseRefs.Count > 0 ? clauseRefs : null);
 
         foreach (var w in context.Warnings)
             _logger.LogWarning("[CertCheck] 装配告警 item={Item} {Warn}", item.CheckItemCode, w);
+        if (context.Clauses.Count == 0)
+            return Result<CertAnalysisResult>.Fail(
+                $"条款无法完整装配，请重新选择或修复条款：{string.Join("；", context.Warnings)}");
+        if (await HasCurrentManualDecisionAsync(item.CheckItemCode, stageKind))
+            return Result<CertAnalysisResult>.Fail("当前分析已有审核员判定，暂不自动替换，请先处理人工判定");
 
         // ---- L3：解析提示词（★ 按分支分流，F2）----
         var standardCode = task != null ? await ResolveStandardCodeAsync(task.PlanCode) : null;
@@ -297,7 +306,9 @@ public class CertCheckEngineService
                 promptType, standardCode ?? "(null)");
 
         // ---- L4：组装 prompt（★ 真正渲染 DB 里的模板正文，按分支取不同占位符集）----
-        var prompt = BuildPrompt(promptView.Template, stageKind, detail, context, evidences);
+        var prompt = BuildPrompt(promptView.Template, stageKind, detail, context, activeEvidences);
+        if (Encoding.UTF8.GetByteCount(prompt) > 60000)
+            return Result<CertAnalysisResult>.Fail("完整分析输入超过当前 60000 字节留痕上限，未调用模型；需要分批处理，不能截断资料后生成结论");
 
         // ---- L5：计算证据指纹（只用于过期告警，不用于跳过）----
         var fingerprint = string.Join("|", evidences
@@ -326,30 +337,37 @@ public class CertCheckEngineService
         result.DurationMs = llmResponse.DurationMs;
         result.EvidenceUsedCount = evidences.Count;
 
-        if (!llmResponse.Success)
+        if (!llmResponse.Success || llmResponse.Json == null || llmResponse.JsonRepaired
+            || string.Equals(llmResponse.FinishReason, "length", StringComparison.OrdinalIgnoreCase)
+            || (llmResponse.CompletionTokens.HasValue && llmResponse.CompletionTokens.Value >= aiSettings.MaxTokens))
         {
+            var failure = llmResponse.Success
+                ? "模型输出不完整或不是有效 JSON"
+                : llmResponse.Message ?? "未知错误";
             item.AnalysisState = "failed";
             item.Status = "failed";
-            item.Message = Truncate($"LLM 调用失败：{llmResponse.Message}", 500);
+            item.Message = Truncate($"LLM 调用失败：{failure}", 500);
             item.UpdateBy = userCode;
             item.UpdateTime = DateTime.Now;
             await _db.UpdateAsync(item);
 
             // 失败也留一条分析行（否则"跑过但失败"在界面上完全看不见）
             await InsertFailedAnalysisAsync(userCode, item, task, stageKind, promptType,
-                promptView, fingerprint, $"LLM 调用失败：{llmResponse.Message}");
+                promptView, fingerprint, $"LLM 调用失败：{failure}");
 
-            result.Message = $"LLM 调用失败：{llmResponse.Message}";
+            result.Message = $"LLM 调用失败：{failure}";
             await LogAnalysisAsync(result);
             return Result<CertAnalysisResult>.Fail(result.Message);
         }
 
         // ---- L7：解析 LLM JSON ----
         var conclusion = ParseConclusion(llmResponse);
+        if (conclusion == null)
+            return Result<CertAnalysisResult>.Fail("模型结果无法解析，未替换已有分析结果");
         result.ConclusionData = conclusion;
 
-        // 系统建议（⚠️ 不是最终结论）：无疑点 ⇒ 建议合格；有疑点 ⇒ 至少观察项
-        var aiConclusion = isPrep ? null : ResolveSuggestedConclusion(conclusion);
+        // 资料覆盖尚未经过完整性验证，无疑点不能推断为合格。
+        var aiConclusion = isPrep || context.Clauses.Count != 1 ? null : ResolveSuggestedConclusion(conclusion);
         var aiSeverity = isPrep || aiConclusion != CertVerdictMapper.ConclusionNc
             ? null
             : CertVerdictMapper.ToSeverity(conclusion?.Conclusion, conclusion?.SeveritySuggestion);
@@ -363,9 +381,7 @@ public class CertCheckEngineService
         // ---- L8：落库（分析行 + 逐条款结果 + 证据链）----
         // ★ 条款来源优先用装配上下文（条款号取自 cert_iso_clause，权威）；
         //   计划明细的 ClauseNumbers 是导入时的手填串，实测有 "m 1" 这类脏前缀。
-        var clausePairs = context.Clauses.Count > 0
-            ? context.Clauses.Select(c => (c.ClauseCode, (string?)c.ClauseNumber)).ToList()
-            : SplitClauses(detail?.Clauses, detail?.ClauseNumbers);
+        var clausePairs = context.Clauses.Select(c => (c.ClauseCode, (string?)c.ClauseNumber)).ToList();
         var now = DateTime.Now;
 
         using var tran = _db.BeginTransaction();
@@ -375,13 +391,15 @@ public class CertCheckEngineService
             if (await _lock.IsLockedAsync(item.CheckItemCode, stageKind))
                 throw new InvalidOperationException(
                     $"检查项已锁定，拒绝写入（CheckItemCode={item.CheckItemCode}, StageKind={stageKind}）");
+            if (await HasCurrentManualDecisionAsync(item.CheckItemCode, stageKind))
+                throw new InvalidOperationException("分析期间出现审核员判定，拒绝替换当前结果");
 
             // 8.1 旧当前分析置 IsCurrent=NULL，算本次 RunNo
             var runNo = await DemoteCurrentAnalysisAsync(item.CheckItemCode, stageKind, userCode);
             result.RunNo = runNo;
 
             // 8.2 插分析行（IsCurrent=1）
-            await _db.InsertAsync(new CertCheckAnalysis
+            var analysisInsert = await _db.InsertAsync(new CertCheckAnalysis
             {
                 Code = result.AnalysisCode,
                 CheckItemCode = item.CheckItemCode,
@@ -398,7 +416,7 @@ public class CertCheckEngineService
                 PromptVersion = promptView.Version.ToString(),
                 ModelName = aiSettings.Model,
                 EvidenceFingerprint = fingerprint,
-                InputSnapshotJson = Truncate(prompt, 60000),   // 装配包快照（回放用）
+                InputSnapshotJson = prompt,
                 ResultSummaryJson = JsonSerializer.Serialize(new
                 {
                     stage_kind = stageKind,
@@ -421,6 +439,11 @@ public class CertCheckEngineService
                         : aiConclusion,
                     ai_severity_suggestion = aiSeverity,
                     doubt_count = conclusion?.Doubts.Count ?? 0,
+                    doubts_provided = conclusion?.DoubtsProvided ?? false,
+                    doubts = conclusion?.Doubts,
+                    summary = conclusion?.Summary,
+                    audit_evidence = conclusion?.AuditEvidence,
+                    clause_evidence = conclusion?.ClauseEvidences,
                     severity = isPrep
                         ? null
                         : CertVerdictMapper.ToSeverity(conclusion?.Conclusion, conclusion?.SeveritySuggestion),
@@ -428,11 +451,13 @@ public class CertCheckEngineService
                 }),
                 AnalyzedAt = now,
                 DurationMs = (int)llmResponse.DurationMs,
-                InputTokenCount = (int)llmResponse.PromptTokens,
-                OutputTokenCount = (int)llmResponse.CompletionTokens,
+                InputTokenCount = llmResponse.PromptTokens,
+                OutputTokenCount = llmResponse.CompletionTokens,
                 CreateBy = userCode,
                 CreateTime = now
             });
+            if (!analysisInsert.Success)
+                throw new InvalidOperationException(analysisInsert.Error ?? "保存分析记录失败");
 
             // 8.3 逐条款写结果行（F4：全部条款，不是首条）
             var written = 0;
@@ -442,7 +467,7 @@ public class CertCheckEngineService
                 var clauseStandard = context.Clauses
                     .FirstOrDefault(c => string.Equals(c.ClauseCode, clauseCode, StringComparison.Ordinal))
                     ?.StandardCode;
-                await _db.InsertAsync(new CertCheckResult
+                var resultInsert = await _db.InsertAsync(new CertCheckResult
                 {
                     Code = Guid.NewGuid().ToString("N"),
                     AnalysisCode = result.AnalysisCode,
@@ -453,18 +478,18 @@ public class CertCheckEngineService
                     StandardCode = string.IsNullOrWhiteSpace(clauseStandard) ? standardCode : clauseStandard,
 
                     // ★ 一行只填一段（§4.5.4）：prep 只写 Prep 组、onsite 只写 Check 组
-                    PrepState = isPrep ? CertVerdictMapper.NormalizePrepState(conclusion?.PrepState) : null,
-                    MissingKindsJson = isPrep ? conclusion?.MissingKindsJson : null,
-                    ConflictsJson = isPrep ? conclusion?.ConflictsJson : null,
-                    VerifyLevel = isPrep ? conclusion?.VerifyLevel : null,
-                    PrepNcHint = isPrep ? conclusion?.PrepNcHint : null,
+                    PrepState = isPrep && clausePairs.Count == 1 ? CertVerdictMapper.NormalizePrepState(conclusion?.PrepState) : null,
+                    MissingKindsJson = isPrep && clausePairs.Count == 1 ? conclusion?.MissingKindsJson : null,
+                    ConflictsJson = isPrep && clausePairs.Count == 1 ? conclusion?.ConflictsJson : null,
+                    VerifyLevel = isPrep && clausePairs.Count == 1 ? conclusion?.VerifyLevel : null,
+                    PrepNcHint = isPrep && clausePairs.Count == 1 ? conclusion?.PrepNcHint : null,
 
                     // ★ 2026-11-03：分析只写「系统建议」，⛔ 不写最终结论
                     //   最终 Conclusion / Severity 由审核员在判定弹窗里写（SaveResultAsync）。
                     //   无疑点 ⇒ 建议合格；有疑点 ⇒ 按模型结论映射，模型说合格也不给「合格」的假建议。
                     AiConclusion = isPrep ? null : aiConclusion,
                     AiSeverity = isPrep ? null : aiSeverity,
-                    DoubtsJson = isPrep
+                    DoubtsJson = isPrep || clausePairs.Count != 1
                         ? null
                         : (conclusion != null && conclusion.Doubts.Count > 0
                             ? JsonSerializer.Serialize(conclusion.Doubts)
@@ -475,11 +500,20 @@ public class CertCheckEngineService
 
                     // 审核证据：优先用该条款的 clause_evidence；回退整体 audit_evidence；再回退 summary。
                     // ⛔ 审核发现（文档原文）不写在这里 —— 它是事实来源，不是审核员署名证据。
-                    Reason = ResolveAuditEvidence(conclusion, clauseNumber),
+                    Reason = clausePairs.Count == 1
+                        ? ResolveAuditEvidence(conclusion, clauseNumber)
+                        : context.Clauses.Count(c => ClauseRefs.NormalizeNumber(c.ClauseNumber)
+                              == ClauseRefs.NormalizeNumber(clauseNumber)) == 1
+                            ? conclusion.ClauseEvidences.FirstOrDefault(x =>
+                                ClauseRefs.NormalizeNumber(x.ClauseNumber)
+                                == ClauseRefs.NormalizeNumber(clauseNumber))?.AuditEvidence ?? ""
+                            : "",
                     RollupTo = true,
                     CreateBy = userCode,
                     CreateTime = now
                 });
+                if (!resultInsert.Success)
+                    throw new InvalidOperationException(resultInsert.Error ?? "保存条款结果失败");
                 written++;
             }
             result.ClauseResultCount = written;
@@ -497,7 +531,9 @@ public class CertCheckEngineService
             item.Message = null;
             item.UpdateBy = userCode;
             item.UpdateTime = now;
-            await _db.UpdateAsync(item);
+            var itemUpdate = await _db.UpdateAsync(item);
+            if (!itemUpdate.Success)
+                throw new InvalidOperationException(itemUpdate.Error ?? "更新任务状态失败");
 
             // 分析审计日志（运维指标：跑了多少次 / 指纹 / 跳过数）
             await LogAnalysisAsync(result, result.AnalysisCode, fingerprint);
@@ -618,7 +654,7 @@ public class CertCheckEngineService
         {
             sb.AppendLine($"- [{ev.Code}] {ev.SourceName ?? ev.Code}（{ev.EvidenceKind}）");
             if (!string.IsNullOrEmpty(ev.TranscriptText))
-                sb.AppendLine($"  转录：{Truncate(ev.TranscriptText, 500)}");
+                sb.AppendLine($"  转录：{ev.TranscriptText}");
             if (!string.IsNullOrEmpty(ev.CapturedPlace))
                 sb.AppendLine($"  地点：{ev.CapturedPlace}");
             if (!string.IsNullOrEmpty(ev.PresentPersons))
@@ -653,6 +689,7 @@ public class CertCheckEngineService
                     ? evs.EnumerateArray().Select(e => e.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList()
                     : new List<string>(),
                 Doubts = ParseDoubts(root),
+                DoubtsProvided = root.TryGetProperty("doubts", out var doubts) && doubts.ValueKind == JsonValueKind.Array,
 
                 // ── 准备分支字段（audit_prep 输出；缺失时保持 null，⛔ 不要回填成检查分支的值）──
                 PrepState = GetStr(root, "prep_state"),
@@ -714,9 +751,9 @@ public class CertCheckEngineService
 
     /// <summary>
     /// 计算「系统建议结论」（⛔ 不是最终结论）。
-    /// <para>规则（用户 2026-11-03）：</para>
+    /// <para>资料完整性尚未验证时，不根据空疑点自动建议合格。</para>
     /// <list type="bullet">
-    ///   <item>无疑点 ⇒ <c>pass</c>（建议该检查项合格）；</item>
+    ///   <item>无疑点 ⇒ 不生成建议结论；</item>
     ///   <item>有疑点 ⇒ 按模型结论映射；模型若说合格 / 不适用，降级为 <c>ofi</c>
     ///         （有疑点就不该给「合格」的建议，但也不替审核员判不合格）。</item>
     /// </list>
@@ -726,7 +763,7 @@ public class CertCheckEngineService
         if (conclusion == null) return null;
 
         if (conclusion.Doubts.Count == 0)
-            return CertVerdictMapper.ConclusionPass;
+            return null;
 
         var mapped = CertVerdictMapper.ToConclusion(conclusion.Conclusion);
         return mapped == CertVerdictMapper.ConclusionPass || mapped == CertVerdictMapper.ConclusionNa
@@ -742,7 +779,7 @@ public class CertCheckEngineService
     /// <summary>
     /// 解析 <c>doubts</c>（疑点分析，可多条）。
     /// <para>兼容两种写法：<c>[{"point":"...","detail":"..."}]</c> 与 <c>["..."]</c>；
-    /// 空数组 / 缺失 ⇒ 空列表（= 无疑点 ⇒ 建议合格）。</para>
+    /// 空数组 / 缺失目前均返回空列表，不据此推断合格。</para>
     /// </summary>
     private static List<CertDoubtDto> ParseDoubts(JsonElement root)
     {
@@ -829,7 +866,12 @@ public class CertCheckEngineService
         var context = await _ctxBuilder.BuildAsync(
             clauseCodes, plan.EnterpriseCode, new List<CertEvidence>(),
             detailRefs.Count > 0 ? detailRefs : null);
+        if (context.Clauses.Count == 0)
+            return Result<List<CertOnsitePlanItem>>.Fail(
+                $"条款无法完整装配，请重新选择或修复条款：{string.Join("；", context.Warnings)}");
         var prompt = BuildPrompt(promptView.Template, StagePrep, detail, context, new List<CertEvidence>());
+        if (Encoding.UTF8.GetByteCount(prompt) > 60000)
+            return Result<List<CertOnsitePlanItem>>.Fail("完整分析输入超过当前 60000 字节上限，未调用模型；需要分批处理");
 
         var aiSettings = await GetAiSettingsAsync();
         var llmResponse = await _llm.CompleteAsync(new LlmInvokeRequest
@@ -845,7 +887,9 @@ public class CertCheckEngineService
             ForceJson = true
         });
 
-        if (!llmResponse.Success || llmResponse.Json == null)
+        if (!llmResponse.Success || llmResponse.Json == null || llmResponse.JsonRepaired
+            || string.Equals(llmResponse.FinishReason, "length", StringComparison.OrdinalIgnoreCase)
+            || (llmResponse.CompletionTokens.HasValue && llmResponse.CompletionTokens.Value >= aiSettings.MaxTokens))
             return Result<List<CertOnsitePlanItem>>.Fail(
                 $"AI 生成失败：{llmResponse.Message ?? "模型未返回有效 JSON"}");
 
@@ -853,6 +897,21 @@ public class CertCheckEngineService
         if (items.Count == 0)
             return Result<List<CertOnsitePlanItem>>.Fail("AI 未生成任何检查内容，请重试或手工添加");
 
+        var clausesByNumber = context.Clauses
+            .GroupBy(c => ClauseRefs.NormalizeNumber(c.ClauseNumber), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        var referencedNumbers = items.SelectMany(i => (i.ClauseNumbers ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(ClauseRefs.NormalizeNumber).Distinct(StringComparer.Ordinal).ToList();
+        var invalidNumbers = referencedNumbers
+            .Where(n => !clausesByNumber.TryGetValue(n, out var matches) || matches.Count != 1).ToList();
+        if (invalidNumbers.Count > 0)
+            return Result<List<CertOnsitePlanItem>>.Fail(
+                $"生成的条款号不存在或对应多个标准版本，无法确定归属：{string.Join(",", invalidNumbers)}");
+
+        using var tran = _db.BeginTransaction();
+        try
+        {
         var now = DateTime.Now;
 
         // 只清掉旧「系统生成」行，人工行保留
@@ -860,6 +919,8 @@ public class CertCheckEngineService
             i.CheckItemCode == checkItemCode && !i.IsDeleted);
         var oldAiRows = (existingResult.Data ?? new List<CertOnsitePlanItem>())
             .Where(i => string.Equals(i.Source, "ai", StringComparison.OrdinalIgnoreCase))
+            .Where(i => string.IsNullOrWhiteSpace(i.UpdateBy)
+                && string.Equals(i.Status, "planned", StringComparison.OrdinalIgnoreCase))
             .ToList();
         foreach (var old in oldAiRows)
         {
@@ -869,29 +930,28 @@ public class CertCheckEngineService
             old.UpdateBy = userCode;
             old.UpdateTime = now;
             // R-A：只写软删相关列
-            await _db.UpdateAsync(old,
+            var updated = await _db.UpdateAsync(old,
                 nameof(CertOnsitePlanItem.IsDeleted),
                 nameof(CertOnsitePlanItem.DeleteBy),
                 nameof(CertOnsitePlanItem.DeleteTime),
                 nameof(CertOnsitePlanItem.UpdateBy),
                 nameof(CertOnsitePlanItem.UpdateTime));
+            if (!updated.Success) throw new InvalidOperationException(updated.Error ?? "更新旧检查项失败");
         }
 
         var seq = (existingResult.Data ?? new List<CertOnsitePlanItem>())
-            .Where(i => !i.IsDeleted && !string.Equals(i.Source, "ai", StringComparison.OrdinalIgnoreCase))
+            .Where(i => !i.IsDeleted)
             .Select(i => Math.Max(i.SeqNo, i.Sort))
             .DefaultIfEmpty(0)
             .Max();
 
         // 条款号 → 条款 Code，便于后续按 Code 追溯
-        var clausePairs = SplitClauses(detail.Clauses, detail.ClauseNumbers);
-        var numberToCode = clausePairs
-            .Where(p => !string.IsNullOrWhiteSpace(p.ClauseNumber))
-            .GroupBy(p => p.ClauseNumber!)
-            .ToDictionary(g => g.Key, g => g.First().ClauseCode);
+        var numberToCode = clausesByNumber.Where(g => g.Value.Count == 1)
+            .ToDictionary(g => g.Key, g => g.Value[0].ClauseCode, StringComparer.Ordinal);
         var detailRefsByNumber = detailRefs
-            .GroupBy(r => r.ClauseNumber, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+            .GroupBy(r => ClauseRefs.NormalizeNumber(r.ClauseNumber), StringComparer.Ordinal)
+            .Where(g => g.Count() == 1)
+            .ToDictionary(g => g.Key, g => g.Single(), StringComparer.Ordinal);
 
         var created = new List<CertOnsitePlanItem>();
         foreach (var item in items)
@@ -902,7 +962,7 @@ public class CertCheckEngineService
                 ? null
                 : string.Join(",",
                     clauseNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                        .Select(n => numberToCode.TryGetValue(n, out var code) ? code : null)
+                        .Select(n => numberToCode.TryGetValue(ClauseRefs.NormalizeNumber(n), out var code) ? code : null)
                         .Where(c => c != null)
                         .Distinct());
 
@@ -918,7 +978,7 @@ public class CertCheckEngineService
                 TargetDept = Truncate(item.TargetDept, 200),
                 SampleRequirement = Truncate(item.SampleRequirement, 200),
                 ExpectedFinding = Truncate(item.ExpectedFinding, 500),
-                ClauseCodes = Truncate(string.IsNullOrWhiteSpace(mappedCodes) ? clauseNumbers : mappedCodes, 500),
+                ClauseCodes = Truncate(mappedCodes, 500),
                 ClauseRefsJson = ClauseRefs.ToJson(
                     (clauseNumbers ?? string.Empty)
                         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -929,11 +989,20 @@ public class CertCheckEngineService
                 CreateBy = userCode,
                 CreateTime = now
             };
-            await _db.InsertAsync(entity);
+            var inserted = await _db.InsertAsync(entity);
+            if (!inserted.Success) throw new InvalidOperationException(inserted.Error ?? "保存检查项失败");
             created.Add(entity);
         }
 
+        tran.Commit();
         return Result<List<CertOnsitePlanItem>>.Ok(created);
+        }
+        catch (Exception ex)
+        {
+            tran.Rollback();
+            _logger.LogError(ex, "更新现场检查内容失败 CheckItemCode={CheckItemCode}", checkItemCode);
+            return Result<List<CertOnsitePlanItem>>.Fail($"保存现场检查内容失败：{ex.Message}");
+        }
     }
 
     private static List<OnsitePlanItemDto> ParseOnsitePlanItems(JsonElement root)
@@ -1018,6 +1087,23 @@ public class CertCheckEngineService
     /// 依赖"MySQL 唯一索引允许多个 NULL"—— 用 0 的话 <c>(item, prep, 0)</c> 只能有一条，
     /// 重跑第二次就唯一键冲突（46 号 R10）。</para>
     /// </summary>
+    private async Task<bool> HasCurrentManualDecisionAsync(string checkItemCode, string stageKind)
+    {
+        var currentQuery = await _db.GetListAsync<CertCheckAnalysis>(a =>
+            a.CheckItemCode == checkItemCode && a.StageKind == stageKind
+            && a.IsCurrent == 1 && !a.IsDeleted);
+        if (!currentQuery.Success) throw new InvalidOperationException(currentQuery.Error ?? "查询当前分析失败");
+        var current = currentQuery.Data ?? new List<CertCheckAnalysis>();
+        var codes = current.Select(a => a.Code).ToList();
+        if (codes.Count == 0) return false;
+        var resultsQuery = await _db.GetListAsync<CertCheckResult>(r =>
+            codes.Contains(r.AnalysisCode) && !r.IsDeleted);
+        if (!resultsQuery.Success) throw new InvalidOperationException(resultsQuery.Error ?? "查询人工判定失败");
+        var results = resultsQuery.Data ?? new List<CertCheckResult>();
+        return results.Any(r => !string.IsNullOrWhiteSpace(r.ConclusionBy)
+            || (!string.IsNullOrWhiteSpace(r.UpdateBy) && !string.IsNullOrWhiteSpace(r.Reason)));
+    }
+
     private async Task<int> DemoteCurrentAnalysisAsync(
         string checkItemCode, string stageKind, string userCode)
     {
@@ -1033,7 +1119,8 @@ public class CertCheckEngineService
             old.IsCurrent = null;               // ⛔ 不要写 0
             old.UpdateBy = userCode;
             old.UpdateTime = DateTime.Now;
-            await _db.UpdateAsync(old);
+            var updated = await _db.UpdateAsync(old);
+            if (!updated.Success) throw new InvalidOperationException(updated.Error ?? "更新历史分析失败");
         }
 
         return runNo;
@@ -1096,7 +1183,7 @@ public class CertCheckEngineService
             order++;
             var dropped = string.Equals(ev.Status, "dropped", StringComparison.OrdinalIgnoreCase);
 
-            await _db.InsertAsync(new CertCheckAnalysisEvidence
+            var inserted = await _db.InsertAsync(new CertCheckAnalysisEvidence
             {
                 Code = Guid.NewGuid().ToString("N"),
                 AnalysisCode = analysisCode,
@@ -1109,6 +1196,8 @@ public class CertCheckEngineService
                 CreateBy = userCode,
                 CreateTime = now
             });
+            if (!inserted.Success)
+                throw new InvalidOperationException(inserted.Error ?? "保存证据链失败");
         }
     }
 
@@ -1198,5 +1287,3 @@ public class CertCheckEngineService
         }
     }
 }
-
-

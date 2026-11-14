@@ -38,6 +38,7 @@ import {
   entDocPlanStandards,
   entDocPreviewBlob,
   entDocQueueDetail,
+  entDocRebuildProfiles,
   entDocRegenerate,
   entDocRestore,
   entDocStatusBar,
@@ -54,14 +55,19 @@ import {
   type EntDocVersionRow,
 } from '@share/api/ent/enterprise-doc'
 import {
+  buildFileTree,
+  collectFileCodes,
   extractBadge,
   folderLabel,
   formatSize,
+  isFolderNode,
   parseExtractContent,
   sortClauses,
   splitByAnchor,
   summarize,
   type AnchorHit,
+  type FolderTreeNode,
+  type TreeRow,
 } from './pure'
 import { createUploadState, type UploadHost } from './useUpload'
 
@@ -160,6 +166,10 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
   async onNodeClick(node: any): Promise<void> {
     if (!node) return
     this.selectedNode.value = node
+    // ★ 切企业必须清空勾选：否则上一企业的文件仍挂在 selectedRows 上，
+    //   工具条「已选 N 个文件」残留，点「删除选中」会把旧 Code 发给新企业
+    //   （后端归属校验挡得住，但交互是错的）。
+    this.selectedRows.value = []
     this.activeStandardCode.value = ''
     this.keyword.value = ''
     this.onlyFailed.value = false
@@ -237,9 +247,25 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
    *   否则「操作 ▾」被推到横向溢出区，用户点不到（2026-10-29 真机实测踩到）。
    *   ⇒ 文件名 / 文件夹用 `minWidth` 让宽屏自动撑开，其余给固定窄宽。
    */
-  fileColumns: YzhTableColumn<EntDocRow>[] = [
-    { prop: 'FileName', label: '文件名', minWidth: 200, slot: true },
-    { prop: 'RelFolderPath', label: '文件夹', minWidth: 130, slot: true },
+  /**
+   * 文件表列定义（树模式）。
+   *
+   * ⚠️ 去掉 `RelFolderPath` 列 —— 文件夹层次已由树结构表达，再列一遍是冗余。
+   * ⚠️ 属性名必须叫 `fileColumns`，⛔ 不能叫 `columns`（基类 `columns` 是 getter）。
+   * ⚠️ 泛型用 `TreeRow`（不是 `EntDocRow`）：行里含文件夹节点，且必须与
+   *   `dataLoader` 的返回类型一致，否则 `YzhTable` 的 `T` 推断不出共同类型。
+   */
+  fileColumns: YzhTableColumn<TreeRow>[] = [
+    /*
+     * `className: 'ed-file-cell'` → YzhTable 透传到 el-table-column 的 class-name（td 上），
+     * 页面 CSS 据此把首列 `.cell` 变 flex 容器（见 index.vue `.ed-file-cell`）。
+     * 原因：el-table 树缩进前缀（indent/placeholder/arrow）+ inline-flex 内容盒
+     * 若超出列内容宽，原子盒会被整块挤到下一行盒 ⇒ 缩进全丢（详见 CSS 处注释）。
+     */
+    { prop: 'FileName', label: '文件名', minWidth: 200, slot: true, className: 'ed-file-cell' },
+    // ★ 文档类型 / 提取方式：来自 DocProfileJson；未画像时为 null，模板显示 “—”
+    { prop: 'DocType', label: '文档类型 / 提取方式', width: 132, slot: true },
+    { prop: 'OwnerDept', label: '部门', width: 88, slot: true },
     { prop: 'FileSize', label: '大小', width: 84, align: 'right', slot: true },
     { prop: 'ConvertStatus', label: '转换', width: 92, slot: true },
     { prop: 'ExtractStatus', label: '提取', width: 128, slot: true },
@@ -266,8 +292,13 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
     await this.dataLoader()
   }
 
-  /** `YzhTable` 数据加载器（`show-pagination=false` ⇒ 一次给全量） */
-  async dataLoader(): Promise<{ rows: EntDocRow[]; total: number }> {
+  /**
+   * `YzhTable` 数据加载器（`show-pagination=false` ⇒ 一次给全量）。
+   *
+   * ★ 返回**树结构**（文件夹节点 + 文件行），`el-table` tree 模式渲染。
+   *   `this.rows` 保持扁平（汇总 / 筛选判定用），⛔ 不拿树结构当汇总数据源。
+   */
+  async dataLoader(): Promise<{ rows: TreeRow[]; total: number }> {
     const ent = this.selectedCode.value
     if (!ent) {
       this.rows.value = []
@@ -284,7 +315,9 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
       this.rows.value = r.rows ?? []
       this.totalAll.value = r.total ?? this.rows.value.length
       this.planInfo.value = r.plan ?? null
-      return { rows: this.rows.value, total: this.rows.value.length }
+      // ★ 扁平 → 树（文件夹节点由 `pure.buildFileTree` 构建）
+      const tree = buildFileTree(this.rows.value)
+      return { rows: tree, total: this.rows.value.length }
     } catch (e) {
       this.reportError(e, '查询失败')
       return { rows: [], total: 0 }
@@ -326,11 +359,14 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
   /**
    * 勾选变化（批量删除用）。
    *
+   * ★ 过滤掉文件夹节点：`el-table` tree 模式选中父节点会自动选子节点，
+   *   这里只保留真实文件行（⛔ 不把 `folder:xxx` 当文件 Code 去删除）。
+   *
    * ⚠️ 名字不能叫 `onSelectionChange`：基类把它声明成**实例属性**（回调字段），
    *   子类用方法覆盖 ⇒ TS2425。
    */
-  onRowsSelected(rows: EntDocRow[]): void {
-    this.selectedRows.value = rows ?? []
+  onRowsSelected(rows: TreeRow[]): void {
+    this.selectedRows.value = (rows ?? []).filter((r) => !isFolderNode(r)) as EntDocRow[]
   }
 
   // ═══════════════════════ 三、轮询 ═══════════════════════
@@ -423,8 +459,8 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
 
   // ═══════════════════════ 五、提取 ═══════════════════════
 
-  /** 入队提取：`rows` 空 = 整家企业 */
-  async startExtract(rows?: EntDocRow[]): Promise<void> {
+  /** 入队提取：`rows` 空 = 整家企业；`force` = 重新分析（跳过指纹复用） */
+  async startExtract(rows?: EntDocRow[], force = false): Promise<void> {
     const ent = this.selectedCode.value
     if (!ent) {
       ElMessage.warning('请先在左侧选择企业')
@@ -436,13 +472,54 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
     }
     try {
       const codes = rows && rows.length > 0 ? rows.map((r) => r.Code) : undefined
-      const r = await entDocExtract(ent, codes)
+      const r = await entDocExtract(ent, codes, force)
       // ⚠️ 「没有需要提取的内容」不是失败：后端刻意返回 success=true + 原因
       if (r.Queued > 0) ElMessage.success(r.Message)
       else ElMessage.info(r.Message || '没有需要提取的内容')
       await this.refreshAll()
     } catch (e) {
       this.reportError(e, '提取入队失败')
+    }
+  }
+
+  /**
+   * ★ 「重新分析」：按最新提取规则重跑整家企业。
+   *
+   * <para>与「开始提取」同一个入口，差别只在**用户意图与文案**：
+   * 首次是「开始提取」，后续是「重新分析」。后端按内容指纹决定是否复用；
+   * 提取提示词一改，指纹变化 ⇒ 自动重跑，不会静默沿用旧结果。</para>
+   */
+  async reextractAll(): Promise<void> {
+    const ent = this.selectedCode.value
+    if (!ent) {
+      ElMessage.warning('请先在左侧选择企业')
+      return
+    }
+    if (!this.hasPlan.value) {
+      ElMessage.warning(this.planReason.value || '该企业还没有有效认证计划，请先创建计划')
+      return
+    }
+    const ok = await confirmOrFalse(
+      '将按最新提取规则重新分析当前企业的全部文档。\n'
+      + '已有提取结果会被新结果替换；处理期间可以继续查看页面。',
+      '重新分析确认',
+      { confirmButtonText: '开始重新分析', cancelButtonText: '取消' },
+    )
+    if (!ok) return
+    try {
+      // ① 先按最新画像规则重建 DocProfileJson（不重新转换）
+      ElMessage.info('正在重建文档画像…')
+      const profile = await entDocRebuildProfiles(ent)
+      if (profile.Failed > 0) {
+        ElMessage.warning(`画像完成：更新 ${profile.Updated} 份，失败 ${profile.Failed} 份；失败文件仍按旧画像提取`)
+      } else if (profile.Updated === 0 && profile.Skipped > 0) {
+        ElMessage.info(`画像未更新：${profile.Skipped} 份缺少 Markdown，请先完成转换`)
+      }
+
+      // ② 再按新画像入队提取；force=true 保证「重新分析」不会沿用旧结果
+      await this.startExtract(undefined, true)
+    } catch (e) {
+      this.reportError(e, '重新分析失败')
     }
   }
 
@@ -737,31 +814,48 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
     }
   }
 
-  /** 批量删除（页面上「删除选中」/「删除整个文件夹」的落点） */
-  async batchDelete(rows?: EntDocRow[]): Promise<void> {
+  /** 批量删除提交中锁（防连点出双重确认框 / 重复请求） */
+  private deleting = false
+
+  /**
+   * 批量删除（页面上「删除选中」/「删除整个文件夹」的落点）。
+   *
+   * @param opts.confirm 默认 true；「删除整个文件夹」已弹过确认框 ⇒ 传 false，
+   *   否则会二次弹框（用户要点两次确认才能删一个文件夹）。
+   */
+  async batchDelete(rows?: EntDocRow[], opts: { confirm?: boolean } = {}): Promise<void> {
     const target = (rows && rows.length > 0 ? rows : this.selectedRows.value) ?? []
     if (target.length === 0) {
       ElMessage.warning('请先勾选要删除的文件')
       return
     }
-    const ok = await confirmOrFalse(
-      `确定删除选中的 ${target.length} 个文件？\n它们的 PDF / 原文与全部提取结果都会一起删除。`,
-      '批量删除确认',
-      { confirmButtonText: `确定删除 ${target.length} 个`, cancelButtonText: '取消' },
-    )
-    if (!ok) return
+    if (this.deleting) return
+    if (opts.confirm !== false) {
+      const ok = await confirmOrFalse(
+        `确定删除选中的 ${target.length} 个文件？\n它们的 PDF / 原文与全部提取结果都会一起删除。`,
+        '批量删除确认',
+        { confirmButtonText: `确定删除 ${target.length} 个`, cancelButtonText: '取消' },
+      )
+      if (!ok) return
+    }
+    this.deleting = true
     try {
       const r = await entDocBatchDelete(target.map((x) => x.Code), this.selectedCode.value, '批量删除')
       if (r.Failed && r.Failed.length > 0) {
-        ElMessage.warning(`已删除 ${r.DeletedCount} 个，${r.Failed.length} 个失败：${r.Failed[0].Message}`)
+        // 部分失败：保留失败行的选中（计数与表格勾选一致，用户可重试）
+        const failedSet = new Set(r.Failed.map((f) => f.FileCode))
+        this.selectedRows.value = target.filter((x) => failedSet.has(x.Code)) as EntDocRow[]
+        ElMessage.warning(`已删除 ${r.Deleted} 个，${r.Failed.length} 个失败：${r.Failed[0].Message}`)
       } else {
-        ElMessage.success(`已删除 ${r.DeletedCount} 个文件`)
+        this.selectedRows.value = []
+        ElMessage.success(`已删除 ${r.Deleted} 个文件`)
       }
-      this.selectedRows.value = []
       await this.loadTree()
       await this.refreshAll()
     } catch (e) {
       this.reportError(e, '批量删除失败')
+    } finally {
+      this.deleting = false
     }
   }
 
@@ -811,18 +905,21 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
    * ⚠️ 返回值必须显式标 `YzhAction[]`：不标会被推断成「联合元素的数组」，
    *   传给 `YzhTable` 的 `row-action-buttons` 时类型收窄不过（TS2416）。
    */
-  docRowActions = (row: EntDocRow): YzhAction[] => {
-    const list = [
+  docRowActions = (row: TreeRow): YzhAction[] => {
+    if (isFolderNode(row)) {
+      return [{ key: 'folder-delete', text: '删除整个文件夹', type: 'danger' }]
+    }
+    const file = row as EntDocRow
+    return [
       { key: 'extractions', text: '提取结果' },
-      { key: 'preview', text: '预览 PDF', disabled: !row.CanPreview },
+      { key: 'preview', text: '预览 PDF', disabled: !file.CanPreview },
       { key: 'markdown', text: '查看原文' },
       { key: 'download', text: '下载原件' },
       { key: 'versions', text: '历史版本' },
       { key: 'regenerate', text: '重新生成' },
-      { key: 'extract-one', text: '重新提取', disabled: !row.CanExtract },
+      { key: 'extract-one', text: '重新分析', disabled: !file.CanExtract },
       { key: 'delete', text: '删除', type: 'danger' as const },
     ]
-    return list
   }
 
   /**
@@ -830,17 +927,45 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
    *
    * ⚠️ 名字不能叫 `onRowAction`：基类同名成员是实例属性 ⇒ TS2425。
    */
-  async handleRowAction(key: string, row: EntDocRow): Promise<void> {
+  async handleRowAction(key: string, row: TreeRow): Promise<void> {
+    if (isFolderNode(row)) {
+      if (key === 'folder-delete') return this.deleteFolder(row)
+      return
+    }
+    const file = row as EntDocRow
     switch (key) {
-      case 'extractions': return this.openExtractions(row)
-      case 'preview': return this.openPreview(row)
-      case 'markdown': return this.openMarkdown(row)
-      case 'download': return this.download(row)
-      case 'versions': return this.openVersions(row)
-      case 'regenerate': return this.regenerate(row)
-      case 'extract-one': return this.startExtract([row])
-      case 'delete': return this.deleteDoc(row)
+      case 'extractions': return this.openExtractions(file)
+      case 'preview': return this.openPreview(file)
+      case 'markdown': return this.openMarkdown(file)
+      case 'download': return this.download(file)
+      case 'versions': return this.openVersions(file)
+      case 'regenerate': return this.regenerate(file)
+      case 'extract-one': return this.startExtract([file], true)
+      case 'delete': return this.deleteDoc(file)
       default: return
+    }
+  }
+
+  /**
+   * 删除整个文件夹（收集子树所有文件 Code → 批量删除）。
+   */
+  async deleteFolder(node: FolderTreeNode): Promise<void> {
+    const codes = collectFileCodes(node)
+    if (codes.length === 0) {
+      ElMessage.info('该文件夹下没有文件')
+      return
+    }
+    const ok = await confirmOrFalse(
+      `确定删除文件夹【${node.FileName}】？\n该文件夹下共 ${codes.length} 个文件，它们的 PDF / 原文与全部提取结果都会一起删除。`,
+      '删除文件夹确认',
+      { confirmButtonText: `确定删除 ${codes.length} 个文件`, cancelButtonText: '取消' },
+    )
+    if (!ok) return
+    try {
+      // ⛔ 已在前面的确认框确认过（“删除文件夹确认”）⇒ 跳过 batchDelete 内部的二次确认
+      await this.batchDelete(codes.map((c) => ({ Code: c }) as EntDocRow), { confirm: false })
+    } catch (e) {
+      this.reportError(e, '删除文件夹失败')
     }
   }
 }

@@ -13,7 +13,9 @@
 import { describe, it, expect } from 'vitest'
 import type { EntDocExtractionRow, EntDocRow } from '@share/api/ent/enterprise-doc'
 import {
+  buildFileTree,
   clauseSortKey,
+  collectFileCodes,
   compareClauseNo,
   confidenceBadge,
   confidenceText,
@@ -23,6 +25,7 @@ import {
   folderLabel,
   formatDuration,
   formatSize,
+  isFolderNode,
   locateAnchor,
   normalizePunctuation,
   parseClauseNumbers,
@@ -36,6 +39,7 @@ import {
   summarize,
   taskTypeText,
 } from './pure'
+import type { FolderTreeNode } from './pure'
 
 // ─── fixtures ───────────────────────────────────────────────────
 
@@ -400,5 +404,120 @@ describe('summarize', () => {
 
   it('空数组不抛', () => {
     expect(summarize([]).total).toBe(0)
+  })
+})
+
+// ─── 九、文件夹树构建 ───────────────────────────────────────────────────
+
+/*
+ * 为什么单独列一组：树表是「文件管理」页的主视图，而**树构建错了不会报错** ——
+ * 只会表现为「层级不对 / 文件夹重复 / 文件数不对」，用户看到的是一个
+ * 说不清哪里坏的界面。而这些函数是纯函数（输入确定 ⇒ 输出确定），
+ * 必须钉死以下契约：
+ *   ① 空文件夹不凭空出现（树只由「有文件的行」长出来）
+ *   ② 文件夹 Code 带 `folder:` 前缀，⛔ 不与真实文件 Code（GUID）撞键
+ *   ③ 子树 `FileCount` 自底向上汇总（⛔ 不是只数直接子级）
+ *   ④ 「删除整个文件夹」用的是**递归**收集，漏一层就删不干净
+ */
+describe('buildFileTree', () => {
+  it('空数组直接返回空（⛔ 不凭空造根节点）', () => {
+    expect(buildFileTree([])).toEqual([])
+  })
+
+  it('根目录文件（RelFolderPath 为空）直接成为顶层文件行', () => {
+    const tree = buildFileTree([docRow({ Code: 'r1', FileName: 'a.pdf', RelFolderPath: '' })])
+    expect(tree).toHaveLength(1)
+    expect(isFolderNode(tree[0])).toBe(false)
+    expect(tree[0].Code).toBe('r1')
+  })
+
+  it('按 RelFolderPath 逐级建文件夹，并把文件挂到最深目录', () => {
+    const tree = buildFileTree([
+      docRow({ Code: 'f1', FileName: 'a.pdf', RelFolderPath: '资料' }),
+      docRow({ Code: 'f2', FileName: 'b.pdf', RelFolderPath: '资料/子' }),
+    ])
+    expect(tree).toHaveLength(1)
+    const folder = tree[0] as FolderTreeNode
+    expect(isFolderNode(folder)).toBe(true)
+    expect(folder.Code).toBe('folder:资料')
+    expect(folder.FileName).toBe('资料')
+    expect(folder.FileCount).toBe(2)
+
+    // 子层：文件夹在前、文件在后
+    const kids = folder.Children
+    expect(kids).toHaveLength(2)
+    const sub = kids[0] as FolderTreeNode
+    expect(sub.Code).toBe('folder:资料/子')
+    expect(sub.FileCount).toBe(1)
+    expect(isFolderNode(kids[1])).toBe(false)
+    expect(kids[1].Code).toBe('f1')
+  })
+
+  it('同一文件夹下多份文件 ⇒ 只建一个节点（⛔ 不因文件多而复制文件夹）', () => {
+    const tree = buildFileTree([
+      docRow({ Code: 'f1', FileName: 'a.pdf', RelFolderPath: '资料' }),
+      docRow({ Code: 'f2', FileName: 'b.pdf', RelFolderPath: '资料' }),
+      docRow({ Code: 'f3', FileName: 'c.pdf', RelFolderPath: '资料' }),
+    ])
+    expect(tree).toHaveLength(1)
+    const folder = tree[0] as FolderTreeNode
+    expect(folder.FileCount).toBe(3)
+  })
+
+  it('路径首尾斜杠被归一（/资料/ ≡ 资料）', () => {
+    const tree = buildFileTree([docRow({ Code: 'f1', RelFolderPath: '/资料/' })])
+    expect(tree).toHaveLength(1)
+    expect(tree[0].Code).toBe('folder:资料')
+  })
+
+  it('三层路径逐级建父节点，FileCount 自底向上汇总', () => {
+    const tree = buildFileTree([docRow({ Code: 'f1', RelFolderPath: '资料/子/孙' })])
+    expect(tree).toHaveLength(1)
+    const top = tree[0] as FolderTreeNode
+    expect(top.Code).toBe('folder:资料')
+    expect(top.FileCount).toBe(1)
+    const mid = top.Children[0] as FolderTreeNode
+    expect(mid.Code).toBe('folder:资料/子')
+    expect(mid.FileCount).toBe(1)
+    const leaf = mid.Children[0] as FolderTreeNode
+    expect(leaf.Code).toBe('folder:资料/子/孙')
+    expect(leaf.FileCount).toBe(1)
+  })
+
+  it('同层排序：文件夹在前、文件在后，各按名称字典序', () => {
+    const tree = buildFileTree([
+      docRow({ Code: 'f1', FileName: 'z.pdf', RelFolderPath: '' }),
+      docRow({ Code: 'f2', FileName: 'x.pdf', RelFolderPath: 'bfolder' }),
+      docRow({ Code: 'f3', FileName: 'y.pdf', RelFolderPath: 'afolder' }),
+    ])
+    expect(tree.map((n) => n.FileName)).toEqual(['afolder', 'bfolder', 'z.pdf'])
+  })
+
+  it('文件夹与文件通过 IsFolder 区分（⛔ 不靠字段缺失推断）', () => {
+    const tree = buildFileTree([docRow({ Code: 'f1', RelFolderPath: '资料' })])
+    const folder = tree[0] as FolderTreeNode
+    expect(isFolderNode(tree[0])).toBe(true)
+    expect(isFolderNode(folder.Children[0])).toBe(false)
+  })
+})
+
+describe('collectFileCodes（「删除整个文件夹」的依据）', () => {
+  it('递归收集子树全部文件 Code，⛔ 不含文件夹自身的 folder:xxx', () => {
+    const tree = buildFileTree([
+      docRow({ Code: 'f1', FileName: 'a.pdf', RelFolderPath: 'A' }),
+      docRow({ Code: 'f2', FileName: 'b.pdf', RelFolderPath: 'A/B' }),
+      docRow({ Code: 'f3', FileName: 'c.pdf', RelFolderPath: 'A/B/C' }),
+      docRow({ Code: 'f4', FileName: 'd.pdf', RelFolderPath: 'A' }),
+    ])
+    const root = tree.find((n) => n.Code === 'folder:A') as FolderTreeNode
+    const codes = collectFileCodes(root)
+    expect(codes.sort()).toEqual(['f1', 'f2', 'f3', 'f4'])
+    expect(codes).not.toContain('folder:A')
+  })
+
+  it('收集到的是文件 Code（GUID），可直接交给后端批量删', () => {
+    const tree = buildFileTree([docRow({ Code: 'only-file', RelFolderPath: 'single' })])
+    const root = tree[0] as FolderTreeNode
+    expect(collectFileCodes(root)).toEqual(['only-file'])
   })
 })

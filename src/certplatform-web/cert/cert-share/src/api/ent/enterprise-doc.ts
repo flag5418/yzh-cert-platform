@@ -136,6 +136,14 @@ export interface EntDocRow {
   ExtractStatus: EntDocExtractStatus
   ExtractMessage?: string | null
   ExtractTime?: string | null
+  /** ★ 文档画像摘要（来自 DocProfileJson；未画像时为空） */
+  DocType?: string | null
+  /** 提取模式：逐条款 / 过程画像 / 记录画像 / 仅索引 / 审核画像 */
+  ExtractionMode?: string | null
+  /** 主章节 4–10 */
+  PrimaryChapter?: string | null
+  /** 归属部门（管理层 / 生产部 / 品质部…） */
+  OwnerDept?: string | null
   /** ★ 每个标准一行：抽屉直接渲染，⛔ 不另开一次请求 */
   Extractions: EntDocExtractionRow[]
   /** 计划内标准中「还没有提取产物」的那几个 ⇒ 显示「待提取」 */
@@ -503,11 +511,11 @@ export async function entDocDelete(fileCode: string, enterpriseCode: string, rea
  */
 export async function entDocBatchDelete(
   fileCodes: string[], enterpriseCode: string, reason?: string,
-): Promise<{ DeletedCount: number; Failed: Array<{ FileCode: string; Message: string }> }> {
+): Promise<{ Deleted: number; Failed: Array<{ FileCode: string; Message: string }> }> {
   const res = await yzhApi.post<Payload>(`${BASE}/delete/batch`, {
     FileCodes: fileCodes, EnterpriseCode: enterpriseCode, Reason: reason,
   })
-  return unwrap(res, { DeletedCount: 0, Failed: [] })
+  return unwrap(res, { Deleted: 0, Failed: [] })
 }
 
 /**
@@ -555,22 +563,50 @@ export async function entDocRegenerate(
 
 // ═══════════════════════ 三之二、按标准提取条款（P2） ═══════════════════════
 
+/** ★ 批量重建文档画像（「重新分析」前半段；不重新转换、不重新上传） */
+export interface EntDocProfileRebuildResult {
+  Updated: number
+  Skipped: number
+  Failed: number
+  Message: string
+  Failures?: Array<{ FileCode: string; FileName: string; Error: string }>
+}
+
+export async function entDocRebuildProfiles(
+  enterpriseCode: string, fileCodes?: string[],
+): Promise<EntDocProfileRebuildResult> {
+  const res = await yzhApi.post<Payload>(`${BASE}/doc-profile/rebuild-all`, {
+    EnterpriseCode: enterpriseCode,
+    FileCodes: fileCodes ?? null,
+  })
+  const d = res?.data ?? {}
+  return {
+    Updated: d.Updated ?? 0,
+    Skipped: d.Skipped ?? 0,
+    Failed: d.Failed ?? 0,
+    Message: d.Message ?? res?.err ?? res?.message ?? '',
+    Failures: d.Failures ?? [],
+  }
+}
+
 /**
  * 入队「按标准提取条款」。
  *
  * @param fileCodes 给 = 只跑这几份；不给 = 整家企业。
+ * @param reExtract `true` = 强制重跑（「重新分析」），跳过后端「指纹未变 ⇒ 沿用旧结果」。
  *
- * ★ **可以反复点**：后端只入队「真需要跑的」（Markdown 就绪 + 该标准未完成 / 已过期 / hash 变了），
- *   已完成的进 `Skipped` 计数。
+ * ★ **可以反复点**：普通提取只入队「真需要跑的」（Markdown 就绪 + 该标准未完成 / 已过期 / hash 变了），
+ *   已完成的进 `Skipped` 计数；强制重跑则全部重新入队。
  * ⚠️ 没有有效计划 ⇒ `success=true` 但 `Queued=0` 且 `Message` 说清原因
  *   （⛔ 不是失败：这是「还没建计划」，不该弹红字）。
  */
 export async function entDocExtract(
-  enterpriseCode: string, fileCodes?: string[],
+  enterpriseCode: string, fileCodes?: string[], reExtract = false,
 ): Promise<EntDocExtractResult> {
   const res = await yzhApi.post<Payload>(`${BASE}/extract`, {
     EnterpriseCode: enterpriseCode,
     FileCodes: fileCodes ?? null,
+    ReExtract: reExtract,
   })
   const d = res?.data ?? {}
   return {

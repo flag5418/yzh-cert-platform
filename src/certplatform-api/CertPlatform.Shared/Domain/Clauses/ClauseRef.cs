@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace CertPlatform.Shared.Domain.Clauses
 {
     /// <summary>
-    /// 条款业务键（稳定键）：<c>StandardNo + ClauseNumber</c>。
+    /// 条款业务键（稳定键）：<c>StandardNo + VersionYear + ClauseNumber</c>。
     ///
     /// <para><b>为什么不用 <c>cert_iso_clause.Code</c></b>：标准条款被重新生成时旧 Code 会软删，
     /// 计划 / 属性 / 检查 / 准备按 Code 关联会静默失效。条款号在同一标准内稳定不变。</para>
@@ -20,6 +22,9 @@ namespace CertPlatform.Shared.Domain.Clauses
         /// <summary>标准短码（iso9001 / iso14001 / iso45001 / iso13485）</summary>
         public string StandardNo { get; set; } = string.Empty;
 
+        /// <summary>标准版本年份；旧引用可能没有该字段，不得在存在多个版本时猜测。</summary>
+        public int? VersionYear { get; set; }
+
         /// <summary>条款编号（4.1 / 7.1.2），统一归一为纯编号，不带 e / m 等展示前缀</summary>
         public string ClauseNumber { get; set; } = string.Empty;
     }
@@ -27,7 +32,27 @@ namespace CertPlatform.Shared.Domain.Clauses
     /// <summary>条款业务键的归一、解析与序列化。</summary>
     public static class ClauseRefs
     {
-        private static readonly Regex NumberPattern = new Regex(@"\d+(?:\.\d+)*", RegexOptions.Compiled);
+        private static readonly Regex NumberPattern = new Regex(
+            @"[A-Za-z]+(?:\.\d+)+|\d+(?:\.\d+)*", RegexOptions.Compiled);
+        private static readonly Regex StableNumberPattern = new Regex(
+            @"^(?:\d+(?:\.\d+)*|[A-Za-z]+(?:\.\d+)+)$", RegexOptions.Compiled);
+
+        /// <summary>由标准短码、版本年份和完整条款号生成稳定的 32 位条款 Code。</summary>
+        public static string CreateStableCode(string standardNo, int versionYear, string clauseNumber)
+        {
+            var standard = (standardNo ?? string.Empty).Trim().ToLowerInvariant();
+            var number = (clauseNumber ?? string.Empty).Trim().ToUpperInvariant();
+            if (standard.Length == 0)
+                throw new ArgumentException("标准编号不能为空", nameof(standardNo));
+            if (versionYear <= 0)
+                throw new ArgumentOutOfRangeException(nameof(versionYear));
+            if (!StableNumberPattern.IsMatch(number))
+                throw new ArgumentException("条款编号格式不正确", nameof(clauseNumber));
+
+            var identity = $"cert-clause-v1|{standard.Length}:{standard}|{versionYear}|{number}";
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(identity));
+            return Convert.ToHexString(hash.AsSpan(0, 16)).ToLowerInvariant();
+        }
 
         /// <summary>
         /// 把 <c>e 4.1</c> / <c>m 1</c> / <c>4.1 理解组织及其环境</c> 统一成纯条款号 <c>4.1</c>。
@@ -69,7 +94,7 @@ namespace CertPlatform.Shared.Domain.Clauses
             });
         }
 
-        /// <summary>去空、归一、按 (标准, 编号) 去重，并保持原顺序。</summary>
+        /// <summary>去空、归一、按 (标准, 版本, 编号) 去重，并保持原顺序。</summary>
         public static List<ClauseRef> Clean(IEnumerable<ClauseRef>? refs)
         {
             var result = new List<ClauseRef>();
@@ -79,9 +104,9 @@ namespace CertPlatform.Shared.Domain.Clauses
                 var std = (r.StandardNo ?? string.Empty).Trim();
                 var no = NormalizeNumber(r.ClauseNumber);
                 if (std.Length == 0 || no.Length == 0) continue;
-                var key = std + "|" + no;
+                var key = std + "|" + r.VersionYear + "|" + no;
                 if (!seen.Add(key)) continue;
-                result.Add(new ClauseRef { StandardNo = std, ClauseNumber = no });
+                result.Add(new ClauseRef { StandardNo = std, VersionYear = r.VersionYear, ClauseNumber = no });
             }
             return result;
         }

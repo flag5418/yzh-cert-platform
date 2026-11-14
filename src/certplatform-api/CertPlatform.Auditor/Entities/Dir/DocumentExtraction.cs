@@ -37,9 +37,8 @@ namespace CertPlatform.Auditor.Entities.Dir
     public string EnterpriseCode { get; set; } = string.Empty;
 
     /// <summary>
-    /// 本产物覆盖的条款号，逗号分隔（如 <c>4.2.4,4.2.5,7.5.1</c>）。
-    /// <para>⚠️ 查询用 <c>FIND_IN_SET('4.2.5', ClauseNumbers)</c> —— <b>逗号精确匹配</b>，
-    /// ⛔ 不能用 <c>LIKE '%4.2.5%'</c>（会误中 <c>4.2.55</c>）。</para>
+    /// 本产物覆盖的条款号短索引，逗号分隔（如 <c>4.2.4,4.2.5,7.5.1</c>）。
+    /// 超过列容量时为空，完整关联保存在 <see cref="ContentJson"/>。
     /// </summary>
     [SugarColumn(Length = 500)]
     public string ClauseNumbers { get; set; } = string.Empty;

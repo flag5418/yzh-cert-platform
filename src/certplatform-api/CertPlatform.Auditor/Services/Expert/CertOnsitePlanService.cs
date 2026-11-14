@@ -134,6 +134,7 @@ namespace CertPlatform.Auditor.Services.Expert
                 return Result<CertOnsitePlanItemRow>.Ok(ToRow(created));
             }
 
+            entity.Source = "manual";
             entity.CheckWhat = req.CheckWhat.Trim();
             entity.CheckMethod = req.CheckMethod?.Trim();
             entity.TargetDept = req.TargetDept?.Trim();
@@ -150,6 +151,7 @@ namespace CertPlatform.Auditor.Services.Expert
             entity.UpdateTime = now;
             // R-A：列级写回（全列 UpdateAsync(entity) 会覆盖并发方已写入的其他列）
             await _db.UpdateAsync(entity,
+                nameof(CertOnsitePlanItem.Source),
                 nameof(CertOnsitePlanItem.CheckWhat),
                 nameof(CertOnsitePlanItem.CheckMethod),
                 nameof(CertOnsitePlanItem.TargetDept),

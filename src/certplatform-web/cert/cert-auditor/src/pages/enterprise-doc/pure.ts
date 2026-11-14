@@ -458,3 +458,148 @@ export function formatDuration(ms?: number | null): string {
   const m = Math.floor(s / 60)
   return `${m}m${Math.round(s - m * 60)}s`
 }
+
+// ═══════════════════════ 九、文件夹树构建 ═══════════════════════
+
+/**
+ * 文件夹树节点（由 `buildFileTree` 从扁平 `EntDocRow[]` 构建）。
+ *
+ * ★ 与文件行 `EntDocRow` 通过 `IsFolder` 区分，⛔ 不靠「字段缺失」判断
+ *   （文件行没有 `Children` 字段，但 `in` 操作符对 undefined 也返回 true）。
+ */
+export interface FolderTreeNode {
+  /** 树节点唯一键：`folder:{路径}`，⛔ 与文件行 Code（GUID）不冲突 */
+  Code: string
+  /** 文件夹名（路径最后一段） */
+  FileName: string
+  IsFolder: true
+  /** 完整相对路径（与文件的 `RelFolderPath` 同口径） */
+  RelFolderPath: string
+  /** 子节点（子文件夹 + 本层文件） */
+  Children: TreeRow[]
+  /** 子树文件总数（含所有后代） */
+  FileCount: number
+  /** 层级深度（根 = 1） */
+  Depth: number
+}
+
+/** 树表行 = 文件行 | 文件夹节点 */
+export type TreeRow = EntDocRow | FolderTreeNode
+
+/** 类型守卫：是否文件夹节点 */
+export function isFolderNode(row: TreeRow): row is FolderTreeNode {
+  return 'IsFolder' in row && (row as FolderTreeNode).IsFolder === true
+}
+
+/**
+ * 扁平文件行 → 文件夹树（`el-table` tree 模式消费）。
+ *
+ * 构建规则：
+ *  ① 根目录文件（`RelFolderPath` 为空）→ 直接作为顶层行
+ *  ② 有路径的文件 → 按 `/` 拆段，逐级建文件夹节点
+ *  ③ 文件夹节点按「短路径是长路径的父」组树
+ *  ④ 子树 `FileCount` 自底向上汇总
+ *  ⑤ 排序：同层内文件夹在前、文件在后，各按名称字典序
+ *
+ * ⚠️ 文件夹节点只在「有文件路径」时创建 ⇒ 空文件夹不会出现（⛔ 不凭空造节点）
+ */
+export function buildFileTree(rows: EntDocRow[]): TreeRow[] {
+  const list = rows ?? []
+  if (list.length === 0) return []
+
+  const rootFiles: EntDocRow[] = []
+  const folderMap = new Map<string, FolderTreeNode>()
+
+  // ① 分离根文件 + 登记所有文件夹路径
+  for (const f of list) {
+    const path = (f.RelFolderPath ?? '').trim().replace(/^\/+|\/+$/g, '')
+    if (!path) {
+      rootFiles.push(f)
+      continue
+    }
+    const segs = path.split('/').filter(Boolean)
+    let acc = ''
+    for (let i = 0; i < segs.length; i++) {
+      acc = acc ? `${acc}/${segs[i]}` : segs[i]
+      if (!folderMap.has(acc)) {
+        folderMap.set(acc, {
+          Code: `folder:${acc}`,
+          FileName: segs[i],
+          IsFolder: true,
+          RelFolderPath: acc,
+          Children: [],
+          FileCount: 0,
+          Depth: i + 1,
+        })
+      }
+    }
+  }
+
+  // ② 文件挂到最深目录节点
+  for (const f of list) {
+    const path = (f.RelFolderPath ?? '').trim().replace(/^\/+|\/+$/g, '')
+    if (!path) continue
+    folderMap.get(path)?.Children.push(f)
+  }
+
+  // ③ 组树：短路径是长路径的父
+  const roots: TreeRow[] = [...rootFiles]
+  for (const node of folderMap.values()) {
+    const idx = node.RelFolderPath.lastIndexOf('/')
+    const parentPath = idx > 0 ? node.RelFolderPath.slice(0, idx) : ''
+    const parent = parentPath ? folderMap.get(parentPath) : undefined
+    if (parent) parent.Children.push(node)
+    else roots.push(node)
+  }
+
+  // ④ 子树文件数汇总（后序遍历）
+  const calcCount = (node: FolderTreeNode): number => {
+    let count = 0
+    for (const child of node.Children) {
+      if (isFolderNode(child)) {
+        count += calcCount(child)
+      } else {
+        count++
+      }
+    }
+    node.FileCount = count
+    return count
+  }
+  for (const r of roots) {
+    if (isFolderNode(r)) calcCount(r)
+  }
+
+  // ⑤ 排序：同层内文件夹在前、文件在后，各按名称字典序
+  const sortRec = (items: TreeRow[]): void => {
+    items.sort((a, b) => {
+      const aFolder = isFolderNode(a)
+      const bFolder = isFolderNode(b)
+      if (aFolder && !bFolder) return -1
+      if (!aFolder && bFolder) return 1
+      return a.FileName.localeCompare(b.FileName, 'zh-CN')
+    })
+    for (const item of items) {
+      if (isFolderNode(item)) sortRec(item.Children)
+    }
+  }
+  sortRec(roots)
+
+  return roots
+}
+
+/**
+ * 收集文件夹子树下的所有文件 Code（删除整个文件夹时用）。
+ *
+ * ⛔ 不收集文件夹节点自身的 Code（「folder:xxx」不是真实文件 Code）
+ */
+export function collectFileCodes(node: FolderTreeNode): string[] {
+  const codes: string[] = []
+  const walk = (n: FolderTreeNode): void => {
+    for (const child of n.Children) {
+      if (isFolderNode(child)) walk(child)
+      else codes.push(child.Code)
+    }
+  }
+  walk(node)
+  return codes
+}

@@ -10,13 +10,14 @@ using YZH.Core.DataBase.Interfaces;
 namespace CertPlatform.Auditor.Services.Ent
 {
     /// <summary>
-    /// <b>「按标准提取条款」提示词</b> —— 读 <c>cert_prompt_template</c>（<c>PromptCode = doc_clause_extract</c>）
-    /// + 占位符渲染 + 代码内兜底正文。
+    /// <b>文档提取提示词服务</b> —— 读 <c>cert_prompt_template</c>（旧 <c>doc_clause_extract</c> +
+    /// 画像 <c>doc_profile</c> + 5 条按模式提取提示词）+ 占位符渲染 + 代码内兜底正文。
     ///
     /// <para><b>★★ 为什么提示词必须落库、且必须能被覆盖</b>：提取质量 = 提示词质量。
     /// 换一份标准（iso9001 → iso13485）时条款语法差异很大（见 24 号 §十二 208 条叶子语法实测），
-    /// 靠改代码发版调提示词不可行。库里有行 ⇒ 以库为准；没有 ⇒ 用
-    /// <see cref="FallbackTemplate"/>（与 <c>scripts/db/20261029_doc_clause_extract_prompt_V1.sql</c> 逐字一致）。</para>
+    /// 靠改代码发版调提示词不可行。库里有行 ⇒ 以库为准；旧 <c>doc_clause_extract</c> 没有 ⇒ 用
+    /// <see cref="FallbackTemplate"/>（与 <c>scripts/db/20261029_doc_clause_extract_prompt_V1.sql</c> 逐字一致）。
+    /// 新 5 条提示词没有代码兜底：缺行直接失败，避免“以为用了新提示词、实际跑旧正文”。</para>
     ///
     /// <para><b>★ 四条硬规则（写进提示词正文，缺一条产物就不可用）</b>：
     /// <list type="number">
@@ -32,8 +33,16 @@ namespace CertPlatform.Auditor.Services.Ent
     /// </summary>
     public sealed class DocExtractPromptService
     {
-        /// <summary>提示词代码（<c>cert_prompt_template.PromptCode</c>）</summary>
+        /// <summary>提示词代码（<c>cert_prompt_template.PromptCode</c>）—— 旧主链</summary>
         public const string PromptCode = "doc_clause_extract";
+
+        /// <summary>5 条按模式提取提示词代码（与 <c>20261113_doc_prompt_templates_V1.sql</c> 对齐）</summary>
+        public const string PromptCodeProfile = "doc_profile";
+        public const string PromptCodeClauseFull = "doc_extract_clause_full";
+        public const string PromptCodeProcessProfile = "doc_extract_process_profile";
+        public const string PromptCodeRecordProfile = "doc_extract_record_profile";
+        public const string PromptCodeIndex = "doc_extract_index";
+        public const string PromptCodeAudit = "doc_extract_audit";
 
         /// <summary>提示词版本（留痕到 <c>cert_document_extraction.PromptVersion</c>）</summary>
         public const string PromptVersion = "v1";
@@ -43,6 +52,8 @@ namespace CertPlatform.Auditor.Services.Ent
         public const string PhClauseList = "{{clause_list}}";
         public const string PhDocumentName = "{{document_name}}";
         public const string PhDocumentContent = "{{document_content}}";
+        public const string PhDocProfile = "{{doc_profile}}";
+        public const string PhDocumentText = "{{document_text}}";
 
         private readonly IDbOrm _db;
 
@@ -57,11 +68,23 @@ namespace CertPlatform.Auditor.Services.Ent
         /// <para>⚠️ 返回的 <c>Scope</c> 必须被调用方记录下来（<c>stored</c>/<c>fallback</c>）——
         /// 「用的是兜底正文」等于「库里改的正文没生效」，用户会以为模型不行。</para>
         /// </summary>
-        public async Task<(string Template, string Scope, string? StandardScopeKey)> ResolveAsync(
+        public Task<(string Template, string Scope, string? StandardScopeKey)> ResolveAsync(
             string? standardShortCode, CancellationToken ct = default)
+            => ResolveByCodeAsync(PromptCode, standardShortCode, ct);
+
+        /// <summary>
+        /// 按 <paramref name="promptCode"/> 读提示词正文：标准级 → 平台级 两级回退。
+        /// <para>⚠️ 新 5 条提示词没有代码内兜底：库中缺行时返回空 Template + <c>missing</c>，
+        /// 调用方必须显式失败，⛔ 不许静默退回旧 <c>doc_clause_extract</c>。</para>
+        /// </summary>
+        public async Task<(string Template, string Scope, string? StandardScopeKey)> ResolveByCodeAsync(
+            string promptCode, string? standardShortCode, CancellationToken ct = default)
         {
+            var code = (promptCode ?? string.Empty).Trim();
+            if (code.Length == 0) return (string.Empty, "missing", null);
+
             var all = await _db.Client.Queryable<CertPromptTemplateRow>()
-                .Where(x => x.PromptCode == PromptCode && !x.IsDeleted && x.IsValid == 1
+                .Where(x => x.PromptCode == code && !x.IsDeleted && x.IsValid == 1
                             // ★ 2026-11-11：平台级行的 OrgCode 存的是空串（列 NOT NULL 无默认）。
                             //   只写 == null 会永不命中 ⇒ 页面保存好的正文被忽略，静默走代码兜底。
                             && (x.OrgCode == null || x.OrgCode == ""))
@@ -83,8 +106,10 @@ namespace CertPlatform.Auditor.Services.Ent
                 string.IsNullOrWhiteSpace(x.ScopeKey) && !string.IsNullOrWhiteSpace(x.Template));
             if (platform != null) return (platform.Template!, "stored", null);
 
-            // ③ 库中缺行 ⇒ 代码兜底（⛔ 不抛异常：兜底正文是可用正文，不是错误）
-            return (FallbackTemplate, "fallback", null);
+            // ③ 旧主链允许代码兜底；新提示词缺行必须失败，避免“以为用了新提示词、实际跑旧正文”。
+            if (code == PromptCode)
+                return (FallbackTemplate, "fallback", null);
+            return (string.Empty, "missing", null);
         }
 
         /// <summary>
@@ -102,6 +127,16 @@ namespace CertPlatform.Auditor.Services.Ent
                 .Replace(PhClauseList, clauseList ?? string.Empty, StringComparison.Ordinal)
                 .Replace(PhDocumentName, documentName ?? string.Empty, StringComparison.Ordinal)
                 .Replace(PhDocumentContent, documentContent ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// 渲染过程/记录/索引/审核 4 条模式提示词：只有 <c>{{doc_profile}}</c> 与 <c>{{document_text}}</c>。
+        /// </summary>
+        public static string RenderMode(string template, string docProfileJson, string documentText)
+        {
+            return (template ?? string.Empty)
+                .Replace(PhDocProfile, docProfileJson ?? string.Empty, StringComparison.Ordinal)
+                .Replace(PhDocumentText, documentText ?? string.Empty, StringComparison.Ordinal);
         }
 
         /// <summary>

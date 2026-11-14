@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
@@ -57,11 +59,14 @@ namespace CertPlatform.Auditor.Services.Ent
         /// </summary>
         public const int ChunkChars = 15000;
 
-        /// <summary>标准原文注入上限（与文档分段同口径 3 万字）</summary>
+        /// <summary>单次模型调用的条款 Markdown 分片上限。</summary>
         private const int StandardTextChars = 30_000;
 
         /// <summary>最多切几块（防误传超大文件把额度烧光；超出的部分记入 Message ⛔ 不静默丢）</summary>
         public const int MaxChunks = 8;
+
+        private const int MaxStandardChunks = 8;
+        private const int MaxModelCalls = 32;
 
         public ClauseExtractExecutor(
             IServiceProvider serviceProvider,
@@ -132,15 +137,8 @@ namespace CertPlatform.Auditor.Services.Ent
                     return new TaskExecutionResult { Success = false, Message = why, Retryable = false };
                 }
 
-                // ── ③ 幂等：字节没变且产物已完成 ⇒ 跳过 ──
+                // 仅在实际模板、标准、模型和转换文本均已读取后才能判断缓存。
                 var existing = await store.GetAsync(doc.Code!, payload.StandardCode);
-                if (existing is { IsDeleted: false, IsStale: false, ExtractStatus: ExtractRowStatus.Done }
-                    && !string.IsNullOrEmpty(doc.Sha256)
-                    && string.Equals(existing.SourceSha256, doc.Sha256, StringComparison.OrdinalIgnoreCase))
-                {
-                    _logger.LogInformation("[条款提取] 命中幂等（hash 未变）: {File} × {Std}", doc.Code, standard.StandardCode);
-                    return new TaskExecutionResult { Success = true, Message = "文档未变化，沿用已有提取结果", Retryable = false };
-                }
 
                 // ── ④ 条款清单（DocCheckMode ≠ none） ──
                 var (clauses, clauseNote) = await ResolveClausesAsync(db, core, standard);
@@ -188,25 +186,57 @@ namespace CertPlatform.Auditor.Services.Ent
                     return new TaskExecutionResult { Success = true, Message = why, Retryable = false };
                 }
 
-                // ── ⑤b 标准原文 Markdown（知识层事实源，2026-11-10） ──
-                //   用途：给模型核对条款措辞，避免只凭“编号+标题”猜条文含义。
-                //   ⛔ 不属于待提取的文档内容，单独加段并在提示词里显式隔离。
-                var standardMarkdown = string.Empty;
-                if (!string.IsNullOrWhiteSpace(standard.MarkdownPath))
+                // ── ⑤.1 画像路由：过程/记录/索引/审核 4 类走新提示词；手册逐条款暂留旧链 ──
+                var extractionMode = EnterpriseDocExtractionRouter.Resolve(doc.DocProfileJson, doc.FileName);
+                if (EnterpriseDocExtractionRouter.IsSkip(extractionMode))
                 {
-                    try
-                    {
-                        var (stdStream, _) = await storage.DownloadAsync(standard.MarkdownPath!.TrimStart('/'));
-                        using var stdReader = new StreamReader(stdStream, Encoding.UTF8, true);
-                        standardMarkdown = await stdReader.ReadToEndAsync();
-                        if (standardMarkdown.Length > StandardTextChars)
-                            standardMarkdown = standardMarkdown.Substring(0, StandardTextChars);
-                    }
-                    catch (Exception ex)
-                    {
-                        // 非致命：标准原文读不到不影响提取，只记日志
-                        _logger.LogWarning(ex, "[条款提取] 标准原文 Markdown 读取失败: {Path}", standard.MarkdownPath);
-                    }
+                    var why = "文档画像判定为无标准相关性（ExtractionMode=none），跳过提取";
+                    await store.UpsertAsync(doc.Code!, payload.StandardCode, doc.EnterpriseCode,
+                        null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                        DocExtractPromptService.PromptCodeProfile, DocExtractPromptService.PromptVersion,
+                        ExtractRowStatus.Skipped, why, null, cancellationToken);
+                    await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                    return new TaskExecutionResult { Success = true, Message = why, Retryable = false };
+                }
+
+                if (EnterpriseDocExtractionRouter.IsModePrompt(extractionMode))
+                    return await ExecuteModePromptAsync(
+                        db, llm, prompts, store, docSvc, doc, standard, existing,
+                        markdown, extractionMode, payload.StandardCode, payload.Force, cancellationToken);
+
+                // 条款输入使用派生的条款 Markdown，不能退回原始标准 Markdown。
+                var fullStandardMarkdown = string.Empty;
+                string? standardReadError = null;
+                var standardReadRetryable = false;
+                try
+                {
+                    fullStandardMarkdown = await ClauseMarkdownInput.LoadAsync(storage, standard);
+                    foreach (var clause in clauses)
+                        ClauseMarkdownInput.ReadSection(fullStandardMarkdown, clause);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    standardReadError = ex.Message;
+                    standardReadRetryable = ex is not InvalidOperationException;
+                    _logger.LogWarning(ex, "[条款提取] 条款 Markdown 读取或校验失败: {Path}", standard.ClauseMarkdownPath);
+                }
+
+                List<string> standardChunks;
+                try
+                {
+                    if (standardReadError != null)
+                        throw new InvalidOperationException(standardReadError);
+                    standardChunks = BuildStandardChunks(fullStandardMarkdown, StandardTextChars, MaxStandardChunks);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    var why = standardReadError == null ? ex.Message : $"条款 Markdown 不可用：{standardReadError}";
+                    await store.UpsertAsync(doc.Code!, payload.StandardCode, doc.EnterpriseCode,
+                        null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                        DocExtractPromptService.PromptCode, DocExtractPromptService.PromptVersion,
+                        ExtractRowStatus.Failed, why, null, cancellationToken);
+                    await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                    return new TaskExecutionResult { Success = false, Message = why, Retryable = standardReadRetryable };
                 }
 
                 // ── ⑥ 提示词 + AI 参数 ──
@@ -225,10 +255,42 @@ namespace CertPlatform.Auditor.Services.Ent
 
                 // ── ⑦ 分段 → 逐段调用 → 合并 ──
                 var chunks = SplitIntoChunks(markdown, ChunkChars, MaxChunks);
-                var truncated = chunks.Count == MaxChunks && chunks.Sum(c => c.Length) < markdown.Length;
+                var truncated = chunks.Sum(c => c.Length) < markdown.Length;
+                var callCount = chunks.Count * standardChunks.Count;
+                if (truncated || callCount > MaxModelCalls)
+                {
+                    var why = truncated
+                        ? $"企业文档超过 {MaxChunks} 段，未进行不完整提取"
+                        : $"文档与标准分片需调用 {callCount} 次，超过单任务上限 {MaxModelCalls} 次，未开始提取";
+                    await store.UpsertAsync(doc.Code!, payload.StandardCode, doc.EnterpriseCode,
+                        null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                        DocExtractPromptService.PromptCode, DocExtractPromptService.PromptVersion,
+                        ExtractRowStatus.Failed, why, null, cancellationToken);
+                    await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                    return new TaskExecutionResult { Success = false, Message = why, Retryable = false };
+                }
 
                 var clauseList = DocExtractPromptService.BuildClauseList(
                     clauses.Select(c => (c.ClauseNumber ?? string.Empty, c.Title ?? string.Empty)));
+                var markdownHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(markdown))).ToLowerInvariant();
+                var fingerprint = DocumentExtractionFingerprint.Compute(
+                    "doc-clause-extract-v6", doc.Sha256 ?? "", doc.VersionNumber.ToString(),
+                    markdownHash, standard.Code ?? "", standard.StandardCode ?? "",
+                    standard.VersionYear.ToString(), standard.StandardName ?? "", clauseList,
+                    fullStandardMarkdown, JsonSerializer.Serialize(clauses.Select(c => new
+                    {
+                        c.ClauseNumber, c.Title, c.Description
+                    })), template, settings.BaseUrl ?? "", settings.Model ?? "",
+                    ChunkChars.ToString(), MaxChunks.ToString(), StandardTextChars.ToString(),
+                    MaxStandardChunks.ToString(), MaxModelCalls.ToString(), "0.1", "8192");
+                if (!payload.Force
+                    && existing is { IsDeleted: false, IsStale: false, ExtractStatus: ExtractRowStatus.Done }
+                    && !string.IsNullOrEmpty(doc.Sha256)
+                    && string.Equals(existing.SourceSha256, doc.Sha256, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(ReadFingerprint(existing.ContentJson), fingerprint, StringComparison.Ordinal))
+                {
+                    return new TaskExecutionResult { Success = true, Message = "提取输入未变化，沿用已有结果", Retryable = false };
+                }
 
                 var merged = new Dictionary<string, ExtractedClause>(StringComparer.Ordinal);
                 var allowed = clauses.Select(c => (c.ClauseNumber ?? string.Empty).Trim())
@@ -238,9 +300,13 @@ namespace CertPlatform.Auditor.Services.Ent
                 var failMessages = new List<string>();
                 var droppedNumbers = 0;
 
-                for (var i = 0; i < chunks.Count; i++)
+                for (var batch = 0; batch < callCount; batch++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    var i = batch / standardChunks.Count;
+                    var j = batch % standardChunks.Count;
+                    var standardMarkdown = standardChunks[j];
+                    var batchLabel = $"文档第 {i + 1}/{chunks.Count} 段、标准第 {j + 1}/{standardChunks.Count} 段";
 
                     var prompt = DocExtractPromptService.Render(
                         template,
@@ -250,20 +316,18 @@ namespace CertPlatform.Auditor.Services.Ent
                         clauseList,
                         chunks[i]);
 
-                    // ★ 附标准原文：只作“条款措辞参照”，⛔ 不是待提取文档内容
-                    if (standardMarkdown.Length > 0)
-                    {
-                        prompt += "\n\n【标准原文·仅用于核对条款措辞，不是待提取的文档内容】\n"
-                               + "（以下为该标准的正式条文；企业文档里若没有对应证据，不要凭它编造摘录）\n"
-                               + standardMarkdown;
-                    }
+                    // 条款 Markdown 仅供理解条款，不是待提取的企业文档。
+                    prompt += $"\n\n【标准条款 Markdown 分片 {j + 1}/{standardChunks.Count}，仅用于理解条款，不是待提取的文档内容】\n"
+                           + "这是由条款表生成的内容，可能存在正文不完整或摘要；当前仅包含一个连续片段，可能不含完整条款或其上下文。"
+                           + "企业文档里若没有对应证据，不要凭标准编造摘录。\n"
+                           + standardMarkdown;
 
                     // ★ 2026-11-11：长文档提取实测在 180s 稳定超时（提示词含标准原文 3 万字
                     //   + 文档段 3 万字 + 输出上限 8192 token），单次必须给到 600s。
                     //   同时把实际规模打进日志，便于判断是输入过大还是模型输出卡住。
                     _logger.LogInformation(
-                        "[条款提取] {File}×{Std} 第 {I}/{N} 段：prompt {Chars} 字符（文档段 {DocChars}，标准原文 {StdChars}）",
-                        doc.Code, standard.StandardCode, i + 1, chunks.Count,
+                        "[条款提取] {File}×{Std} {Batch}：prompt {Chars} 字符（文档段 {DocChars}，条款 Markdown {StdChars}）",
+                        doc.Code, standard.StandardCode, batchLabel,
                         prompt.Length, chunks[i].Length, standardMarkdown.Length);
 
                     var resp = await llm.CompleteAsync(new LlmInvokeRequest
@@ -281,14 +345,27 @@ namespace CertPlatform.Auditor.Services.Ent
                     if (!resp.Success || resp.Json == null)
                     {
                         // 单段失败不立刻放弃：其余段可能成功，先记下来
-                        failMessages.Add($"第 {i + 1}/{chunks.Count} 段失败：{resp.Message}");
-                        _logger.LogWarning("[条款提取] {File}×{Std} 第 {I}/{N} 段失败: {Msg}",
-                            doc.Code, standard.StandardCode, i + 1, chunks.Count, resp.Message);
+                        failMessages.Add($"{batchLabel}失败：{resp.Message}");
+                        _logger.LogWarning("[条款提取] {File}×{Std} {Batch} 失败: {Msg}",
+                            doc.Code, standard.StandardCode, batchLabel, resp.Message);
                         continue;
                     }
 
                     using (resp.Json)
                     {
+                        if (resp.JsonRepaired
+                            || string.Equals(resp.FinishReason, "length", StringComparison.OrdinalIgnoreCase)
+                            || (resp.CompletionTokens.HasValue && resp.CompletionTokens.Value >= 8192))
+                        {
+                            failMessages.Add($"{batchLabel}输出被截断或疑似达到输出上限");
+                            continue;
+                        }
+                        if (!TryProp(resp.Json.RootElement, "clauses", out var clauseArray)
+                            || clauseArray.ValueKind != JsonValueKind.Array)
+                        {
+                            failMessages.Add($"{batchLabel}缺少有效的 clauses 数组");
+                            continue;
+                        }
                         var (got, dropped) = ReadClauses(resp.Json.RootElement, allowed);
                         droppedNumbers += dropped;
                         foreach (var c in got)
@@ -312,8 +389,8 @@ namespace CertPlatform.Auditor.Services.Ent
                     }
                 }
 
-                // 全部段都失败 ⇒ 才判 failed（部分成功按部分成功记，⛔ 不假装全好）
-                if (merged.Count == 0 && failMessages.Count == chunks.Count)
+                // 全部段都失败时保留失败原因，不发布空产物。
+                if (merged.Count == 0 && failMessages.Count == callCount)
                 {
                     var why = "全部段落调用失败：" + string.Join("；", failMessages.Take(3));
                     await store.UpsertAsync(doc.Code!, payload.StandardCode, doc.EnterpriseCode,
@@ -330,6 +407,42 @@ namespace CertPlatform.Auditor.Services.Ent
                     .ThenBy(c => c.ClauseNumber, StringComparer.Ordinal)
                     .ToList();
 
+                foreach (var clause in ordered)
+                {
+                    for (var index = 0; index < clause.Excerpts.Count; index++)
+                    {
+                        var text = clause.Excerpts[index];
+                        var start = DocumentSourceLocator.LocateUnique(markdown, text);
+                        clause.ExcerptLocations.Add(new ExtractedExcerptLocation
+                        {
+                            ExcerptIndex = index,
+                            Start = start,
+                            End = start.HasValue ? start.Value + text.Length : null,
+                            Status = start.HasValue ? "matched"
+                                : markdown.Contains(text, StringComparison.Ordinal) ? "ambiguous" : "unverified"
+                        });
+                    }
+
+                    var section = DocumentManualSectionLocator.Locate(markdown, clause.ClauseNumber, clause.Anchor);
+                    if (section.HasValue)
+                    {
+                        var text = markdown[section.Value.Start..section.Value.End];
+                        if (!clause.Excerpts.Contains(text, StringComparer.Ordinal))
+                        {
+                            var index = clause.Excerpts.Count;
+                            clause.Excerpts.Add(text);
+                            clause.ExcerptLocations.Add(new ExtractedExcerptLocation
+                            {
+                                ExcerptIndex = index,
+                                Start = section.Value.Start,
+                                End = section.Value.End,
+                                Status = "matched",
+                                Kind = "section_candidate"
+                            });
+                        }
+                    }
+                }
+
                 var payloadDoc = new ExtractedDoc
                 {
                     DocMeta = new ExtractedDocMeta
@@ -338,6 +451,10 @@ namespace CertPlatform.Auditor.Services.Ent
                         StandardCode = standard.StandardCode ?? string.Empty,
                         StandardName = standard.StandardName ?? string.Empty,
                         Model = settings.Model,
+                        SourceSha256 = doc.Sha256 ?? string.Empty,
+                        SourceVersion = doc.VersionNumber,
+                        MarkdownSha256 = markdownHash,
+                        ExtractionFingerprint = fingerprint,
                         ExtractedAt = DateTime.Now,
                         Chunks = chunks.Count,
                     },
@@ -354,8 +471,13 @@ namespace CertPlatform.Auditor.Services.Ent
                 if (promptScope == "fallback")
                     notes.Add("库里没有保存过提取提示词，本次用的是代码内兜底正文，建议确认后保存");
                 if (chunks.Count > 1) notes.Add($"长文档已分 {chunks.Count} 段提取");
+                if (standardChunks.Count > 1) notes.Add($"条款 Markdown 分 {standardChunks.Count} 段处理，完整覆盖文本不代表语义召回完整");
                 if (truncated) notes.Add($"文档超过 {MaxChunks}×{ChunkChars} 字符，超出部分未提取");
                 if (droppedNumbers > 0) notes.Add($"丢弃 {droppedNumbers} 条编号不在清单内的输出（模型自造编号）");
+                var unverifiedCount = ordered.Sum(c => c.ExcerptLocations.Count(x => x.Status != "matched"));
+                if (unverifiedCount > 0) notes.Add($"{unverifiedCount} 条摘录未能唯一匹配转换原文，需人工核实");
+                var indexOverflow = string.Join(",", ordered.Select(c => c.ClauseNumber).Distinct(StringComparer.Ordinal)).Length > 500;
+                if (indexOverflow) notes.Add("条款关联较多，反查使用完整提取内容");
                 if (failMessages.Count > 0) notes.Add($"{failMessages.Count} 段失败：" + string.Join("；", failMessages.Take(2)));
                 if (!string.IsNullOrEmpty(clauseNote)) notes.Add(clauseNote);
 
@@ -363,7 +485,20 @@ namespace CertPlatform.Auditor.Services.Ent
                     ? $"提取 {ordered.Count} 条条款"
                     : $"提取 {ordered.Count} 条条款；" + string.Join("；", notes);
 
-                var status = ExtractRowStatus.Done;
+                var status = truncated || failMessages.Count > 0
+                    ? ExtractRowStatus.Failed
+                    : ExtractRowStatus.Done;
+                var currentDoc = (await db.GetOneIgnoreValidAsync<EnterpriseDoc>(x => x.Code == payload.FileCode)).Data;
+                if (currentDoc == null || currentDoc.IsDeleted || currentDoc.VersionNumber != doc.VersionNumber
+                    || !string.Equals(currentDoc.Sha256, doc.Sha256, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(currentDoc.MarkdownPath, doc.MarkdownPath, StringComparison.Ordinal)
+                    || currentDoc.MarkdownStatus != "completed")
+                    return new TaskExecutionResult
+                    {
+                        Success = false,
+                        Message = "提取期间文件版本或转换状态发生变化，未发布本次结果，请重新提取",
+                        Retryable = true
+                    };
                 var (ok, err) = await store.UpsertAsync(
                     doc.Code!, payload.StandardCode, doc.EnterpriseCode,
                     json, ordered.Select(c => c.ClauseNumber).ToList(),
@@ -379,14 +514,14 @@ namespace CertPlatform.Auditor.Services.Ent
 
                 await docSvc.RecomputeExtractStatusAsync(doc.Code!);
 
-                _logger.LogInformation("[条款提取] 完成 {File}×{Std}：{N} 条（{Chunks} 段，丢弃 {Drop}）",
-                    doc.Code, standard.StandardCode, ordered.Count, chunks.Count, droppedNumbers);
+                _logger.LogInformation("[条款提取] {Status} {File}×{Std}：{N} 条（{Chunks} 段，丢弃 {Drop}）",
+                    status, doc.Code, standard.StandardCode, ordered.Count, chunks.Count, droppedNumbers);
 
                 return new TaskExecutionResult
                 {
-                    Success = true,
+                    Success = status == ExtractRowStatus.Done,
                     Message = message,
-                    Retryable = false,
+                    Retryable = status == ExtractRowStatus.Failed && !truncated,
                 };
             }
             catch (OperationCanceledException)
@@ -398,6 +533,208 @@ namespace CertPlatform.Auditor.Services.Ent
                 _logger.LogError(ex, "[条款提取] 任务异常: {TaskCode}", task.Code);
                 return new TaskExecutionResult { Success = false, Message = ex.Message, Retryable = true };
             }
+        }
+
+        /// <summary>
+        /// 过程/记录/索引/审核 4 类模式提取：一次调用、原样保留模型 JSON，写入
+        /// <c>ContentJson.ModeOutput</c>。⛔ 不把模型输出硬塞进 <c>Clauses[]</c>。
+        /// </summary>
+        private async Task<TaskExecutionResult> ExecuteModePromptAsync(
+            IDbOrm db,
+            LlmInvokeService llm,
+            DocExtractPromptService prompts,
+            DocumentExtractionService store,
+            EnterpriseDocService docSvc,
+            EnterpriseDoc doc,
+            ISOStandard standard,
+            DocumentExtraction? existing,
+            string markdown,
+            string extractionMode,
+            string standardCode,
+            bool force,
+            CancellationToken cancellationToken)
+        {
+            var promptCode = EnterpriseDocExtractionRouter.PromptCodeForMode(extractionMode);
+            if (promptCode.Length == 0)
+                return new TaskExecutionResult { Success = false, Message = $"未知提取模式：{extractionMode}", Retryable = false };
+
+            var (template, promptScope, _) = await prompts.ResolveByCodeAsync(promptCode, standard.StandardCode, cancellationToken);
+            if (string.IsNullOrWhiteSpace(template))
+            {
+                var why = $"提示词 {promptCode} 未落库，拒绝提取（跑旧提示词会污染结果）";
+                await store.UpsertAsync(doc.Code!, standardCode, doc.EnterpriseCode,
+                    null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                    promptCode, DocExtractPromptService.PromptVersion,
+                    ExtractRowStatus.Failed, why, null, cancellationToken);
+                await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                return new TaskExecutionResult { Success = false, Message = why, Retryable = false };
+            }
+
+            var settings = await AiConnSettings.ReadAsync(db, cancellationToken);
+            if (!settings.IsUsable)
+            {
+                var why = "AI 参数未配置：请在「系统管理 → 系统参数」里填写 ai_api_key 与 ai_base_url";
+                await store.UpsertAsync(doc.Code!, standardCode, doc.EnterpriseCode,
+                    null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                    promptCode, DocExtractPromptService.PromptVersion,
+                    ExtractRowStatus.Failed, why, null, cancellationToken);
+                await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                return new TaskExecutionResult { Success = false, Message = why, Retryable = false };
+            }
+
+            var markdownHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(markdown))).ToLowerInvariant();
+            var fingerprint = DocumentExtractionFingerprint.Compute(
+                "doc-mode-extract-v1", doc.Sha256 ?? "", doc.VersionNumber.ToString(),
+                markdownHash, standard.Code ?? "", standard.StandardCode ?? "",
+                standard.VersionYear.ToString(), standard.StandardName ?? "",
+                extractionMode, doc.DocProfileJson ?? "", template,
+                settings.BaseUrl ?? "", settings.Model ?? "", "0.2", "4000");
+
+            if (!force
+                && existing is { IsDeleted: false, IsStale: false, ExtractStatus: ExtractRowStatus.Done }
+                && !string.IsNullOrEmpty(doc.Sha256)
+                && string.Equals(existing.SourceSha256, doc.Sha256, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(ReadFingerprint(existing.ContentJson), fingerprint, StringComparison.Ordinal))
+            {
+                return new TaskExecutionResult { Success = true, Message = "提取输入未变化，沿用已有结果", Retryable = false };
+            }
+
+            var prompt = DocExtractPromptService.RenderMode(template, doc.DocProfileJson ?? "{}", markdown);
+            _logger.LogInformation("[模式提取] {File}×{Std} mode={Mode} prompt={Chars} 字符",
+                doc.Code, standard.StandardCode, extractionMode, prompt.Length);
+
+            var resp = await llm.CompleteAsync(new LlmInvokeRequest
+            {
+                BaseUrl = settings.BaseUrl,
+                ApiKey = settings.ApiKey,
+                Model = settings.Model,
+                Temperature = 0.2f,
+                MaxTokens = 4000,
+                Prompt = prompt,
+                ForceJson = true,
+                TimeoutSeconds = 600,
+            });
+
+            if (!resp.Success || resp.Json == null)
+            {
+                var why = $"模型调用失败：{resp.Message}";
+                await store.UpsertAsync(doc.Code!, standardCode, doc.EnterpriseCode,
+                    null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                    promptCode, DocExtractPromptService.PromptVersion,
+                    ExtractRowStatus.Failed, why, null, cancellationToken);
+                await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                return new TaskExecutionResult { Success = false, Message = why, Retryable = true };
+            }
+
+            JsonElement modeOutput;
+            using (resp.Json)
+            {
+                if (resp.JsonRepaired
+                    || string.Equals(resp.FinishReason, "length", StringComparison.OrdinalIgnoreCase)
+                    || (resp.CompletionTokens.HasValue && resp.CompletionTokens.Value >= 4000))
+                {
+                    var why = "模型输出被截断或疑似达到输出上限";
+                    await store.UpsertAsync(doc.Code!, standardCode, doc.EnterpriseCode,
+                        null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                        promptCode, DocExtractPromptService.PromptVersion,
+                        ExtractRowStatus.Failed, why, null, cancellationToken);
+                    await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                    return new TaskExecutionResult { Success = false, Message = why, Retryable = true };
+                }
+
+                if (resp.Json.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    var why = "模型输出不是 JSON 对象";
+                    await store.UpsertAsync(doc.Code!, standardCode, doc.EnterpriseCode,
+                        null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                        promptCode, DocExtractPromptService.PromptVersion,
+                        ExtractRowStatus.Failed, why, null, cancellationToken);
+                    await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                    return new TaskExecutionResult { Success = false, Message = why, Retryable = true };
+                }
+
+                // 审核/评审只删系统结论字段；过程/记录/索引不动原文
+                modeOutput = DocExtractGuard.Sanitize(extractionMode, resp.Json.RootElement);
+
+                // 文件控制类：模型只交元数据，目录条目/总数由代码从 Markdown 表格解析，避免漏行/算错/输出过长
+                if (extractionMode == EnterpriseDocExtractionRouter.DocumentControl)
+                {
+                    var node = JsonNode.Parse(modeOutput.GetRawText())?.AsObject();
+                    if (node != null)
+                    {
+                        DocControlTableParser.Populate(node, markdown);
+                        modeOutput = JsonSerializer.SerializeToElement(node);
+                    }
+                }
+
+                // PDCA 定位 + 部门归集：代码按条款算，模型不参与
+                modeOutput = DocPdcaClassifier.Apply(extractionMode, modeOutput);
+
+                // 指导书证据指针必须能在原文找到；防止把别的文档记录串进来
+                modeOutput = DocExtractGuard.ValidateEvidenceAgainstText(extractionMode, modeOutput, markdown);
+            }
+
+            var payloadDoc = new ExtractedDoc
+            {
+                DocMeta = new ExtractedDocMeta
+                {
+                    FileName = doc.FileName ?? string.Empty,
+                    StandardCode = standard.StandardCode ?? string.Empty,
+                    StandardName = standard.StandardName ?? string.Empty,
+                    Model = settings.Model,
+                    SourceSha256 = doc.Sha256 ?? string.Empty,
+                    SourceVersion = doc.VersionNumber,
+                    MarkdownSha256 = markdownHash,
+                    ExtractionFingerprint = fingerprint,
+                    ExtractionMode = extractionMode,
+                    PromptCode = promptCode,
+                    PromptScope = promptScope,
+                    ExtractedAt = DateTime.Now,
+                    Chunks = 1,
+                },
+                ExtractionMode = extractionMode,
+                ModeOutput = modeOutput,
+                Clauses = new List<ExtractedClause>(),
+            };
+
+            var json = JsonSerializer.Serialize(payloadDoc, new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            });
+
+            // 提取期间文件被替换/回滚 ⇒ 不发布本次结果
+            var currentDoc = (await db.GetOneIgnoreValidAsync<EnterpriseDoc>(x => x.Code == doc.Code)).Data;
+            if (currentDoc == null || currentDoc.IsDeleted || currentDoc.VersionNumber != doc.VersionNumber
+                || !string.Equals(currentDoc.Sha256, doc.Sha256, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(currentDoc.MarkdownPath, doc.MarkdownPath, StringComparison.Ordinal)
+                || currentDoc.MarkdownStatus != "completed")
+                return new TaskExecutionResult
+                {
+                    Success = false,
+                    Message = "提取期间文件版本或转换状态发生变化，未发布本次结果，请重新提取",
+                    Retryable = true
+                };
+
+            var message = $"按 {extractionMode} 提取完成" + (promptScope == "stored" ? "（库内提示词）" : $"（{promptScope}）");
+            var (ok, err) = await store.UpsertAsync(
+                doc.Code!, standardCode, doc.EnterpriseCode,
+                json, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                promptCode, DocExtractPromptService.PromptVersion,
+                ExtractRowStatus.Done, message, null, cancellationToken);
+
+            if (!ok)
+            {
+                _logger.LogError("[模式提取] 产物落库失败 {File}×{Std}: {Err}", doc.Code, standard.StandardCode, err);
+                return new TaskExecutionResult { Success = false, Message = $"产物落库失败：{err}", Retryable = true };
+            }
+
+            await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+            // 旧画像常常没有 OwnerDept；模式产物已有部门时补回画像，页面/按部门检索才可用
+            await docSvc.MergeModeOutputProfileAsync(doc, extractionMode, modeOutput);
+            _logger.LogInformation("[模式提取] {Status} {File}×{Std} mode={Mode}",
+                ExtractRowStatus.Done, doc.Code, standard.StandardCode, extractionMode);
+
+            return new TaskExecutionResult { Success = true, Message = message, Retryable = false };
         }
 
         // ========================================================
@@ -432,6 +769,8 @@ namespace CertPlatform.Auditor.Services.Ent
                             && x.AttrCode == "DocCheckMode"
                             && !x.IsDeleted && x.IsValid == 1)
                 .ToListAsync() ?? new List<ClauseAttrRow>();
+            var leafCodes = leaves.Select(c => c.Code).ToHashSet(StringComparer.Ordinal);
+            attrs = attrs.Where(a => !string.IsNullOrEmpty(a.ClauseCode) && leafCodes.Contains(a.ClauseCode)).ToList();
 
             if (attrs.Count == 0)
             {
@@ -439,27 +778,20 @@ namespace CertPlatform.Auditor.Services.Ent
                     $"标准【{standard.StandardCode}】的条款还没配 DocCheckMode，本次按全部叶子条款提取（建议先跑条款属性预生成）");
             }
 
-            // ★ 业务键：同一标准内按条款号匹配 DocCheckMode；ClauseCode 只作旧数据兜底。
-            var modeByNumber = new Dictionary<string, string>(StringComparer.Ordinal);
-            var modeByCode = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var a in attrs)
-            {
-                var mode = (a.AttrValue ?? string.Empty).Trim().ToLowerInvariant();
-                var no = ClauseRefs.NormalizeNumber(a.ClauseNumber);
-                if (no.Length > 0) modeByNumber[no] = mode;
-                if (!string.IsNullOrEmpty(a.ClauseCode)) modeByCode[a.ClauseCode] = mode;
-            }
+            var groups = attrs.GroupBy(a => a.ClauseCode, StringComparer.Ordinal).ToList();
+            var duplicates = groups.Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+            var modeByCode = groups.Where(g => g.Count() == 1)
+                .ToDictionary(g => g.Key, g => (g.Single().AttrValue ?? string.Empty).Trim().ToLowerInvariant(), StringComparer.Ordinal);
 
             // 未配 DocCheckMode 的条款按「要查」处理（保守：宁可多查，不静默漏条款）
             var kept = leaves.Where(c =>
             {
-                var no = ClauseRefs.NormalizeNumber(c.ClauseNumber);
-                var mode = modeByNumber.GetValueOrDefault(no)
-                           ?? modeByCode.GetValueOrDefault(c.Code ?? string.Empty);
+                var mode = modeByCode.GetValueOrDefault(c.Code ?? string.Empty);
                 return mode == null || mode != "none";
             }).ToList();
 
-            return (Order(kept), null);
+            return (Order(kept), duplicates.Count == 0 ? null
+                : $"部分条款的 DocCheckMode 存在重复，已保留这些条款待核实：{string.Join(",", duplicates)}");
         }
 
         private static List<ISOClause> Order(List<ISOClause> list)
@@ -572,6 +904,19 @@ namespace CertPlatform.Auditor.Services.Ent
             return false;
         }
 
+        private static string? ReadFingerprint(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (!TryProp(doc.RootElement, "DocMeta", out var meta)
+                    || meta.ValueKind != JsonValueKind.Object) return null;
+                return Str(meta, "ExtractionFingerprint");
+            }
+            catch (JsonException) { return null; }
+        }
+
         /// <summary>
         /// 取字段（<b>大小写不敏感</b>）：模型偶发把 <c>ClauseNumber</c> 写成 <c>clauseNumber</c>，
         /// 严格匹配会整条丢弃且不报错（表现为「明明有内容却提取 0 条」）。
@@ -598,6 +943,20 @@ namespace CertPlatform.Auditor.Services.Ent
         // 分段
         // ========================================================
 
+        /// <summary>切分条款 Markdown；内容缺失或无法在预算内完整覆盖时拒绝提取。</summary>
+        public static List<string> BuildStandardChunks(string text, int chunkChars, int maxChunks)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                throw new InvalidOperationException("条款 Markdown 缺失或为空，无法按条款提取");
+            if (chunkChars <= 0 || maxChunks <= 0)
+                throw new InvalidOperationException("条款 Markdown 分片预算无效");
+
+            var chunks = SplitIntoChunks(text, chunkChars, maxChunks);
+            if (chunks.Sum(chunk => chunk.Length) != text.Length)
+                throw new InvalidOperationException($"条款 Markdown 超过 {maxChunks} 段，未进行不完整提取");
+            return chunks;
+        }
+
         /// <summary>
         /// 按<b>段落边界</b>切块（⛔ 不硬切字符：硬切会把一句话劈开，模型摘录的锚点就对不上原文）。
         /// <para>块数上限 <paramref name="maxChunks"/>：超出的尾部<b>不送模型</b>，由调用方在
@@ -616,35 +975,23 @@ namespace CertPlatform.Auditor.Services.Ent
                 return result;
             }
 
-            var paragraphs = text.Replace("\r\n", "\n").Split('\n');
-            var sb = new StringBuilder();
-
-            foreach (var para in paragraphs)
+            var offset = 0;
+            while (offset < text.Length && result.Count < maxChunks)
             {
-                // 单段本身就超限 ⇒ 硬切（否则永远装不进去）
-                if (para.Length > chunkChars)
+                var length = Math.Min(chunkChars, text.Length - offset);
+                if (offset + length < text.Length)
                 {
-                    if (sb.Length > 0) { result.Add(sb.ToString()); sb.Clear(); }
-                    for (var i = 0; i < para.Length; i += chunkChars)
-                    {
-                        var len = Math.Min(chunkChars, para.Length - i);
-                        result.Add(para.Substring(i, len));
-                        if (result.Count >= maxChunks) return result;
-                    }
-                    continue;
+                    var newline = text.LastIndexOf('\n', offset + length - 1, length);
+                    if (newline >= offset) length = newline - offset + 1;
+                    else if (length > 1 && text[offset + length - 1] == '\r' && text[offset + length] == '\n')
+                        length--;
+                    else if (length > 1 && char.IsHighSurrogate(text[offset + length - 1])
+                             && char.IsLowSurrogate(text[offset + length]))
+                        length--;
                 }
-
-                if (sb.Length + para.Length + 1 > chunkChars)
-                {
-                    result.Add(sb.ToString());
-                    sb.Clear();
-                    if (result.Count >= maxChunks) return result;
-                }
-
-                sb.Append(para).Append('\n');
+                result.Add(text.Substring(offset, length));
+                offset += length;
             }
-
-            if (sb.Length > 0 && result.Count < maxChunks) result.Add(sb.ToString());
             return result;
         }
 

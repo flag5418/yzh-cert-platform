@@ -6,6 +6,8 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Auditor.Entities.Expert;
@@ -291,6 +293,7 @@ namespace CertPlatform.Auditor.Services.Ent
                 .Select(r =>
                 {
                     var mine = extByFile.TryGetValue(r.Code ?? "", out var l) ? l : new List<DocumentExtraction>();
+                    var profile = ReadDocProfileBrief(r.DocProfileJson);
                     return (object)new
                     {
                         r.Code,
@@ -312,6 +315,11 @@ namespace CertPlatform.Auditor.Services.Ent
                         r.ExtractStatus,
                         r.ExtractMessage,
                         r.ExtractTime,
+                        // ★ 文档画像摘要（未画像时为 null，前端显示 “—”）
+                        DocType = profile.DocType,
+                        ExtractionMode = profile.ExtractionMode,
+                        PrimaryChapter = profile.PrimaryChapter,
+                        OwnerDept = profile.OwnerDept,
                         // ★ 提取明细（每个标准一行）：前端抽屉直接渲染，⛔ 不另开一次请求
                         //   ⚠️ 标准名称由前端按树里的标准列表映射（后端不重复查一次标准表）
                         Extractions = mine.Select(x => new
@@ -347,6 +355,112 @@ namespace CertPlatform.Auditor.Services.Ent
                 Rows = list,
                 // 计划信息随列表下发：前端不必再单独请求一次
                 Plan = plan == null ? null : new { plan.Code, plan.Name, plan.Standards, StandardCodes = planStdCodes },
+            };
+        }
+
+        /// <summary>
+        /// ★ 按「章节 + 部门」采集候选文档包（只读，不调用 LLM）。
+        /// <para>用于路线 B：程序 / 作业指导书 / 记录 / 设备台账 / 供应商清单。
+        /// 章节命中优先看已提取产物的 <c>ClauseNumbers</c>，未提取时退到画像
+        /// <c>PrimaryChapter</c>；两者都不命中不返回，避免把整家企业全倒出来。</para>
+        /// </summary>
+        public async Task<object> CollectAsync(
+            string enterpriseCode, string? standardCode, string? chapter,
+            IReadOnlyList<string>? deptNames, IReadOnlyList<string>? docTypes, int? maxDocs)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err, Packages = new object[0] };
+
+            var docs = await _db.Client.Queryable<EnterpriseDoc>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && !x.IsDeleted && x.IsValid == 1)
+                .ToListAsync() ?? new List<EnterpriseDoc>();
+
+            var exts = await _db.Client.Queryable<DocumentExtraction>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && !x.IsDeleted)
+                .ToListAsync() ?? new List<DocumentExtraction>();
+            if (!string.IsNullOrWhiteSpace(standardCode))
+                exts = exts.Where(x => x.StandardCode == standardCode).ToList();
+
+            var extByFile = exts
+                .GroupBy(x => x.FileCode ?? "", StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+
+            var chapterNo = NormalizeChapter(chapter);
+            var deptWanted = (deptNames ?? Array.Empty<string>())
+                .Select(x => (x ?? "").Trim()).Where(x => x.Length > 0).ToList();
+            var typeWanted = (docTypes ?? Array.Empty<string>())
+                .Select(x => (x ?? "").Trim()).Where(x => x.Length > 0).ToList();
+
+            var packages = new List<object>();
+            foreach (var doc in docs)
+            {
+                var brief = ReadDocProfileBrief(doc.DocProfileJson);
+                var dt = ResolveFilterDocType(brief.DocType, doc.FileName);
+                if (typeWanted.Count > 0 && !typeWanted.Any(w =>
+                        dt.Contains(w, StringComparison.OrdinalIgnoreCase)
+                        || w.Contains(dt, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var mine = extByFile.TryGetValue(doc.Code ?? "", out var l) ? l : new List<DocumentExtraction>();
+                var depts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(brief.OwnerDept)) depts.Add(brief.OwnerDept!);
+                depts.AddRange(brief.SupportDepts);
+                foreach (var x in mine) depts.AddRange(ReadExtractionDeptNames(x));
+                if (deptWanted.Count > 0 && !depts.Any(d => deptWanted.Any(w =>
+                        d.Contains(w, StringComparison.OrdinalIgnoreCase)
+                        || w.Contains(d, StringComparison.OrdinalIgnoreCase))))
+                    continue;
+
+                var clauses = mine
+                    .SelectMany(ReadClauseNumbers)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(x => x, StringComparer.Ordinal)
+                    .ToList();
+
+                var matchedBy = "dept_type";
+                if (chapterNo.Length > 0)
+                {
+                    if (clauses.Any(c => ClauseInChapter(c, chapterNo)))
+                        matchedBy = "clause";
+                    else if (clauses.Count == 0 && ModeMatchesChapter(brief.ExtractionMode, chapterNo))
+                        matchedBy = "mode_fallback";
+                    else if (NormalizeChapter(brief.PrimaryChapter).Length > 0
+                             && NormalizeChapter(brief.PrimaryChapter) == chapterNo)
+                        matchedBy = "profile_chapter";
+                    else
+                        continue;
+                }
+
+                packages.Add(new
+                {
+                    FileCode = doc.Code,
+                    FileName = doc.FileName,
+                    RelFolderPath = doc.RelFolderPath,
+                    DocType = dt,
+                    ExtractionMode = brief.ExtractionMode,
+                    OwnerDept = brief.OwnerDept,
+                    SupportDepts = brief.SupportDepts,
+                    DeptNames = depts.Distinct(StringComparer.Ordinal).ToList(),
+                    ClauseNumbers = string.Join(",", clauses),
+                    ClauseCount = clauses.Count,
+                    HasExtraction = mine.Any(x => x.ExtractStatus == "done"),
+                    ExtractionStatus = string.Join(",", mine.Select(x => x.ExtractStatus).Distinct()),
+                    MatchedBy = matchedBy,
+                    MarkdownReady = !string.IsNullOrWhiteSpace(doc.MarkdownPath),
+                });
+            }
+
+            var take = Math.Clamp(maxDocs ?? 100, 1, 200);
+            return new
+            {
+                Success = true,
+                Route = "chapter_dept",
+                Chapter = chapterNo,
+                DeptNames = deptWanted,
+                DocTypes = typeWanted,
+                TotalDocs = docs.Count,
+                Matched = packages.Count,
+                Packages = packages.Take(take).ToList(),
             };
         }
 
@@ -1040,13 +1154,15 @@ namespace CertPlatform.Auditor.Services.Ent
 
             var ok = 0;
             var failed = new List<object>();
-            foreach (var code in fileCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.Ordinal))
+            // ⛔ 去重后计数：Total 必须与实际执行数一致（重复 Code 不能虚增总数）
+            var dist = fileCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.Ordinal).ToList();
+            foreach (var code in dist)
             {
                 var r = await DeleteAsync(code, enterpriseCode, reason);
                 if (r.Success) ok++;
                 else failed.Add(new { FileCode = code, Message = r.Error });
             }
-            return Result<object?>.Ok(new { Total = fileCodes.Count, Deleted = ok, Failed = failed });
+            return Result<object?>.Ok(new { Total = dist.Count, Deleted = ok, Failed = failed });
         }
 
         /// <summary>版本历史（新 → 旧）</summary>
@@ -1339,6 +1455,222 @@ namespace CertPlatform.Auditor.Services.Ent
         }
 
         /// <summary>
+        /// ★ 批量重建文档画像（「重新分析」的前半段）。
+        ///
+        /// <para>只读 Markdown，不重新转换、不重新上传；逐份重建 <c>DocProfileJson</c>。
+        /// 单份失败不阻断其余文档，失败清单回传给前端。</para>
+        /// </summary>
+        public async Task<object> RebuildAllDocProfilesAsync(
+            string enterpriseCode, IReadOnlyList<string>? fileCodes = null)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err };
+
+            var all = await _db.Client.Queryable<EnterpriseDoc>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && !x.IsDeleted && x.IsValid == 1)
+                .ToListAsync() ?? new List<EnterpriseDoc>();
+
+            var files = all;
+            if (fileCodes is { Count: > 0 })
+            {
+                var wanted = new HashSet<string>(
+                    fileCodes.Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.Ordinal);
+                files = all.Where(x => wanted.Contains(x.Code ?? string.Empty)).ToList();
+            }
+
+            var updated = 0;
+            var skipped = 0;
+            var failed = 0;
+            var failures = new List<object>();
+
+            foreach (var row in files)
+            {
+                if (string.IsNullOrWhiteSpace(row.MarkdownPath))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                try
+                {
+                    var (stream, _) = await _storage.DownloadAsync(row.MarkdownPath.TrimStart('/'));
+                    using var ms = new MemoryStream();
+                    await stream.CopyToAsync(ms);
+                    var markdown = Encoding.UTF8.GetString(ms.ToArray());
+                    var ok = await EnterpriseDocProfileBuilder.BuildAndSaveAsync(_db, row, markdown, _logger);
+                    if (ok) updated++;
+                    else
+                    {
+                        failed++;
+                        if (failures.Count < 20)
+                            failures.Add(new { FileCode = row.Code, FileName = row.FileName, Error = "画像写入失败" });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    if (failures.Count < 20)
+                        failures.Add(new { FileCode = row.Code, FileName = row.FileName, Error = ex.Message });
+                    _logger.LogWarning(ex, "[企业文档] 批量重建画像失败: {Code}", row.Code);
+                }
+            }
+
+            return new
+            {
+                Success = true,
+                Total = files.Count,
+                Updated = updated,
+                Skipped = skipped,
+                Failed = failed,
+                Failures = failures,
+                Message = $"画像已更新 {updated} 份（跳过 {skipped}，失败 {failed}）",
+            };
+        }
+
+        /// <summary>
+        /// 模式提取完成后，把 <c>ModeOutput</c> 中已有的部门/模式补回 <c>DocProfileJson</c>。
+        ///
+        /// <para><b>只补空，不覆盖</b>：画像 LLM 明确写出的 <c>OwnerDept</c> 优先保留；
+        /// 只有旧画像为空时才用提取结果补齐。这样页面和「按部门找文档」不再全空。</para>
+        /// </summary>
+        public async Task MergeModeOutputProfileAsync(
+            EnterpriseDoc doc, string extractionMode, JsonElement modeOutput)
+        {
+            if (string.IsNullOrWhiteSpace(doc.DocProfileJson)) return;
+            try
+            {
+                if (JsonNode.Parse(doc.DocProfileJson) is not JsonObject obj) return;
+
+                var owner = FindStringProperty(modeOutput, "OwnerDept");
+                if (string.IsNullOrWhiteSpace(NodeString(obj, "OwnerDept")) && !string.IsNullOrWhiteSpace(owner))
+                    obj["OwnerDept"] = owner!.Trim();
+
+                // SupportDepts 也回写画像：按部门过滤/按部门看证据时需要
+                var supports = FindStringsProperty(modeOutput, "SupportDepts");
+                if (obj["SupportDepts"] is not JsonArray || obj["SupportDepts"]!.AsArray().Count == 0)
+                {
+                    if (supports.Count > 0)
+                    {
+                        var arr = new JsonArray();
+                        foreach (var s in supports.Distinct()) arr.Add(s);
+                        obj["SupportDepts"] = arr;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(NodeString(obj, "ExtractionMode")) && !string.IsNullOrWhiteSpace(extractionMode))
+                    obj["ExtractionMode"] = extractionMode;
+
+                if (string.IsNullOrWhiteSpace(NodeString(obj, "ExtractionModeName")))
+                    obj["ExtractionModeName"] = ModeDisplayName(extractionMode);
+
+                doc.DocProfileJson = obj.ToJsonString(new JsonSerializerOptions
+                {
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                    TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
+                });
+                doc.DocProfileUpdatedTime = DateTime.Now;
+                doc.UpdateTime = DateTime.Now;
+                await _db.UpdateAsync(doc,
+                    nameof(EnterpriseDoc.DocProfileJson),
+                    nameof(EnterpriseDoc.DocProfileUpdatedTime),
+                    nameof(EnterpriseDoc.UpdateTime));
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "[企业文档] 模式产物回写画像失败（JSON 非法）: {Code}", doc.Code);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[企业文档] 模式产物回写画像失败: {Code}", doc.Code);
+            }
+        }
+
+        private static string? NodeString(JsonObject obj, string name)
+            => obj[name] is JsonValue v && v.TryGetValue<string>(out var s) && !string.IsNullOrWhiteSpace(s)
+                ? s.Trim()
+                : null;
+
+        /// <summary>递归找第一个非空字符串属性；过程/记录/审核产物字段层级不同，统一兜底。</summary>
+        private static string? FindStringProperty(JsonElement element, string name)
+        {
+            if (element.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in element.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase)
+                        && prop.Value.ValueKind == JsonValueKind.String)
+                    {
+                        var s = prop.Value.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) return s;
+                    }
+                    var nested = FindStringProperty(prop.Value, name);
+                    if (nested != null) return nested;
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in element.EnumerateArray())
+                {
+                    var nested = FindStringProperty(item, name);
+                    if (nested != null) return nested;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>递归找所有同名数组/字符串（SupportDepts 可能在 ModeOutput 顶层，也可能在 Processes[] 内）。</summary>
+        private static List<string> FindStringsProperty(JsonElement element, string name)
+        {
+            var list = new List<string>();
+            if (element.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in element.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (prop.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var item in prop.Value.EnumerateArray())
+                            {
+                                var s = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+                                if (!string.IsNullOrWhiteSpace(s) && !list.Contains(s!)) list.Add(s!);
+                            }
+                        }
+                        else if (prop.Value.ValueKind == JsonValueKind.String)
+                        {
+                            var s = prop.Value.GetString();
+                            if (!string.IsNullOrWhiteSpace(s) && !list.Contains(s!)) list.Add(s!);
+                        }
+                    }
+                    foreach (var s in FindStringsProperty(prop.Value, name))
+                        if (!list.Contains(s)) list.Add(s);
+                }
+            }
+            else if (element.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in element.EnumerateArray())
+                    foreach (var s in FindStringsProperty(item, name))
+                        if (!list.Contains(s)) list.Add(s);
+            }
+            return list;
+        }
+
+        private static string ModeDisplayName(string mode) => mode switch
+        {
+            EnterpriseDocExtractionRouter.ProcessProfile => "过程画像",
+            EnterpriseDocExtractionRouter.RecordProfile => "记录画像",
+            EnterpriseDocExtractionRouter.IndexOnly => "仅索引",
+            EnterpriseDocExtractionRouter.AuditProfile => "审核画像",
+            EnterpriseDocExtractionRouter.DocumentControl => "文件控制",
+            EnterpriseDocExtractionRouter.WorkInstructionCitation => "指导书引用",
+            EnterpriseDocExtractionRouter.PolicyProfile => "制度摘要",
+            EnterpriseDocExtractionRouter.ContextList => "组织环境清单",
+            EnterpriseDocExtractionRouter.ClauseFull => "逐条款",
+            EnterpriseDocExtractionRouter.None => "不提取",
+            _ => mode,
+        };
+
+        /// <summary>
         /// 构建 / 重建「标准条款 → 手册小节」索引（L1），保存到 <c>SectionMapJson</c>。
         /// </summary>
         public async Task<object> RebuildSectionMapAsync(string fileCode, string enterpriseCode, string standardCode)
@@ -1496,8 +1828,20 @@ namespace CertPlatform.Auditor.Services.Ent
                 return new { Success = false, Message = "AI 参数未配置：请先填写 ai_api_key 与 ai_base_url" };
 
             var standard = await _core.GetStandardByCodeAsync(standardCode);
+            if (standard == null)
+                return new { Success = false, Message = "标准不存在或已停用" };
+            string clauseSection;
+            try
+            {
+                var clauseMarkdown = await ClauseMarkdownInput.LoadAsync(_storage, standard);
+                clauseSection = ClauseMarkdownInput.ReadSection(clauseMarkdown, clause);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return new { Success = false, Message = $"条款 Markdown 不可用：{ex.Message}" };
+            }
             var prompt = BuildSectionProbePrompt(
-                standard?.StandardName ?? standardCode, clause, sectionTitle, sectionPath, sectionText);
+                standard.StandardName ?? standardCode, clause, clauseSection, sectionTitle, sectionPath, sectionText);
 
             var resp = await _llm.CompleteAsync(new LlmInvokeRequest
             {
@@ -1598,10 +1942,9 @@ namespace CertPlatform.Auditor.Services.Ent
         }
 
         private static string BuildSectionProbePrompt(
-            string standardName, ISOClause clause, string sectionTitle, string sectionPath, string sectionText)
+            string standardName, ISOClause clause, string clauseSection, string sectionTitle, string sectionPath, string sectionText)
         {
-            var req = (clause.Description ?? "").Trim();
-            if (req.Length > 1200) req = req.Substring(0, 1200) + "…";
+            var req = clauseSection;
 
             return $$"""
 你是 ISO 体系审核员。请只依据下面给出的【企业文档小节】判断条款覆盖情况，不要使用标准原文之外的知识编造企业做法。
@@ -2055,14 +2398,15 @@ namespace CertPlatform.Auditor.Services.Ent
         ///
         /// <para><b>★ 只入队「真需要跑」的</b>：Markdown 就绪 + 该标准还没跑过（或 <c>IsStale</c> /
         /// hash 变了 / 上次失败）。已经 <c>done</c> 且 hash 未变的直接跳过 —— 否则用户每点一次
-        /// 「开始提取」都全量重跑一遍模型，费用与时间都不可接受。</para>
+        /// 「开始提取」都全量重跑一遍模型，费用与时间都不可接受。
+        /// <para><c>force=true</c> 为「重新分析」：全部入队，执行器不再走指纹复用。</para>
         ///
         /// <para>⚠️ 与转换队列<b>互不阻塞</b>：资源锁表用
         /// <see cref="EnterpriseDocQueue.ResourceTableExtract"/>，锁键 = <c>{fileCode}:{standardCode}</c>
         /// ⇒ 同一份文档的 N 个标准可并行，且不会把排队中的转换挡住。</para>
         /// </summary>
         public async Task<(int Queued, int Skipped, string? Error)> EnqueueExtractAsync(
-            string enterpriseCode, IReadOnlyList<EnterpriseDoc> files, string sourceTag)
+            string enterpriseCode, IReadOnlyList<EnterpriseDoc> files, string sourceTag, bool force = false)
         {
             if (files == null || files.Count == 0) return (0, 0, null);
 
@@ -2083,23 +2427,9 @@ namespace CertPlatform.Auditor.Services.Ent
                     continue;
                 }
 
-                var exts = await _db.Client.Queryable<DocumentExtraction>()
-                    .Where(x => x.FileCode == f.Code && !x.IsDeleted && x.IsValid == 1)
-                    .ToListAsync() ?? new List<DocumentExtraction>();
-
                 foreach (var std in planCodes)
                 {
-                    var prev = exts.FirstOrDefault(x =>
-                        string.Equals(x.StandardCode, std, StringComparison.Ordinal));
-
-                    var upToDate = prev != null
-                        && !prev.IsStale
-                        && prev.ExtractStatus == ExtractRowStatus.Done
-                        && !string.IsNullOrEmpty(f.Sha256)
-                        && string.Equals(prev.SourceSha256, f.Sha256, StringComparison.OrdinalIgnoreCase);
-
-                    if (upToDate) { skipped++; continue; }
-
+                    // 完整指纹需要实际模板、标准及转换文本，由执行器判定是否复用。
                     var seq = tasks.Count + 1;
                     tasks.Add(new QueueManager.TaskItem
                     {
@@ -2112,6 +2442,7 @@ namespace CertPlatform.Auditor.Services.Ent
                             StandardCode = std,
                             EnterpriseCode = enterpriseCode,
                             BatchCode = sourceTag,
+                            Force = force,
                         }),
                     });
                     locks.Add(new QueueManager.ResourceLockItem
@@ -2177,7 +2508,8 @@ namespace CertPlatform.Auditor.Services.Ent
         /// 整家企业重新提取（用户在列表页点「开始提取」/ 计划标准变更后）。
         /// </summary>
         public async Task<(int Queued, int Skipped, string? Error)> EnqueueExtractForEnterpriseAsync(
-            string enterpriseCode, string sourceTag, IReadOnlyList<string>? fileCodes = null)
+            string enterpriseCode, string sourceTag, IReadOnlyList<string>? fileCodes = null, bool force = false,
+            IReadOnlyList<string>? docTypes = null, IReadOnlyList<string>? deptNames = null)
         {
             var err = await OwnershipErrorAsync(enterpriseCode);
             if (err != null) return (0, 0, err);
@@ -2193,9 +2525,51 @@ namespace CertPlatform.Auditor.Services.Ent
                 files = all.Where(x => wanted.Contains(x.Code ?? string.Empty)).ToList();
             }
 
+            // ★ 按画像里的 DocType 过滤（包含匹配；“程序文件”可命中“程序文件”，“指导”可命中“作业指导书”）
+            var typeWanted = (docTypes ?? Array.Empty<string>())
+                .Select(x => (x ?? string.Empty).Trim())
+                .Where(x => x.Length > 0)
+                .ToList();
+            if (typeWanted.Count > 0)
+            {
+                files = files.Where(f =>
+                {
+                    var dt = ResolveFilterDocType(ReadDocProfileBrief(f.DocProfileJson).DocType, f.FileName);
+                    if (dt.Length == 0) return false;
+                    return typeWanted.Any(w =>
+                        dt.Contains(w, StringComparison.OrdinalIgnoreCase)
+                        || w.Contains(dt, StringComparison.OrdinalIgnoreCase));
+                }).ToList();
+
+                if (files.Count == 0)
+                    return (0, 0, $"没有匹配文档类型「{string.Join("、", typeWanted)}」的文档（画像未识别类型或类型不一致）");
+            }
+
+            // ★ 按部门过滤：OwnerDept 或 SupportDepts 命中即保留；部门口径用于“按部门执行检查”
+            var deptWanted = (deptNames ?? Array.Empty<string>())
+                .Select(x => (x ?? string.Empty).Trim())
+                .Where(x => x.Length > 0)
+                .ToList();
+            if (deptWanted.Count > 0)
+            {
+                files = files.Where(f =>
+                {
+                    var p = ReadDocProfileBrief(f.DocProfileJson);
+                    var depts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(p.OwnerDept)) depts.Add(p.OwnerDept!);
+                    depts.AddRange(p.SupportDepts);
+                    return depts.Any(d => deptWanted.Any(w =>
+                        d.Contains(w, StringComparison.OrdinalIgnoreCase)
+                        || w.Contains(d, StringComparison.OrdinalIgnoreCase)));
+                }).ToList();
+
+                if (files.Count == 0)
+                    return (0, 0, $"没有匹配部门「{string.Join("、", deptWanted)}」的文档（画像未识别部门或部门不一致）");
+            }
+
             if (files.Count == 0) return (0, 0, "该企业还没有可提取的文档");
 
-            return await EnqueueExtractAsync(enterpriseCode, files, sourceTag);
+            return await EnqueueExtractAsync(enterpriseCode, files, sourceTag, force);
         }
 
         /// <summary>查该文件当前活跃（非终态）的队列 Code（资源锁优先，SourceId 前缀兜底）</summary>
@@ -2346,6 +2720,391 @@ namespace CertPlatform.Auditor.Services.Ent
                 return doc.RootElement.TryGetProperty("Code", out var v) ? v.GetString() : null;
             }
             catch (JsonException) { return null; }
+        }
+
+        /// <summary>
+        /// 过滤用文档类型：画像只给了“体系文件”这类泛类型时，用文件名兜底；
+        /// 已识别为“程序文件/作业指导书/记录表单/文件索引”等具体类型时原样保留。
+        /// </summary>
+        // ========================================================
+        // 部门主数据（从企业文档归集，不手填）
+        // ========================================================
+
+        /// <summary>
+        /// 从企业文档归集真实部门，并幂等回写 <c>cert_enterprise_dept</c>。
+        /// <para>证据源：画像 OwnerDept/SupportDepts + 文件名/目录 + 正文“职责/部门”表述。</para>
+        /// <para>⛔ 不删除既有部门行；只新增缺失部门，避免误删用户已维护的负责人信息。</para>
+        /// </summary>
+        public async Task<object> RebuildDepartmentsAsync(
+            string enterpriseCode, IReadOnlyList<string>? fileCodes = null)
+        {
+            var err = await OwnershipErrorAsync(enterpriseCode);
+            if (err != null) return new { Success = false, Message = err };
+
+            var docs = await _db.Client.Queryable<EnterpriseDoc>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && !x.IsDeleted && x.IsValid == 1)
+                .ToListAsync() ?? new List<EnterpriseDoc>();
+            if (fileCodes is { Count: > 0 })
+            {
+                var wanted = new HashSet<string>(fileCodes.Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.Ordinal);
+                docs = docs.Where(x => wanted.Contains(x.Code ?? string.Empty)).ToList();
+            }
+
+            var buckets = new Dictionary<string, DeptBucket>(StringComparer.OrdinalIgnoreCase);
+
+            void Add(string? raw, string docCode)
+            {
+                var name = NormalizeDeptName(raw);
+                if (name == null) return;
+                if (!buckets.TryGetValue(name, out var b))
+                    buckets[name] = b = new DeptBucket { Name = name };
+                b.Docs.Add(docCode);
+            }
+
+            foreach (var doc in docs)
+            {
+                var brief = ReadDocProfileBrief(doc.DocProfileJson);
+                Add(brief.OwnerDept, doc.Code ?? "");
+                foreach (var s in brief.SupportDepts) Add(s, doc.Code ?? "");
+                AddFromText(doc.FileName, doc.Code ?? "", Add);
+                AddFromText(doc.RelFolderPath, doc.Code ?? "", Add);
+
+                if (string.IsNullOrWhiteSpace(doc.MarkdownPath)) continue;
+                try
+                {
+                    var (stream, _) = await _storage.DownloadAsync(doc.MarkdownPath.TrimStart('/'));
+                    using var ms = new MemoryStream();
+                    await stream.CopyToAsync(ms);
+                    // 只扫前 300 KB：部门多数出现在职责/适用范围/前几页；避免长手册拖慢
+                    var text = Encoding.UTF8.GetString(ms.ToArray());
+                    if (text.Length > 300_000) text = text[..300_000];
+                    AddFromText(text, doc.Code ?? "", Add);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[部门归集] 读取 Markdown 失败: {Code}", doc.Code);
+                }
+            }
+
+            var existing = await _db.Client.Queryable<CertEnterpriseDept>()
+                .Where(x => x.EnterpriseCode == enterpriseCode && !x.IsDeleted)
+                .ToListAsync() ?? new List<CertEnterpriseDept>();
+            var byName = existing
+                .GroupBy(x => x.DeptName.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            var ordered = buckets.Values
+                .OrderByDescending(x => x.Docs.Count)
+                .ThenBy(x => x.Name, StringComparer.Ordinal)
+                .ToList();
+            var added = 0;
+            var sort = existing.Count == 0 ? 10 : existing.Max(x => x.Sort) + 10;
+            foreach (var b in ordered)
+            {
+                if (byName.ContainsKey(b.Name)) continue;
+                var row = new CertEnterpriseDept
+                {
+                    Code = Guid.NewGuid().ToString("N"),
+                    EnterpriseCode = enterpriseCode,
+                    DeptName = b.Name,
+                    Sort = sort,
+                    Remark = $"从企业文档归集：{b.Docs.Count} 份",
+                    IsValid = 1,
+                    IsDeleted = false,
+                    CreateTime = DateTime.Now,
+                    CreateBy = _user.UserCode,
+                };
+                await _db.InsertAsync(row);
+                byName[b.Name] = row;
+                sort += 10;
+                added++;
+            }
+
+            return new
+            {
+                Success = true,
+                TotalDocs = docs.Count,
+                DeptCount = ordered.Count,
+                Added = added,
+                Existing = ordered.Count - added,
+                Departments = ordered.Select(x => new
+                {
+                    DeptName = x.Name,
+                    DocCount = x.Docs.Count,
+                    DocCodes = x.Docs.Take(8).ToList(),
+                    IsNew = !existing.Any(e => string.Equals(e.DeptName.Trim(), x.Name, StringComparison.OrdinalIgnoreCase)),
+                }).ToList(),
+            };
+        }
+
+        private sealed class DeptBucket
+        {
+            public string Name { get; init; } = string.Empty;
+            public HashSet<string> Docs { get; } = new(StringComparer.Ordinal);
+        }
+
+        private static readonly string[] DeptNoise =
+        {
+            "全部", "部分", "内部", "外部", "本部", "干部", "局部", "南部", "北部", "东部", "西部",
+            "各部门", "有关部门", "主管部门", "管理部门", "本部门", "该部门", "部门",
+        };
+
+        private static readonly string[] KnownDepts =
+        {
+            "仓库", "管理层", "生产部", "生产车间", "制造部", "品质部", "品管部", "质检部", "质量管理部",
+            "技术部", "工程部", "设备管理部", "设备部", "设备科", "综合部", "行政人事", "行政部", "人事部",
+            "采购部", "销售部", "业务部", "营销部", "财务部", "人力资源部", "计划部", "物控部", "仓储部", "仓管部",
+        };
+
+        private static void AddFromText(string? text, string docCode, Action<string?, string> add)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            // 第一版只认可信部门词典 + 画像字段。
+            // ⛔ 不再用「XX部」宽泛后缀正则：会把“其全部或任何部”“由综合部”当成部门。
+            foreach (var known in KnownDepts)
+                if (text.Contains(known, StringComparison.Ordinal)) add(known, docCode);
+        }
+
+        /// <summary>从提取行取条款：短索引为空时回读 ContentJson 的 PrimaryClauses/SupportClauses。</summary>
+        private static IEnumerable<string> ReadClauseNumbers(DocumentExtraction x)
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var c in SplitClauseNumbers(x.ClauseNumbers)) set.Add(c);
+            if (set.Count > 0) return set;
+
+            if (string.IsNullOrWhiteSpace(x.ContentJson)) return set;
+            try
+            {
+                using var doc = JsonDocument.Parse(x.ContentJson);
+                CollectClauseStrings(doc.RootElement, set);
+            }
+            catch (JsonException) { }
+            return set;
+        }
+
+        private static void CollectClauseStrings(JsonElement el, HashSet<string> set)
+        {
+            if (el.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var p in el.EnumerateObject())
+                {
+                    if (p.Name is "PrimaryClauses" or "SupportClauses" or "ClauseNumbers")
+                    {
+                        if (p.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var item in p.Value.EnumerateArray())
+                                if (item.ValueKind == JsonValueKind.String)
+                                    foreach (var c in SplitClauseNumbers(item.GetString())) set.Add(c);
+                        }
+                        else if (p.Value.ValueKind == JsonValueKind.String)
+                        {
+                            foreach (var c in SplitClauseNumbers(p.Value.GetString())) set.Add(c);
+                        }
+                    }
+                    else CollectClauseStrings(p.Value, set);
+                }
+            }
+            else if (el.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in el.EnumerateArray()) CollectClauseStrings(item, set);
+            }
+        }
+
+        /// <summary>从提取行取部门：画像没回写的内审/记录部门，常只在 ModeOutput.DeptNames。</summary>
+        private static IEnumerable<string> ReadExtractionDeptNames(DocumentExtraction x)
+        {
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            if (string.IsNullOrWhiteSpace(x.ContentJson)) return set;
+            try
+            {
+                using var doc = JsonDocument.Parse(x.ContentJson);
+                CollectNamedStrings(doc.RootElement, "DeptNames", set);
+            }
+            catch (JsonException) { }
+            return set;
+        }
+
+        private static void CollectNamedStrings(JsonElement el, string name, HashSet<string> set)
+        {
+            if (el.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var p in el.EnumerateObject())
+                {
+                    if (p.Name == name && p.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in p.Value.EnumerateArray())
+                            if (item.ValueKind == JsonValueKind.String)
+                            {
+                                var s = (item.GetString() ?? "").Trim();
+                                if (s.Length > 0) set.Add(s);
+                            }
+                    }
+                    else CollectNamedStrings(p.Value, name, set);
+                }
+            }
+            else if (el.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in el.EnumerateArray()) CollectNamedStrings(item, name, set);
+            }
+        }
+
+        /// <summary>新模式没有条款时，按提取模式给章节兜底；只用于“候选召回”，不用于判定。</summary>
+        private static bool ModeMatchesChapter(string? mode, string chapter)
+        {
+            var m = (mode ?? "").ToLowerInvariant();
+            if (chapter is "7" or "8")
+                return m.Contains("process") || m.Contains("过程")
+                    || m.Contains("instruction") || m.Contains("指导")
+                    || m.Contains("record") || m.Contains("记录");
+            if (chapter == "9") return m.Contains("audit") || m.Contains("审核") || m.Contains("评审");
+            if (chapter == "4") return m.Contains("context") || m.Contains("因素") || m.Contains("环境");
+            if (chapter == "5") return m.Contains("policy") || m.Contains("方针") || m.Contains("制度");
+            if (chapter == "7" || chapter.StartsWith("7."))
+                return m.Contains("document_control") || m.Contains("文件控制") || m.Contains("清单") || m.Contains("封面");
+            return false;
+        }
+
+        /// <summary>章节号归一：去掉“第/章/空格”，如“第8章”→“8”。</summary>
+        private static string NormalizeChapter(string? s)
+            => (s ?? "").Trim().Replace("第", "").Replace("章", "").Replace(" ", "").Trim();
+
+        /// <summary>条款号是否属于某章；支持 8 / 8.5 / 8.5.1，也清掉 “e ” 前缀。</summary>
+        private static bool ClauseInChapter(string? clause, string chapter)
+        {
+            var c = NormalizeClauseToken(clause);
+            if (c.Length == 0 || chapter.Length == 0) return false;
+            return c == chapter || c.StartsWith(chapter + ".", StringComparison.Ordinal);
+        }
+
+        private static IEnumerable<string> SplitClauseNumbers(string? raw)
+        {
+            foreach (var part in (raw ?? "").Split(new[] { ',', '，', ';', '；' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var c = NormalizeClauseToken(part);
+                if (c.Length > 0) yield return c;
+            }
+        }
+
+        private static string NormalizeClauseToken(string? raw)
+        {
+            var s = (raw ?? "").Trim();
+            if (s.StartsWith("e ", StringComparison.OrdinalIgnoreCase)) s = s[2..].Trim();
+            if (s.StartsWith("Q", StringComparison.OrdinalIgnoreCase) && s.Length > 1 && char.IsDigit(s[1]))
+                s = s[1..].Trim();
+            return s;
+        }
+
+        /// <summary>部门别名归一；不认识的保留原名，但过滤“全部/部分/内部”等非部门词。</summary>
+        private static string? NormalizeDeptName(string? raw)
+        {
+            var n = (raw ?? "").Trim()
+                .Trim('《', '》', '“', '”', '"', '\'', ' ', '：', ':', '、', ',', '，');
+            if (n.Length < 2 || n.Length > 16) return null;
+            if (DeptNoise.Any(x => n == x || n.EndsWith(x, StringComparison.Ordinal))) return null;
+            if (n.StartsWith("本", StringComparison.Ordinal) && n.Length <= 3) return null;
+            if (n.Contains("生产", StringComparison.Ordinal)
+                && (n.Contains("部", StringComparison.Ordinal) || n.Contains("车间", StringComparison.Ordinal)))
+                return "生产部";
+            if (n.Contains("品质", StringComparison.Ordinal) || n.Contains("质检", StringComparison.Ordinal)
+                || n.Contains("品管", StringComparison.Ordinal) || n.Contains("质量", StringComparison.Ordinal))
+                return "品质部";
+            if (n.Contains("仓储", StringComparison.Ordinal) || n.Contains("仓管", StringComparison.Ordinal)
+                || n == "仓库")
+                return "仓库";
+            if (n.Contains("行政", StringComparison.Ordinal) || n.Contains("人事", StringComparison.Ordinal))
+                return "行政人事";
+            if (n.Contains("业务", StringComparison.Ordinal) || n.Contains("营销", StringComparison.Ordinal)
+                || n.Contains("销售", StringComparison.Ordinal))
+                return "销售部";
+            if (n.Contains("设备", StringComparison.Ordinal)
+                && (n.Contains("科", StringComparison.Ordinal) || n.EndsWith("部", StringComparison.Ordinal)))
+                return "设备管理部";
+            return n;
+        }
+
+        private static string ResolveFilterDocType(string? docType, string? fileName)
+        {
+            var t = (docType ?? string.Empty).Trim();
+            if (!string.IsNullOrEmpty(t) && t != "体系文件") return t;
+
+            var fn = (fileName ?? string.Empty).Trim();
+            if (fn.Contains("作业指示书") || fn.Contains("作业指导书") || fn.Contains("操作规程")) return "作业指导书";
+            if (fn.Contains("制度") || fn.Contains("规范") || fn.Contains("管理办法")) return "制度规范";
+            if (fn.Contains("程序")) return "程序文件";
+            if (fn.Contains("手册")) return "质量手册";
+            if (fn.Contains("记录") || fn.Contains("表单") || fn.Contains("台账")) return "记录表单";
+            return t.Length > 0 ? t : "其他";
+        }
+
+        private sealed class DocProfileBrief
+        {
+            public string? DocType { get; init; }
+            public string? ExtractionMode { get; init; }
+            public string? PrimaryChapter { get; init; }
+            public string? OwnerDept { get; init; }
+            public IReadOnlyList<string> SupportDepts { get; init; } = Array.Empty<string>();
+        }
+
+        /// <summary>
+        /// 读 <c>DocProfileJson</c> 的摘要字段。未画像 / 旧格式 ⇒ 全 null，前端显示 “—”。
+        /// <para>⛔ 只读，不补写：画像字段由画像器产出，列表接口不承担生成职责。</para>
+        /// </summary>
+        private static DocProfileBrief ReadDocProfileBrief(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return new DocProfileBrief();
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                // 新 LLM 画像同时写 DocType(英文枚举) + DocTypeName(中文展示)；页面优先中文
+                var docType = Str(root, "DocTypeName") ?? Str(root, "DocType");
+                return new DocProfileBrief
+                {
+                    DocType = docType,
+                    ExtractionMode = Str(root, "ExtractionModeName")
+                        ?? Str(root, "ExtractionMode")
+                        ?? DeriveExtractionMode(docType),
+                    PrimaryChapter = Str(root, "PrimaryChapter"),
+                    OwnerDept = Str(root, "OwnerDept"),
+                    SupportDepts = StrArray(root, "SupportDepts"),
+                };
+            }
+            catch (JsonException)
+            {
+                return new DocProfileBrief();
+            }
+        }
+
+        private static string? Str(JsonElement root, string name)
+            => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+                ? (v.GetString() ?? "").Trim() is { Length: > 0 } s ? s : null
+                : null;
+
+        private static IReadOnlyList<string> StrArray(JsonElement root, string name)
+        {
+            if (!root.TryGetProperty(name, out var v) || v.ValueKind != JsonValueKind.Array)
+                return Array.Empty<string>();
+            var list = new List<string>();
+            foreach (var item in v.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String) continue;
+                var s = (item.GetString() ?? "").Trim();
+                if (s.Length > 0) list.Add(s);
+            }
+            return list;
+        }
+
+        /// <summary>旧画像没有 ExtractionMode 时，按文档类型给一个展示口径（不写库）</summary>
+        private static string? DeriveExtractionMode(string? docType)
+        {
+            var t = docType ?? "";
+            if (t.Contains("文件索引") || t.Contains("封面") || t.Contains("清单") || t.Contains("汇编")) return "仅索引";
+            // ★ 审核/评审先于“记录”：`审核记录` 不能被当成普通记录画像
+            if (t.Contains("审核") || t.Contains("评审")) return "审核画像";
+            if (t.Contains("手册") || t.Contains("方针") || t.Contains("目标")) return "逐条款";
+            if (t.Contains("程序") || t.Contains("作业指导") || t.Contains("规范")) return "过程画像";
+            if (t.Contains("记录") || t.Contains("表单") || t.Contains("表格")) return "记录画像";
+            return null;
         }
     }
 }

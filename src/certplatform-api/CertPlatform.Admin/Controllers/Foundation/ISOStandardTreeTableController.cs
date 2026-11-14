@@ -1,5 +1,6 @@
 
 using Microsoft.AspNetCore.Mvc;
+using CertPlatform.Admin.Services.StandardDirectory;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
@@ -61,12 +62,16 @@ public class ISOStandardTreeTableController
     : TreeTableControllerBase<ISOStandard,
                              ISOClause>
 {
+    private readonly StandardSourceService _source;
+
     public ISOStandardTreeTableController(
         EntityService<ISOStandard> treeEntityService,
         EntityService<ISOClause> tableEntityService,
-        IUserContext userContext)
+        IUserContext userContext,
+        StandardSourceService source)
         : base(treeEntityService, tableEntityService, userContext)
     {
+        _source = source;
         // ──── 左树配置（ISO 标准） ────
         TreeConfig.NameField = "StandardName";
         TreeConfig.CodeField = "Code";
@@ -148,6 +153,9 @@ public class ISOStandardTreeTableController
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdateTree(
         ISOStandard entity)
     {
+        var identity = await _source.ValidateStandardIdentityUpdateAsync(entity);
+        if (!identity.ok) return identity;
+
         if (string.IsNullOrWhiteSpace(entity.StandardName))
             return (false, "标准名称不能为空");
 
@@ -198,6 +206,9 @@ public class ISOStandardTreeTableController
         if (string.IsNullOrWhiteSpace(entity.StandardCode))
             return (false, "请先选中一个标准后再新增条款");
 
+        var identity = await _source.PrepareManualClauseAsync(entity);
+        if (!identity.ok) return identity;
+
         var exists = await Entity.ExistsAsync(c =>
             c.StandardCode == entity.StandardCode &&
             c.ClauseNumber == entity.ClauseNumber);
@@ -212,6 +223,9 @@ public class ISOStandardTreeTableController
     protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(
         ISOClause entity)
     {
+        var identity = await _source.ValidateManualClauseUpdateAsync(entity);
+        if (!identity.ok) return identity;
+
         var exists = await Entity.ExistsAsync(c =>
             c.Code != entity.Code &&
             c.StandardCode == entity.StandardCode &&

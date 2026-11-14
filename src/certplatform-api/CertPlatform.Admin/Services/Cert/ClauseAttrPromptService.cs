@@ -186,10 +186,10 @@ public sealed class ClauseAttrPromptService
 
     /// <summary>渲染某条款的最终提示词（条款占位符 + 属性池注入段）</summary>
     public async Task<string> RenderAsync(
-        string template, ISOStandard standard, ISOClause? clause, CancellationToken ct = default)
+        string template, ISOStandard standard, ISOClause? clause, string clauseMarkdown, CancellationToken ct = default)
     {
         var section = await BuildPoolSectionAsync(ct);
-        return RenderWithSection(template, standard, clause, section);
+        return RenderWithSection(template, standard, clause, section, clauseMarkdown);
     }
 
     /// <summary>
@@ -200,13 +200,14 @@ public sealed class ClauseAttrPromptService
     /// <see cref="BuildPoolSectionAsync"/> 取一次，再逐条款调本方法。</para>
     /// </summary>
     public static string RenderWithSection(
-        string template, ISOStandard standard, ISOClause? clause, string poolSection)
+        string template, ISOStandard standard, ISOClause? clause, string poolSection,
+        string clauseMarkdown)
     {
         var rendered = (template ?? string.Empty)
             .Replace(PhStandardName, $"{standard.StandardName}（{standard.StandardCode}）")
             .Replace(PhClauseNumber, clause?.ClauseNumber ?? string.Empty)
             .Replace(PhClauseTitle, clause?.Title ?? string.Empty)
-            .Replace(PhClauseContent, clause?.Description ?? string.Empty);
+            .Replace(PhClauseContent, clauseMarkdown);
 
         return ApplyPoolSection(rendered, poolSection);
     }

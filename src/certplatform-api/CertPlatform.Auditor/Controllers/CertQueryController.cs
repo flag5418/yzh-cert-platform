@@ -61,6 +61,7 @@ public class CertQueryController : ControllerBase
                 Code = s.Code,
                 StandardCode = s.StandardCode,
                 StandardName = s.StandardName,
+                VersionYear = s.VersionYear,
                 Abbrev = string.IsNullOrWhiteSpace(s.Abbrev) ? DeriveAbbrev(s.StandardCode) : s.Abbrev
             })
             .ToList();

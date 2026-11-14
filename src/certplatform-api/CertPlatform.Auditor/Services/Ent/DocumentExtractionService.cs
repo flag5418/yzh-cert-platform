@@ -22,9 +22,7 @@ namespace CertPlatform.Auditor.Services.Ent
     /// 不等 ⇒ 必须重跑。<c>IsStale=1</c> 只是「已知过期」的标记，<b>不是</b>重跑依据
     /// （漏标也要能靠 hash 兜住）。</para>
     ///
-    /// <para><b>⚠️ <c>ClauseNumbers</c> 的查询铁律</b>：<c>FIND_IN_SET('4.2.5', ClauseNumbers)</c>。
-    /// ⛔ 绝不用 <c>LIKE '%4.2.5%'</c> —— 会误中 <c>4.2.55</c> / <c>14.2.5</c>，且这类错误<b>不报错</b>，
-    /// 只表现为「条款下多出几份不相干的文档」。</para>
+    /// <para><c>ClauseNumbers</c> 仅为短索引；超长时为空，完整关联从 ContentJson 精确匹配。</para>
     ///
     /// <para><b>⚠️ SqlSugar 陷阱</b>：<c>Where(x => list.Contains(x.Prop))</c> 对闭包集合翻译不可靠，
     /// 会<b>静默返回空集</b> ⇒ 本类一律「全取 + 内存过滤」，⛔ 不在 SQL 里传集合。</para>
@@ -75,17 +73,39 @@ namespace CertPlatform.Auditor.Services.Ent
             if (string.IsNullOrWhiteSpace(standardCode) || string.IsNullOrWhiteSpace(clauseNumber))
                 return new List<DocumentExtraction>();
 
-            // ⚠️ FIND_IN_SET 走参数化，⛔ 不拼字符串（条款号来自标准库，但拼串习惯会传染到别处）
             var rows = await _db.Client.Queryable<DocumentExtraction>()
-                .Where("StandardCode = @std AND !IsDeleted AND IsValid = 1 AND FIND_IN_SET(@clause, ClauseNumbers) > 0",
+                .Where("StandardCode = @std AND !IsDeleted AND IsValid = 1 AND (FIND_IN_SET(@clause, ClauseNumbers) > 0 OR ClauseNumbers = '' OR ClauseNumbers IS NULL)",
                        new { std = standardCode, clause = clauseNumber.Trim() })
                 .OrderBy(x => x.Sort)
                 .ToListAsync();
 
-            var list = rows ?? new List<DocumentExtraction>();
+            var list = (rows ?? new List<DocumentExtraction>())
+                .Where(x => MatchesClause(x, clauseNumber)).ToList();
             return onlyDone
-                ? list.Where(x => x.ExtractStatus == ExtractRowStatus.Done).ToList()
+                ? list.Where(x => x.ExtractStatus == ExtractRowStatus.Done && !x.IsStale).ToList()
                 : list;
+        }
+
+        /// <summary>使用完整产物精确匹配条款；无 JSON 的历史行才回退短索引。</summary>
+        public static bool MatchesClause(DocumentExtraction row, string clauseNumber)
+        {
+            if (string.IsNullOrWhiteSpace(clauseNumber)) return false;
+            var number = clauseNumber.Trim();
+            if (string.IsNullOrWhiteSpace(row.ContentJson))
+                return (row.ClauseNumbers ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Any(x => string.Equals(x.Trim(), number, StringComparison.Ordinal));
+            try
+            {
+                var doc = JsonSerializer.Deserialize<ExtractedDoc>(row.ContentJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                return doc?.Clauses?.Any(c => c != null
+                    && string.Equals(c.ClauseNumber?.Trim(), number, StringComparison.Ordinal)) == true;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -122,20 +142,28 @@ namespace CertPlatform.Auditor.Services.Ent
                 .Select(x => x.Trim())
                 .Distinct(StringComparer.Ordinal));
 
-            // ⚠️ 列宽 500：超了会被 MySQL 静默截断（strict 模式下报错）⇒ 显式截断并留痕
+            // 空索引表示需要从 ContentJson 查询，不能截断成不完整的条款列表。
             if (numbers.Length > 500)
-            {
-                numbers = numbers[..500];
-                message = string.IsNullOrWhiteSpace(message)
-                    ? "条款号超过 500 字符，已截断（请减少单文档覆盖的条款数）"
-                    : message + "；条款号超过 500 字符已截断";
-            }
+                numbers = string.Empty;
 
             var existing = await GetAsync(fileCode, standardCode);
             var now = DateTime.Now;
 
             if (existing != null && !existing.IsDeleted)
             {
+                if ((status == ExtractRowStatus.Failed || status == ExtractRowStatus.Skipped)
+                    && !string.IsNullOrWhiteSpace(existing.ContentJson))
+                {
+                    MarkFailedAttempt(existing, message, userCode, now);
+                    existing.ExtractStatus = status;
+                    var failed = await _db.UpdateAsync(existing,
+                        nameof(DocumentExtraction.ExtractStatus),
+                        nameof(DocumentExtraction.ExtractMessage),
+                        nameof(DocumentExtraction.IsStale),
+                        nameof(DocumentExtraction.UpdateBy),
+                        nameof(DocumentExtraction.UpdateTime));
+                    return failed.Success ? (true, null) : (false, failed.Error);
+                }
                 existing.EnterpriseCode = enterpriseCode;
                 existing.ClauseNumbers = numbers;
                 existing.ContentJson = contentJson;
@@ -239,6 +267,16 @@ namespace CertPlatform.Auditor.Services.Ent
             return ins.Success ? (true, null) : (false, ins.Error);
         }
 
+        /// <summary>标记失败且保留上一份内容，避免重新提取失败后覆盖历史产物。</summary>
+        public static void MarkFailedAttempt(DocumentExtraction existing, string? message, string? userCode, DateTime now)
+        {
+            existing.ExtractStatus = ExtractRowStatus.Failed;
+            existing.ExtractMessage = Truncate(message, 1000);
+            existing.IsStale = true;
+            existing.UpdateBy = userCode;
+            existing.UpdateTime = now;
+        }
+
         /// <summary>
         /// 文档字节变了（替换 / 回滚）⇒ 已有产物全部置 <c>IsStale=1</c>。
         /// <para>⚠️ <b>不删行、不改 <c>ExtractStatus</c></b>：删了就看不出「曾经提过什么」；
@@ -338,7 +376,20 @@ namespace CertPlatform.Auditor.Services.Ent
         /// <summary>文档元信息（文件名 / 标准 / 提取时间 / 模型）</summary>
         public ExtractedDocMeta? DocMeta { get; set; }
 
-        /// <summary>命中的条款切片</summary>
+        /// <summary>
+        /// 本次实际使用的提取模式：<c>clause_full</c> / <c>process_profile</c> /
+        /// <c>record_profile</c> / <c>index_only</c> / <c>audit_profile</c> / <c>legacy</c>。
+        /// </summary>
+        public string ExtractionMode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 过程/记录/索引/审核 4 条模式提示词的原样 JSON。
+        /// <para>⚠️ 只有 <see cref="Clauses"/> 为空的模式才有值；下游预分析读这里，
+        /// 不要再从 <see cref="Clauses"/> 猜。</para>
+        /// </summary>
+        public JsonElement? ModeOutput { get; set; }
+
+        /// <summary>命中的条款切片（旧 <c>doc_clause_extract</c> 与手册逐条款使用）</summary>
         public List<ExtractedClause> Clauses { get; set; } = new();
     }
 
@@ -348,6 +399,16 @@ namespace CertPlatform.Auditor.Services.Ent
         public string StandardCode { get; set; } = string.Empty;
         public string StandardName { get; set; } = string.Empty;
         public string Model { get; set; } = string.Empty;
+        public string SourceSha256 { get; set; } = string.Empty;
+        public int SourceVersion { get; set; }
+        public string MarkdownSha256 { get; set; } = string.Empty;
+        public string ExtractionFingerprint { get; set; } = string.Empty;
+        /// <summary>实际使用的模式（与 <see cref="ExtractedDoc.ExtractionMode"/> 同源）</summary>
+        public string ExtractionMode { get; set; } = string.Empty;
+        /// <summary>实际命中的提示词代码（排障时区分新/旧提示词）</summary>
+        public string PromptCode { get; set; } = string.Empty;
+        /// <summary>提示词来源：stored / fallback / missing</summary>
+        public string PromptScope { get; set; } = string.Empty;
         public DateTime? ExtractedAt { get; set; }
         /// <summary>原文被切成几段送模型（&gt;1 表示长文档分段，结果已合并去重）</summary>
         public int Chunks { get; set; } = 1;
@@ -371,7 +432,19 @@ namespace CertPlatform.Auditor.Services.Ent
         /// <summary>原文摘录（可多段，按出现顺序）</summary>
         public List<string> Excerpts { get; set; } = new();
 
+        /// <summary>摘录在当前 Markdown 中的逐字定位结果；不能唯一定位时位置为空。</summary>
+        public List<ExtractedExcerptLocation> ExcerptLocations { get; set; } = new();
+
         /// <summary>模型自评置信度 0–1（⛔ 不是「符合性结论」）</summary>
         public double Confidence { get; set; }
+    }
+
+    public class ExtractedExcerptLocation
+    {
+        public int ExcerptIndex { get; set; }
+        public int? Start { get; set; }
+        public int? End { get; set; }
+        public string Status { get; set; } = "unverified";
+        public string Kind { get; set; } = "excerpt";
     }
 }

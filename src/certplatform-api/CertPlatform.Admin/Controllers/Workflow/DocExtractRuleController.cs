@@ -27,6 +27,7 @@ using CertPlatform.Admin.Entities.Doc;
 using CertPlatform.Admin.Entities.Workflow;
 using CertPlatform.Admin.Services.Cert;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Scope;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -60,6 +61,8 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
     private readonly LlmInvokeService _llm;
     private readonly IDbOrm _db;
     private readonly ILogger<DocExtractRuleController> _logger;
+    private readonly IObjectStorage _storage;
+    private readonly ICoreResourceQuery _core;
 
     /// <summary>
     /// 注册页面要展示的占位符（与 DocExtractPromptService 的替换常量逐字一致）。
@@ -81,7 +84,9 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         IFileConvertCore convert,
         LlmInvokeService llm,
         IDbOrm db,
-        ILogger<DocExtractRuleController> logger)
+        ILogger<DocExtractRuleController> logger,
+        IObjectStorage storage,
+        ICoreResourceQuery core)
         : base(entityService, userContext)
     {
         _promptTemplate = promptTemplate;
@@ -89,6 +94,8 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         _llm = llm;
         _db = db;
         _logger = logger;
+        _storage = storage;
+        _core = core;
     }
 
     /// <summary>加载 EntityConfig（Workflow/DocExtractRule.json）</summary>
@@ -256,8 +263,10 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         // 2) 标准信息（页面传的是短码 iso9001；也容忍 GUID）
         var stdList = await _db.Client.Ado.SqlQueryAsync<StdRow>(
             "SELECT Code, StandardCode, StandardName FROM cert_iso_standard "
-            + "WHERE (StandardCode = @key OR Code = @key) AND IsDeleted = 0 AND IsValid = 1 LIMIT 1",
+            + "WHERE (StandardCode = @key OR Code = @key) AND IsDeleted = 0 AND IsValid = 1",
             new { key = (req.StandardCode ?? "").Trim() });
+        if (stdList == null || stdList.Count != 1)
+            return Ok(ApiResponse.Fail("标准不存在或存在多个版本，请选择明确的标准版本"));
         var std = stdList?.FirstOrDefault();
         var stdName = std?.StandardName ?? (req.StandardCode ?? "未知标准");
         var stdGuid = std?.Code ?? "";
@@ -276,16 +285,37 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         var (clauseRefs, skippedByMode, filterNote) = await ResolveClausesAsync(
             clauseRows ?? new List<ClauseRow>(), stdShort);
 
+        string clauseMarkdown;
+        var clauseSections = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            var standard = await _core.GetStandardByCodeAsync(stdGuid)
+                ?? throw new InvalidOperationException("标准不存在或已停用");
+            clauseMarkdown = await ClauseMarkdownInput.LoadAsync(_storage, standard);
+            var selectedCodes = clauseRefs.Select(c => c.Code).ToHashSet(StringComparer.Ordinal);
+            var currentClauses = await _core.GetClausesAsync(stdGuid);
+            foreach (var clause in currentClauses.Where(c => selectedCodes.Contains(c.Code ?? string.Empty)
+                         && !string.IsNullOrWhiteSpace(c.Description)))
+                clauseSections.Add(clause.Code!, ClauseMarkdownInput.ReadSection(clauseMarkdown, clause));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Ok(ApiResponse.Fail($"条款 Markdown 不可用：{ex.Message}"));
+        }
+
         // 5) 两种模式
         var mode = string.Equals(req.Mode, "Whole", StringComparison.OrdinalIgnoreCase)
             ? "Whole"
             : "Section";
 
+        if (mode == "Whole" && clauseMarkdown.Length > 30_000)
+            return Ok(ApiResponse.Fail("条款 Markdown 超过整篇试跑输入上限，请使用分节试跑；正式提取会按预算分片"));
+
         object result = mode == "Whole"
             ? await RunWholeDocumentAsync(req, markdown, stdName, stdShort, stdGuid,
-                clauseRows ?? new List<ClauseRow>(), clauseRefs, skippedByMode, filterNote)
+                clauseRows ?? new List<ClauseRow>(), clauseRefs, skippedByMode, filterNote, clauseMarkdown)
             : await RunSectionAsync(req, markdown, stdName, stdShort, stdGuid,
-                clauseRefs, clauseRows?.Count ?? 0, skippedByMode, filterNote);
+                clauseRefs, clauseRows?.Count ?? 0, skippedByMode, filterNote, clauseSections);
 
         return Ok(ApiResponse<object>.Ok(result));
     }
@@ -311,21 +341,24 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
             + "WHERE StandardCode = @code AND AttrCode = 'DocCheckMode' AND IsDeleted = 0 AND IsValid = 1",
             new { code = standardShort });
 
-        if (attrs == null || attrs.Count == 0)
+        var clauseCodes = all.Select(c => c.Code).ToHashSet(StringComparer.Ordinal);
+        var matched = (attrs ?? new List<ClauseAttrRow>())
+            .Where(a => !string.IsNullOrWhiteSpace(a.ClauseCode) && clauseCodes.Contains(a.ClauseCode))
+            .ToList();
+        if (matched.Count == 0)
             return (all, 0, $"标准【{standardShort}】的条款还没配 DocCheckMode，本次按全部条款试跑");
 
-        var modeByClause = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var a in attrs)
-        {
-            if (string.IsNullOrWhiteSpace(a.ClauseCode)) continue;
-            modeByClause[a.ClauseCode!] = (a.AttrValue ?? "").Trim().ToLowerInvariant();
-        }
+        var groups = matched.GroupBy(a => a.ClauseCode!, StringComparer.Ordinal).ToList();
+        var duplicates = groups.Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        var modeByClause = groups.Where(g => g.Count() == 1)
+            .ToDictionary(g => g.Key, g => (g.Single().AttrValue ?? "").Trim().ToLowerInvariant(), StringComparer.Ordinal);
 
         // 未配 DocCheckMode 的条款按「要查」处理，只剔除明确 none 的
         var kept = all
             .Where(c => !modeByClause.TryGetValue(c.Code, out var mode) || mode != "none")
             .ToList();
-        return (kept, all.Count - kept.Count, null);
+        return (kept, all.Count - kept.Count, duplicates.Count == 0 ? null
+            : $"部分条款的 DocCheckMode 存在重复，已保留这些条款待核实：{string.Join(",", duplicates)}");
     }
 
     /// <summary>旧整篇模式：整篇 30k + 全部条款 + 一次大 JSON。仅用于对比。</summary>
@@ -338,7 +371,8 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         List<ClauseRow> clauseRows,
         List<DocClauseRef> clauseRefs,
         int skippedByMode,
-        string? filterNote)
+        string? filterNote,
+        string clauseMarkdown)
     {
         var truncated = markdown.Length > MaxTestDocChars;
         var docForModel = truncated ? markdown.Substring(0, MaxTestDocChars) : markdown;
@@ -347,7 +381,8 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
             .Select(c => "- " + c.ClauseNumber + (string.IsNullOrWhiteSpace(c.Title) ? "" : " " + c.Title)));
 
         var prompt = RenderPrompt(req.Template, stdName, stdShort, req.File!.FileName ?? "",
-            clauseList, docForModel);
+            clauseList, docForModel)
+            + "\n\n【标准条款 Markdown，仅用于理解条款，不是企业文档】\n" + clauseMarkdown;
 
         var ai = await ReadAiSettingsAsync();
         var sw = Stopwatch.StartNew();
@@ -471,7 +506,8 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         List<DocClauseRef> clauseRefs,
         int allClauseCount,
         int skippedByMode,
-        string? filterNote)
+        string? filterNote,
+        Dictionary<string, string> clauseSections)
     {
         var sw = Stopwatch.StartNew();
         var map = DocSectionIndex.Build(markdown, clauseRefs, stdShort, stdName);
@@ -542,8 +578,16 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
             {
                 var clauseList = string.Join("\n", call.Clauses
                     .Select(c => "- " + c.ClauseNumber + (string.IsNullOrWhiteSpace(c.Title) ? "" : " " + c.Title)));
+                var missing = call.Clauses.Where(c => !clauseSections.ContainsKey(c.Code))
+                    .Select(c => c.ClauseNumber).ToList();
+                if (missing.Count > 0)
+                    throw new InvalidOperationException($"条款 Markdown 缺少正文：{string.Join(",", missing)}");
+                var reference = string.Join("\n\n", call.Clauses.Select(c => clauseSections[c.Code]));
+                if (reference.Length > 30_000)
+                    throw new InvalidOperationException("本批条款 Markdown 超过试跑输入上限");
                 var prompt = RenderPrompt(req.Template, stdName, stdShort, req.File!.FileName ?? "",
-                    clauseList, call.Text);
+                    clauseList, call.Text)
+                    + "\n\n【标准条款 Markdown，仅用于理解条款，不是企业文档】\n" + reference;
                 var resp = await _llm.CompleteAsync(new LlmInvokeRequest
                 {
                     BaseUrl = ai.BaseUrl,

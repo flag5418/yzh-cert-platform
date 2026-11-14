@@ -34,7 +34,7 @@ import {
   closeAuditPlan, getMemberOptions, type CertMemberOption,
 } from '@share/api/auditor/cert-check-task'
 
-interface StandardItem { Code: string; StandardCode: string; StandardName: string; Abbrev: string }
+interface StandardItem { Code: string; StandardCode: string; StandardName: string; VersionYear: number; Abbrev: string }
 interface StageItem { Code: string; StageCode: string; StageName: string; Category: string }
 interface EnterpriseItem { Code: string; Name: string }
 interface DeptItem { Code: string; DeptName: string; ParentCode: string | null }
@@ -46,8 +46,8 @@ interface Selection {
   deptNames: string[]
   clauseCodes: string[]
   clauseNumbers: string[]
-  /** 条款业务键：标准短码 + 条款号（稳定关联，后端以此为真源） */
-  clauseRefs: Array<{ StandardNo: string; ClauseNumber: string }>
+  /** 标准短码、版本和条款号共同标识一个条款。 */
+  clauseRefs: Array<{ StandardNo: string; VersionYear?: number | null; ClauseNumber: string }>
   ownerCode: string
   ownerName: string
 }
@@ -244,20 +244,37 @@ async function openEdit(row: PlanRow) {
   await loadClausesForStandards(draft.standards)
   const res = await yzhApi.get('/api/Auditor/AuditPlan/details', { planCode: row.Code })
   const details: any[] = res?.data || []
+  for (const d of details) {
+    try {
+      const raw = d.ClauseRefsJson ? JSON.parse(d.ClauseRefsJson) : []
+      if (!Array.isArray(raw) || raw.some((r: any) => !r?.StandardNo || !r?.ClauseNumber))
+        throw new Error('invalid clause refs')
+    } catch {
+      ElMessage.error('计划包含格式错误的条款引用，无法安全编辑，请先修复数据')
+      wizardVisible.value = false
+      return
+    }
+  }
   selections.value = details.map(d => {
-    // ★ 业务键优先：按 (标准短码, 条款号) 找回当前条款 Code；旧数据没有 refs 时才用 Clauses。
-    let refs: Array<{ StandardNo: string; ClauseNumber: string }> = []
+    let refs: Array<{ StandardNo: string; VersionYear?: number | null; ClauseNumber: string }> = []
     try {
       const raw = d.ClauseRefsJson ? JSON.parse(d.ClauseRefsJson) : []
       if (Array.isArray(raw)) refs = raw.filter((r: any) => r?.StandardNo && r?.ClauseNumber)
     } catch { refs = [] }
-    const clauseByRef: Record<string, string> = {}
+    const clauseByRef: Record<string, string[]> = {}
     Object.values(clausesByStd.value).forEach(arr => arr.forEach(c => {
       const std = stdMap.value[c.StandardCode]
-      if (std) clauseByRef[`${std.StandardCode}|${c.ClauseNumber}`] = c.Code
+      if (!std) return
+      const key = `${std.StandardCode}|${std.VersionYear}|${c.ClauseNumber}`
+      const legacyKey = `${std.StandardCode}||${c.ClauseNumber}`
+      ;(clauseByRef[key] ||= []).push(c.Code)
+      ;(clauseByRef[legacyKey] ||= []).push(c.Code)
     }))
     const clauseCodes = refs.length
-      ? refs.map(r => clauseByRef[`${r.StandardNo}|${r.ClauseNumber}`]).filter(Boolean) as string[]
+      ? refs.map(r => {
+        const matches = clauseByRef[`${r.StandardNo}|${r.VersionYear ?? ''}|${r.ClauseNumber}`] || []
+        return matches.length === 1 ? matches[0] : undefined
+      }).filter((code): code is string => !!code)
       : splitCsv(d.Clauses)
     // 旧数据可能只有 ClauseNumbers 没有 Clauses —— 此时按编号标签原样展示，避免组合凭空消失
     const clauseNumbers = clauseCodes.length
@@ -271,7 +288,7 @@ async function openEdit(row: PlanRow) {
       clauseRefs: refs.length ? refs : clauseCodes.map(c => {
         const cl = clauseMap.value[c]
         const std = cl ? stdMap.value[cl.StandardCode] : undefined
-        return { StandardNo: std?.StandardCode || '', ClauseNumber: cl?.ClauseNumber || '' }
+        return { StandardNo: std?.StandardCode || '', VersionYear: std?.VersionYear, ClauseNumber: cl?.ClauseNumber || '' }
       }).filter(r => r.StandardNo && r.ClauseNumber),
       ownerCode: d.OwnerCode || '',
       ownerName: d.OwnerName || '',
@@ -328,11 +345,10 @@ function addSelection() {
     const cl = clauseMap.value[c]
     return cl ? `${stdAbbrev(cl.StandardCode)} ${cl.ClauseNumber}` : c
   })
-  // ★ 业务键：标准短码（iso9001）+ 条款号，标准条款重建后仍可解析
   const clauseRefs = clauseCodes.map(c => {
     const cl = clauseMap.value[c]
     const std = cl ? stdMap.value[cl.StandardCode] : undefined
-    return { StandardNo: std?.StandardCode || '', ClauseNumber: cl?.ClauseNumber || '' }
+    return { StandardNo: std?.StandardCode || '', VersionYear: std?.VersionYear, ClauseNumber: cl?.ClauseNumber || '' }
   }).filter(r => r.StandardNo && r.ClauseNumber)
   selections.value.push({
     deptCodes, deptNames, clauseCodes, clauseNumbers, clauseRefs,
@@ -345,6 +361,10 @@ function addSelection() {
 
 async function savePlan() {
   if (!selections.value.length) { ElMessage.warning('请先添加选择组合'); return }
+  if (selections.value.some(s => s.clauseRefs.length !== s.clauseCodes.length)) {
+    ElMessage.warning('计划中有无法匹配的条款，请删除对应组合并重新选择')
+    return
+  }
   saving.value = true
   try {
     const payload = {

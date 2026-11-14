@@ -79,6 +79,28 @@ namespace CertPlatform.Auditor.Controllers
         public async Task<IActionResult> RebuildDocProfile(string fileCode, [FromQuery] string? enterpriseCode)
             => Ok(ApiResponse<object?>.Ok(await _service.RebuildDocProfileAsync(fileCode, enterpriseCode ?? "")));
 
+        /// <summary>★ 批量重建文档画像（「重新分析」入口的前半段；不重新转换）</summary>
+        [HttpPost("doc-profile/rebuild-all")]
+        public async Task<IActionResult> RebuildAllDocProfiles([FromBody] ProfileRebuildRequest req)
+        {
+            var ent = req.EnterpriseCode ?? "";
+            if (string.IsNullOrWhiteSpace(ent))
+                return Ok(ApiResponse<object?>.Fail("缺少 enterpriseCode"));
+            return Ok(ApiResponse<object?>.Ok(
+                await _service.RebuildAllDocProfilesAsync(ent, req.FileCodes)));
+        }
+
+        /// <summary>★ 从企业文档归集真实部门（回写 cert_enterprise_dept；不删除既有部门）</summary>
+        [HttpPost("departments/rebuild")]
+        public async Task<IActionResult> RebuildDepartments([FromBody] ProfileRebuildRequest req)
+        {
+            var ent = req.EnterpriseCode ?? "";
+            if (string.IsNullOrWhiteSpace(ent))
+                return Ok(ApiResponse<object?>.Fail("缺少 enterpriseCode"));
+            return Ok(ApiResponse<object?>.Ok(
+                await _service.RebuildDepartmentsAsync(ent, req.FileCodes)));
+        }
+
         /// <summary>★ 生成 / 重建「标准条款 → 手册小节」索引（L1）</summary>
         [HttpPost("section-map/rebuild/{fileCode}")]
         public async Task<IActionResult> RebuildSectionMap(
@@ -203,6 +225,7 @@ namespace CertPlatform.Auditor.Controllers
 
         /// <summary>
         /// ★ 入队「按标准提取条款」：给 <c>FileCodes</c> = 只跑这几份；不给 = 整家企业。
+        /// <para><c>ReExtract=true</c> = 强制重跑（「重新分析」）；普通提取只入队真需要跑的。</para>
         ///
         /// <para><b>只入队真需要跑的</b>（Markdown 就绪 + 该标准未完成 / 已过期 / hash 变了），
         /// 已完成的会被跳过并在 <c>Skipped</c> 里计数 —— 所以本端点<b>可以反复点</b>。</para>
@@ -218,7 +241,7 @@ namespace CertPlatform.Auditor.Controllers
                 return Ok(ApiResponse<object?>.Fail("缺少 enterpriseCode"));
 
             var (queued, skipped, err) = await _service.EnqueueExtractForEnterpriseAsync(
-                ent, "manual", req.FileCodes);
+                ent, "manual", req.FileCodes, req.ReExtract ?? false, req.DocTypes, req.DeptNames);
 
             if (!string.IsNullOrEmpty(err))
             {
@@ -268,6 +291,21 @@ namespace CertPlatform.Auditor.Controllers
                 r.PromptCode,
                 r.PromptVersion,
             }).ToList()));
+        }
+
+        /// <summary>
+        /// ★ <b>路线 B：按「章节 + 部门」采集候选文档包</b>（只读，不调用 LLM）。
+        /// <para>给 <c>Chapter</c>（如 8 / 8.5）、<c>DeptNames</c>（如 生产部）、<c>DocTypes</c>（如 程序文件/作业指导书/记录表单）。</para>
+        /// <para>命中依据：已提取产物的 <c>ClauseNumbers</c> 前缀；未提取时回退画像 <c>PrimaryChapter</c>。</para>
+        /// </summary>
+        [HttpPost("collect")]
+        public async Task<IActionResult> Collect([FromBody] CollectRequest req)
+        {
+            var ent = req.EnterpriseCode ?? "";
+            if (string.IsNullOrWhiteSpace(ent))
+                return Ok(ApiResponse<object?>.Fail("缺少 enterpriseCode"));
+            return Ok(ApiResponse<object?>.Ok(await _service.CollectAsync(
+                ent, req.StandardCode, req.Chapter, req.DeptNames, req.DocTypes, req.MaxDocs)));
         }
 
         /// <summary>某文档的提取产物行（不展开 JSON —— 明细走 <c>list</c>）</summary>
@@ -465,6 +503,31 @@ namespace CertPlatform.Auditor.Controllers
         /// <para><c>FileCodes</c> 空 = 整家企业（后端按「Markdown 就绪 + 该标准未完成」自动过滤）。</para>
         /// </summary>
         public class ExtractRequest
+        {
+            public string? EnterpriseCode { get; set; }
+            public List<string>? FileCodes { get; set; }
+            /// <summary>★ 按文档类型过滤（包含匹配，空 = 全部）；如“程序文件”“作业指导书”“记录表单”“文件索引”</summary>
+            public List<string>? DocTypes { get; set; }
+            /// <summary>★ 按部门过滤（OwnerDept/SupportDepts 包含匹配，空 = 全部）；如“生产部”“品质部”</summary>
+            public List<string>? DeptNames { get; set; }
+            /// <summary>★ 强制重跑（「重新分析」= true；普通「开始提取」不传）</summary>
+            public bool? ReExtract { get; set; }
+        }
+
+        /// <summary>路线 B 采集请求：章节 + 部门 + 文档类型。</summary>
+        public class CollectRequest
+        {
+            public string? EnterpriseCode { get; set; }
+            public string? StandardCode { get; set; }
+            /// <summary>章节号，如 8 / 8.5；空 = 不按章节收窄，只按部门/类型。</summary>
+            public string? Chapter { get; set; }
+            public List<string>? DeptNames { get; set; }
+            public List<string>? DocTypes { get; set; }
+            public int? MaxDocs { get; set; }
+        }
+
+        /// <summary>批量重建画像请求；<c>FileCodes</c> 空 = 整家企业。</summary>
+        public class ProfileRebuildRequest
         {
             public string? EnterpriseCode { get; set; }
             public List<string>? FileCodes { get; set; }

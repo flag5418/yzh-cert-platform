@@ -35,6 +35,11 @@ public class CertEvidenceRow
     public string? SourceCode { get; set; }
     public string? SourceName { get; set; }
     public string? Anchor { get; set; }
+    public string? SourceAnchor { get; set; }
+    public string? SourceMatchStatus { get; set; }
+    public int? SourceStart { get; set; }
+    public int? SourceEnd { get; set; }
+    public string? MarkdownSha256 { get; set; }
     public string? Snippet { get; set; }
     public string? LlmSummary { get; set; }
     public string? TranscriptText { get; set; }

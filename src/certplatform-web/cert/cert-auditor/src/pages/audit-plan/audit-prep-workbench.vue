@@ -695,7 +695,8 @@ onBeforeUnmount(() => {
                   <span class="wb-ev-kind">{{ e.Anchor || e.EvidenceKind }}</span>
                   <span class="wb-ev-source">{{ e.SourceName || '-' }}</span>
                 </div>
-                <div class="wb-ev-snippet">{{ e.Snippet ? e.Snippet.slice(0, 100) + '...' : e.LlmSummary?.slice(0, 100) || '' }}</div>
+                <div>{{ e.SourceMatchStatus === 'section_candidate' ? '章节原文候选，相关性待核实' : e.SourceMatchStatus === 'matched' ? '已匹配转换文本' : e.SourceMatchStatus === 'ambiguous' ? '原文位置不唯一，待核实' : '未核验原文，待核实' }}</div>
+                <div class="wb-ev-snippet">{{ e.Snippet || e.LlmSummary || '' }}</div>
               </div>
             </div>
             <el-empty v-else description="暂无审核发现" :image-size="40" />

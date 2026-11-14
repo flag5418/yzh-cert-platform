@@ -35,7 +35,7 @@ import {
 } from '@yzh-core'
 import type { YzhTableColumn } from '@yzh-core'
 import { ElMessage } from 'element-plus'
-import { Document, FolderOpened, Loading, Refresh, Upload } from '@element-plus/icons-vue'
+import { Document, FolderOpened, Loading, Refresh, RefreshRight, Upload } from '@element-plus/icons-vue'
 import {
   buildAcceptAttribute,
   describeAllowed,
@@ -45,7 +45,6 @@ import type {
   EntDocClauseHit,
   EntDocQueueRow,
   EntDocQueueTask,
-  EntDocRow,
   EntDocVersionRow,
 } from '@share/api/ent/enterprise-doc'
 import { EnterpriseDocLogic } from './logic'
@@ -57,11 +56,13 @@ import {
   folderLabel,
   formatDuration,
   formatSize,
+  isFolderNode,
   planActionBadge,
   queueStatusBadge,
   standardExtractBadge,
   taskTypeText,
 } from './pure'
+import type { TreeRow } from './pure'
 import type { UploadPlanItem } from './useUpload'
 
 const logic = new EnterpriseDocLogic()
@@ -74,8 +75,32 @@ const {
   selectedRows,
 } = logic
 
-/** 表格引用（`logic.refresh()` 靠它触发 dataLoader 重载） */
-const tableRef = ref<unknown>(null)
+/**
+ * 页面持有的表格句柄（仅声明本页用到的方法，⛔ 不引 yzh.vue.core 的内部类型）。
+ * `YzhTable` 通过 defineExpose 暴露了 `expandAll` / `collapseAll`
+ * （el-table 本身没有 collapseAll，YzhTable 已封装好）；
+ * ⛔ 页面不要绕过它自己操作 el-table 内部实例。
+ */
+interface TableRefHandle {
+  refresh: () => Promise<void> | void
+  expandAll?: () => void
+  collapseAll?: () => void
+}
+
+/** 表格引用（`logic.refresh()` 靠它触发 dataLoader 重载；树表展开/折叠也走它） */
+const tableRef = ref<TableRefHandle | null>(null)
+
+// ── 树表展开 / 折叠（工具条，role-menu 风格） ─────────────────
+
+/** 展开全部（无表格引用时静默跳过：空态下工具条不渲染） */
+function expandAll(): void {
+  tableRef.value?.expandAll?.()
+}
+
+/** 折叠全部 */
+function collapseAll(): void {
+  tableRef.value?.collapseAll?.()
+}
 
 // ── 提取结果抽屉 ────────────────────────────────────────────────
 const {
@@ -247,7 +272,7 @@ function onPreviewVisibleChange(v: boolean): void {
 
 // ═══════════════════════ 表格事件 ═══════════════════════
 
-function onRowAction(key: string, row: EntDocRow): void {
+function onRowAction(key: string, row: TreeRow): void {
   void logic.handleRowAction(key, row)
 }
 
@@ -372,6 +397,17 @@ onBeforeUnmount(() => {
                 v-if="selectedCode"
                 type="primary"
                 size="small"
+                text
+                :icon="RefreshRight"
+                :disabled="!hasPlan || isBusy"
+                @click="logic.reextractAll()"
+              >
+                重新分析
+              </el-button>
+              <el-button
+                v-if="selectedCode"
+                type="primary"
+                size="small"
                 :disabled="!hasPlan"
                 @click="logic.startExtract()"
               >
@@ -435,10 +471,39 @@ onBeforeUnmount(() => {
           </YzhEmptyState>
 
           <div v-else class="ed-table-wrap">
-            <div v-if="selectedRows.length > 0" class="ed-bulkbar">
-              <span class="ed-bulkbar__text">已选 {{ selectedRows.length }} 个文件</span>
-              <el-button type="danger" size="small" @click="logic.batchDelete()">删除选中</el-button>
+            <!--
+              ★ 工具条（对齐 role-menu 的树表风格）：左「已选计数 + 批量删除」，
+                右「展开全部 / 折叠全部」。文件夹深时用户原来只能一层层手点箭头。
+                el-table 树表在 row-key 存在时按 key 保留展开态（刷新不丢），
+                但新增的文件夹不会自动展开 —— 这两个按钮就是兜底。
+            -->
+            <div class="ed-tablebar">
+              <div class="ed-tablebar__info">
+                <span class="ed-tablebar__count">已选 {{ selectedRows.length }} 个文件</span>
+                <!--
+                  ⚠️ `v-if` 必须挂在本 span 上，⛔ 不要挂到下方按钮标签上写成
+                  带比较符的条件（如 length > 0）—— 属性值里的 `>` 会把守卫
+                  R20-S04 的标签匹配正则提前截断，误报「缺 type」
+                  （实测：基线 0 → 假阳性 1）。
+                -->
+                <span v-if="selectedRows.length > 0" class="ed-tablebar__bulk">
+                  <el-button type="danger" size="small" @click="logic.batchDelete()">删除选中</el-button>
+                </span>
+              </div>
+              <div class="ed-tablebar__actions">
+                <el-button type="default" size="small" @click="expandAll()">展开全部</el-button>
+                <el-button type="default" size="small" @click="collapseAll()">折叠全部</el-button>
+              </div>
             </div>
+            <!--
+              ★ 树模式：数据由 `logic.dataLoader` 返回带 `Children` 的树形结构
+                （文件夹节点含 `FileCount`），`el-table` 只需两个开关：
+                  ① `:tree-props="{ children: 'Children' }"` —— 字段名是** PascalCase**
+                     （平台树契约），⛔ 不传则 el-table 认小写 `children`，
+                     树就展不开且**不报任何错**；
+                  ② `:default-expand-all="true"` —— 首屏全部展开，让层次一眼可见。
+              ⚠️ 首列必须承载「名字」—— el-table 的展开箭头固定渲染在第一列。
+            -->
             <YzhTable
               ref="tableRef"
               :columns="columns"
@@ -450,54 +515,81 @@ onBeforeUnmount(() => {
               :action-fixed="false"
               select-mode="multiple"
               row-key="Code"
+              :tree-props="{ children: 'Children' }"
+              :default-expand-all="true"
               empty-text="暂无文件"
               @row-action="onRowAction"
               @selection-change="logic.onRowsSelected($event)"
             >
               <template #column-FileName="{ row }">
-                <div class="ed-file">
+                <!--
+                  ★ 文件夹行与文件行必须长得**不一样**：只靠缩进区分会让人
+                    以为「文件夹也是一份资料」。文件夹给「子树文件数」——
+                    它不是任何一份文件的属性，但是判断「这个夹里有多少东西」
+                    的唯一汇总信息。
+                -->
+                <div v-if="isFolderNode(row)" class="ed-file ed-file--folder">
+                  <el-icon class="ed-file__icon"><FolderOpened /></el-icon>
+                  <span class="ed-file__name" :title="row.FileName">{{ row.FileName }}</span>
+                  <span class="ed-file__count">{{ row.FileCount }} 个文件</span>
+                </div>
+                <div v-else class="ed-file">
                   <el-icon class="ed-file__icon"><Document /></el-icon>
                   <span class="ed-file__name" :title="row.FileName">{{ row.FileName }}</span>
                   <span class="ed-file__kind">{{ fileKindText(row.FileType) }}</span>
                 </div>
               </template>
 
-              <template #column-RelFolderPath="{ row }">
-                <div class="ed-folder">
-                  <el-icon class="ed-folder__icon"><FolderOpened /></el-icon>
-                  <span :title="folderLabel(row.RelFolderPath)">{{ folderLabel(row.RelFolderPath) }}</span>
+              <!-- 文件夹没有「大小 / 转换 / 提取 / 版本」——给 “-” 占位，⛔ 不空着让人以为漏数据 -->
+              <template #column-DocType="{ row }">
+                <span v-if="isFolderNode(row)" class="ed-dim">-</span>
+                <div v-else class="ed-doctype">
+                  <span>{{ row.DocType || '—' }}</span>
+                  <span v-if="row.ExtractionMode" class="ed-doctype__mode">{{ row.ExtractionMode }}</span>
                 </div>
               </template>
 
+              <template #column-OwnerDept="{ row }">
+                <span v-if="isFolderNode(row)" class="ed-dim">-</span>
+                <span v-else class="ed-dim">{{ row.OwnerDept || '—' }}</span>
+              </template>
+
               <template #column-FileSize="{ row }">
-                <span>{{ formatSize(row.FileSize) }}</span>
+                <span v-if="isFolderNode(row)" class="ed-dim">-</span>
+                <span v-else>{{ formatSize(row.FileSize) }}</span>
               </template>
 
               <template #column-ConvertStatus="{ row }">
-                <el-tooltip
-                  v-if="row.ConvertMessage || row.MarkdownMessage"
-                  :content="row.MarkdownMessage || row.ConvertMessage"
-                  placement="top"
-                  :show-after="600"
-                >
-                  <span><YzhStatusBadge :type="convertBadge(row.MarkdownStatus || row.ConvertStatus).type" :text="convertBadge(row.MarkdownStatus || row.ConvertStatus).text" /></span>
-                </el-tooltip>
-                <YzhStatusBadge
-                  v-else
-                  :type="convertBadge(row.MarkdownStatus || row.ConvertStatus).type"
-                  :text="convertBadge(row.MarkdownStatus || row.ConvertStatus).text"
-                />
+                <span v-if="isFolderNode(row)" class="ed-dim">-</span>
+                <template v-else>
+                  <el-tooltip
+                    v-if="row.ConvertMessage || row.MarkdownMessage"
+                    :content="row.MarkdownMessage || row.ConvertMessage"
+                    placement="top"
+                    :show-after="600"
+                  >
+                    <span><YzhStatusBadge :type="convertBadge(row.MarkdownStatus || row.ConvertStatus).type" :text="convertBadge(row.MarkdownStatus || row.ConvertStatus).text" /></span>
+                  </el-tooltip>
+                  <YzhStatusBadge
+                    v-else
+                    :type="convertBadge(row.MarkdownStatus || row.ConvertStatus).type"
+                    :text="convertBadge(row.MarkdownStatus || row.ConvertStatus).text"
+                  />
+                </template>
               </template>
 
               <template #column-ExtractStatus="{ row }">
-                <el-tooltip v-if="extractBadge(row).tip" :content="extractBadge(row).tip" placement="top" :show-after="600">
-                  <span><YzhStatusBadge :type="extractBadge(row).type" :text="extractBadge(row).text" /></span>
-                </el-tooltip>
-                <YzhStatusBadge v-else :type="extractBadge(row).type" :text="extractBadge(row).text" />
+                <span v-if="isFolderNode(row)" class="ed-dim">-</span>
+                <template v-else>
+                  <el-tooltip v-if="extractBadge(row).tip" :content="extractBadge(row).tip" placement="top" :show-after="600">
+                    <span><YzhStatusBadge :type="extractBadge(row).type" :text="extractBadge(row).text" /></span>
+                  </el-tooltip>
+                  <YzhStatusBadge v-else :type="extractBadge(row).type" :text="extractBadge(row).text" />
+                </template>
               </template>
 
               <template #column-VersionNumber="{ row }">
-                <span class="ed-dim">v{{ row.VersionNumber }}</span>
+                <span v-if="!isFolderNode(row)" class="ed-dim">v{{ row.VersionNumber }}</span>
               </template>
             </YzhTable>
           </div>
@@ -999,16 +1091,33 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.ed-bulkbar {
+/* 树表工具条（role-menu 风格：左计数 / 右展开折叠，⛔ 数字来自 selectedRows，不在模板现算） */
+.ed-tablebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yzh-space-2, 8px);
+  flex-wrap: wrap;
+  padding: var(--yzh-space-1, 4px) 0 var(--yzh-space-2, 8px);
+  flex: none;
+}
+
+.ed-tablebar__info,
+.ed-tablebar__actions {
   display: flex;
   align-items: center;
   gap: var(--yzh-space-2, 8px);
-  padding: var(--yzh-space-1, 4px) 0;
+  min-width: 0;
 }
 
-.ed-bulkbar__text {
+.ed-tablebar__count {
   font-size: var(--yzh-font-size-sm, 13px);
   color: var(--el-text-color-regular);
+}
+
+.ed-tablebar__bulk {
+  display: inline-flex;
+  min-width: 0;
 }
 
 .ed-placeholder {
@@ -1031,11 +1140,41 @@ onBeforeUnmount(() => {
   color: var(--yzh-color-warning, #e6a23c);
 }
 
-.ed-file {
+/*
+ * ★★★ 树表首列「层次感」布局（2026-11-13 Chrome CDP 实测定位，对齐 role-menu）★★★
+ *
+ * 现象：enterprise-doc 树表所有行的名字都从同一个 x 开始（缩进全丢），
+ *       行高还被撑成两行 —— 即用户反馈的「层次感混乱」。
+ *
+ * 根因：el-table 树缩进前缀（`el-table__indent` / `el-table__placeholder` /
+ *   `el-table__expand-icon`）是**行内元素**，在 `.cell` 内与列内容同处一个行盒。
+ *   当「前缀总宽 + `.ed-file` 宽 > 列内容宽」时，`inline-flex` 是**原子行内盒**，
+ *   会被**整块挤到下一行盒**：前缀独占第一行、名字另起一行且从 cell 左缘开始
+ *   ⇒ 每行缩进只剩前缀、对名字无效。实测（修复前）：arrow(top=429) 与
+ *   .ed-file(top=451) 分行，全部行 nameLeft=622。
+ *   role-menu 首列是**纯文本流**（无原子盒，内容放不下时只折文字），故无此问题。
+ *
+ * 修法：首列 `className: 'ed-file-cell'`（见 logic.ts）→ 下方规则把 `.cell`
+ *   变 **flex 容器**：缩进前缀与 `.ed-file` 成为 flex items 同行排开（永不换行），
+ *   `.ed-file` 靠 `min-width:0 + max-width:100%` 收窄 ⇒ 缩进阶梯恢复。
+ */
+/* `.ed-table-wrap` 是本组件元素（scoped 载体），`:deep()` 内跨到 YzhTable 渲染的 td */
+.ed-table-wrap :deep(.ed-file-cell .cell) {
   display: flex;
+  align-items: center;
+}
+
+/*
+ * `.ed-file` 作为 flex item（被 blockify 为 flex 容器）后：
+ * 与缩进前缀同行；`min-width:0` + `max-width:100%` 允许在窄列收窄，
+ * `.ed-file__name` 的 ellipsis 随之生效。
+ */
+.ed-file {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .ed-file__icon {
@@ -1055,22 +1194,34 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-placeholder);
 }
 
-.ed-folder {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  color: var(--el-text-color-regular);
+/* 文件夹行：图标改用警示色（与文件行的主色区分），名字后可挂子树文件数 */
+.ed-file--folder .ed-file__icon {
+  color: var(--yzh-color-warning, #e6a23c);
 }
 
-.ed-folder__icon {
+.ed-file__count {
   flex: none;
-  color: var(--yzh-color-warning, #e6a23c);
+  font-size: var(--yzh-font-size-xs, 12px);
+  color: var(--el-text-color-placeholder);
 }
 
 .ed-dim {
   font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-text-color-secondary);
+}
+
+/* 文档类型 + 提取方式：主行是类型，副行是提取模式 */
+.ed-doctype {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--yzh-font-size-xs, 12px);
+  line-height: 1.25;
+}
+
+.ed-doctype__mode {
+  color: var(--el-text-color-placeholder);
 }
 
 /* ── 抽屉通用 ── */

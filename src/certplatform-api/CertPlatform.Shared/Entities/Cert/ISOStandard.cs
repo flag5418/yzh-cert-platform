@@ -138,9 +138,8 @@ namespace CertPlatform.Shared.Entities.Cert
         /// <b>标准原文 Markdown 的存储路径</b>（MinIO key，形如
         /// <c>/standard-source/{标准Code}/{文件名}.md</c>）。
         ///
-        /// <para><b>为什么挂在标准行上</b>：这份 Markdown 是「自动生成条款」与
-        /// 「企业文档内容提取（给模型看标准原文）」的<b>同一个输入</b>；
-        /// 挂在标准行 ⇒ 全系统只有一个事实源，⛔ 不允许第二个表再存一份。</para>
+        /// <para>用于自动生成条款和人工溯源；涉及条款的后续模型输入使用
+        /// <see cref="ClauseMarkdownPath"/>。</para>
         /// <para>空 = 还没上传过标准原文。</para>
         /// </summary>
         [StringLength(500)]
@@ -164,8 +163,8 @@ namespace CertPlatform.Shared.Entities.Cert
         ///
         /// <para><b>它不是第二事实源</b>：由 <c>cert_iso_clause</c> 渲染，条款表是事实源；
         /// 原始标准 Markdown 仍在 <see cref="MarkdownPath"/>，供人工核对与溯源。</para>
-        /// <para><b>用途</b>：构造提示词里的条款清单、按条款取「要求原文」、页面预览；
-        /// ⛔ 不要把它当成标准原文来判符合性。</para>
+        /// <para><b>用途</b>：条款相关模型输入和页面预览。它可能继承解析遗漏、摘要或截断，
+        /// 不应未经核对就当作完整标准原文或独立的符合性判据。</para>
         /// <para>空 = 还没执行过「写入条款」或补建。</para>
         /// </summary>
         [StringLength(500)]

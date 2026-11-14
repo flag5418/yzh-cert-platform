@@ -9,6 +9,7 @@ using CertPlatform.Admin.Services.Workflow.Skills.Fill.Ai;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Storage;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 
@@ -45,6 +46,7 @@ public sealed class ClauseAttrGenerateService
     private readonly ICoreResourceQuery _core;
     private readonly LlmInvokeService _llm;
     private readonly IUserContext _user;
+    private readonly IObjectStorage _storage;
 
     /// <summary>
     /// 提示词唯一来源（<c>cert_prompt_template</c> · <c>PromptCode = clause_attr_gen</c>）。
@@ -87,13 +89,15 @@ public sealed class ClauseAttrGenerateService
         ICoreResourceQuery core,
         LlmInvokeService llm,
         IUserContext user,
-        ClauseAttrPromptService prompt)
+        ClauseAttrPromptService prompt,
+        IObjectStorage storage)
     {
         _db = db;
         _core = core;
         _llm = llm;
         _user = user;
         _prompt = prompt;
+        _storage = storage;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -107,17 +111,15 @@ public sealed class ClauseAttrGenerateService
         var result = new ClauseAttrGenerateResult();
 
         // ── ① 参数与前置校验（每条都给"人话"，⛔ 不返回英文异常） ──
-        var standardCode = (request.StandardCode ?? string.Empty).Trim();
-        if (standardCode.Length == 0)
+        var standardId = (request.StandardId ?? string.Empty).Trim();
+        if (standardId.Length == 0)
             return ClauseAttrGenerateResult.Fail("请先选择标准");
 
-        // ★ 入参是**短码**（iso9001，与 cert_clause_attr.StandardCode 同口径），
-        //   而 ICoreResourceQuery.GetStandardByCodeAsync 按 **Code（GUID）** 查
-        //   ⇒ 必须先在有效标准里按 StandardCode 匹配，⛔ 不能直接拿短码去查 Code。
         var standard = (await _core.GetValidStandardsAsync())
-            .FirstOrDefault(s => string.Equals(s.StandardCode, standardCode, StringComparison.Ordinal));
+            .SingleOrDefault(s => string.Equals(s.Code, standardId, StringComparison.Ordinal));
         if (standard == null)
-            return ClauseAttrGenerateResult.Fail($"标准【{standardCode}】不存在或已停用");
+            return ClauseAttrGenerateResult.Fail("所选标准版本不存在或已停用");
+        var standardCode = standard.StandardCode;
 
         // ★★ 提示词唯一来源 = ClauseAttrPromptService（cert_prompt_template · clause_attr_gen）。
         //    属性清单**不进正文**，由 {{attr_pool}} 按属性池实时渲染 —— 见字段注释。
@@ -161,6 +163,8 @@ public sealed class ClauseAttrGenerateService
                                             .Select(x => x.Trim())
                                             .ToHashSet(StringComparer.Ordinal);
             leaves = leaves.Where(c => wanted.Contains(c.Code)).ToList();
+            if (wanted.Count != leaves.Count || wanted.Count != request.ClauseCodes.Count)
+                return ClauseAttrGenerateResult.Fail("所选条款不存在、重复或不属于该标准版本的叶子条款，请刷新后重试");
         }
 
         leaves = leaves.OrderBy(c => c.Sort)
@@ -169,6 +173,18 @@ public sealed class ClauseAttrGenerateService
 
         if (leaves.Count == 0)
             return ClauseAttrGenerateResult.Fail("该标准下没有可生成属性的叶子条款");
+
+        try
+        {
+            if (leaves.Any(c => !string.Equals(c.Code,
+                    ClauseRefs.CreateStableCode(standard.StandardCode, standard.VersionYear, c.ClauseNumber),
+                    StringComparison.Ordinal)))
+                return ClauseAttrGenerateResult.Fail("标准包含旧条款标识，请先完成条款切换");
+        }
+        catch (ArgumentException)
+        {
+            return ClauseAttrGenerateResult.Fail("标准版本或条款编号不合法，请先修复标准条款");
+        }
 
         // ── ②-a 前置条款直接跳过（2026-10-28 用户裁定：生成阶段就跳，⛔ 不留到下游过滤）──
         // 判据两条，命中任一即跳：
@@ -235,6 +251,18 @@ public sealed class ClauseAttrGenerateService
         var limit = request.MaxCount <= 0 ? MaxBatchSize : Math.Min(request.MaxCount, MaxBatchSize);
         var todo = leaves.Take(limit).ToList();
 
+        var sections = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            var markdown = await ClauseMarkdownInput.LoadAsync(_storage, standard);
+            foreach (var clause in todo)
+                sections.Add(clause.Code!, ClauseMarkdownInput.ReadSection(markdown, clause));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return ClauseAttrGenerateResult.Fail($"条款 Markdown 不可用：{ex.Message}");
+        }
+
         result.Total = todo.Count;
         result.Model = settings.Model;
 
@@ -263,7 +291,7 @@ public sealed class ClauseAttrGenerateService
             {
                 // 渲染是纯内存操作，放在并发前完成；LLM 调用在任务里并发
                 var renderedPrompt = ClauseAttrPromptService.RenderWithSection(
-                    template, standard, clause, poolSection);
+                    template, standard, clause, poolSection, sections[clause.Code!]);
                 tasks.Add(GenerateOneSafeAsync(
                     standard, clause, renderedPrompt, settings, result.Model, pool, request.Overwrite, ct));
             }
@@ -485,22 +513,26 @@ public sealed class ClauseAttrGenerateService
 
             var clauseNo = ClauseRefs.NormalizeNumber(clause.ClauseNumber);
             var candidates = await _db.Client.Queryable<ClauseAttr>()
-                .Where(p => p.StandardCode == standard.StandardCode && p.AttrCode == attr.Code)
+                .Where(p => p.ClauseCode == clause.Code && p.AttrCode == attr.Code)
                 .ToListAsync();
-            var existing = candidates.FirstOrDefault(p =>
-                string.Equals(ClauseRefs.NormalizeNumber(p.ClauseNumber), clauseNo, StringComparison.Ordinal)
-                || string.Equals(p.ClauseCode, clause.Code, StringComparison.Ordinal));
+            if (candidates.Count > 1)
+            {
+                item.Success = false;
+                item.Message = Append(item.Message, $"属性【{attr.Code}】存在重复记录，请先清理");
+                return item;
+            }
+            var existing = candidates.FirstOrDefault();
 
             if (existing != null)
             {
-                if (existing.IsDeleted)
+                if (existing.IsDeleted && !string.Equals(existing.Status, "stale", StringComparison.Ordinal))
                 {
-                    // 已删行仍占唯一键 ⇒ 不静默复活（可能与人工删除意图冲突），交给用户决定
                     item.Skipped++;
                     item.Message = Append(item.Message, $"属性【{attr.Code}】曾被删除但记录仍在库中，已跳过");
                     continue;
                 }
-                if (!overwrite)
+                var restoreStale = existing.IsDeleted;
+                if (!overwrite && !restoreStale)
                 {
                     item.Skipped++;
                     continue;
@@ -508,6 +540,14 @@ public sealed class ClauseAttrGenerateService
                 existing.AttrValue = value;
                 existing.ClauseNumber = clauseNo;
                 existing.ClauseCode = clause.Code;
+                if (restoreStale)
+                {
+                    existing.IsDeleted = false;
+                    existing.IsValid = 1;
+                    existing.DeleteBy = null;
+                    existing.DeleteTime = null;
+                    existing.Status = "active";
+                }
                 existing.UpdateBy = _user.UserCode;
                 existing.UpdateTime = DateTime.Now;
                 // ⚠️ 必须列级写回（守卫 R-A / 陷阱 ㉑）：全列写回会把别的列一并覆盖
@@ -516,6 +556,11 @@ public sealed class ClauseAttrGenerateService
                     nameof(ClauseAttr.AttrValue),
                     nameof(ClauseAttr.ClauseNumber),
                     nameof(ClauseAttr.ClauseCode),
+                    nameof(ClauseAttr.IsDeleted),
+                    nameof(ClauseAttr.IsValid),
+                    nameof(ClauseAttr.DeleteBy),
+                    nameof(ClauseAttr.DeleteTime),
+                    nameof(ClauseAttr.Status),
                     nameof(ClauseAttr.UpdateBy),
                     nameof(ClauseAttr.UpdateTime));
                 if (!up.Success)
@@ -616,8 +661,8 @@ public sealed class ClauseAttrGenerateService
 /// <summary>预生成入参</summary>
 public sealed class ClauseAttrGenerateRequest
 {
-    /// <summary>标准短码（<c>iso9001</c>），与 <c>cert_clause_attr.StandardCode</c> 同口径</summary>
-    public string StandardCode { get; set; } = string.Empty;
+    /// <summary>标准记录 Code，明确指定标准版本。</summary>
+    public string StandardId { get; set; } = string.Empty;
 
     /// <summary>指定条款（<c>cert_iso_clause.Code</c>）；为空 = 该标准全部叶子条款</summary>
     public List<string>? ClauseCodes { get; set; }

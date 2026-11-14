@@ -12,6 +12,7 @@ using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.DocExtraction;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Storage;
 using CertPlatform.Shared.Services.DocExtraction;
@@ -21,10 +22,8 @@ namespace CertPlatform.Admin.Services.StandardDirectory;
 /// <summary>
 /// <b>标准原文 → Markdown → 条款</b> 的唯一实现（V3 知识层，2026-11-10）。
 ///
-/// <para><b>为什么单独成服务</b>：同一份标准 Markdown 有两个消费者 ——
-/// ① 本服务「自动生成条款」；② 企业文档内容提取时给模型看标准原文。
-/// 两条链必须读<b>同一份</b> <c>cert_iso_standard.MarkdownPath</c>，
-/// ⛔ 不允许各自再传一次、各存一份。</para>
+/// <para>自动生成条款读取原始标准 Markdown；后续条款相关模型输入读取生成的
+/// <c>cert_iso_standard.ClauseMarkdownPath</c>，原始标准文件保留用于溯源和核对。</para>
 ///
 /// <para><b>生成策略</b>：先按 Markdown 标题里的条款编号做<b>确定性解析</b>（国标正文本身就是
 /// 编号结构，命中率高、零成本、可复现）；解析结果过少（&lt;5 条）才回落到 LLM 抽取，
@@ -167,8 +166,141 @@ public class StandardSourceService
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // 三、写入条款（默认只补缺失；Overwrite = 先清空再全量重建）
+    // 三、写入条款（默认只补缺失；Overwrite = 按稳定标识同步）
     // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>按标准版本和条款号构建确定性的条款及父子关系。</summary>
+    public static List<ISOClause> BuildRebuildPlan(ISOStandard standard, IEnumerable<ParsedClause> parsed)
+    {
+        if (standard == null || string.IsNullOrWhiteSpace(standard.Code))
+            throw new ArgumentException("标准标识不能为空", nameof(standard));
+
+        var items = parsed.OrderBy(c => c.ClauseNumber, ClauseNumberComparer.Instance).ToList();
+        var codes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var item in items)
+        {
+            var number = item.ClauseNumber.Trim().ToUpperInvariant();
+            var code = ClauseRefs.CreateStableCode(standard.StandardCode, standard.VersionYear, number);
+            if (!codes.TryAdd(number, code))
+                throw new ArgumentException($"条款编号重复：{number}", nameof(parsed));
+        }
+
+        var rows = new List<ISOClause>();
+        foreach (var item in items)
+        {
+            var number = item.ClauseNumber.Trim().ToUpperInvariant();
+            var parentNumber = TrimLastSegment(number);
+            string? parentCode = null;
+            while (parentNumber.Length > 0)
+            {
+                if (codes.TryGetValue(parentNumber, out parentCode)) break;
+                parentNumber = TrimLastSegment(parentNumber);
+            }
+            rows.Add(new ISOClause
+            {
+                Code = codes[number],
+                StandardCode = standard.Code,
+                ClauseNumber = number,
+                Title = item.Title,
+                Description = item.Description,
+                ParentCode = parentCode,
+                Sort = (rows.Count + 1) * 10,
+                IsValid = 1
+            });
+        }
+        return rows;
+    }
+
+    /// <summary>手工新增条款时统一生成并检查稳定标识。</summary>
+    public async Task<(bool ok, string? message)> PrepareManualClauseAsync(ISOClause clause)
+    {
+        var standard = await _db.Client.Queryable<ISOStandard>()
+            .Where(s => s.Code == clause.StandardCode && !s.IsDeleted && s.IsValid == 1)
+            .FirstAsync();
+        if (standard == null) return (false, "所属标准不存在或已停用");
+
+        var existing = await _db.Client.Queryable<ISOClause>()
+            .Where(c => c.StandardCode == standard.Code && !c.IsDeleted)
+            .ToListAsync();
+        try
+        {
+            if (existing.Any(c => !string.Equals(c.Code,
+                ClauseRefs.CreateStableCode(standard.StandardCode, standard.VersionYear, c.ClauseNumber),
+                StringComparison.Ordinal)))
+                return (false, "该标准仍有旧随机条款 Code，请先完成稳定标识切换");
+
+            clause.ClauseNumber = clause.ClauseNumber.Trim().ToUpperInvariant();
+            clause.Code = ClauseRefs.CreateStableCode(standard.StandardCode, standard.VersionYear, clause.ClauseNumber);
+        }
+        catch (ArgumentException ex)
+        {
+            return (false, $"条款标识无效：{ex.Message}");
+        }
+
+        var conflict = await _db.Client.Queryable<ISOClause>()
+            .Where(c => c.Code == clause.Code)
+            .FirstAsync();
+        return conflict == null
+            ? (true, null)
+            : (false, "相同稳定 Code 的条款已存在或曾被删除，请通过标准原文同步恢复");
+    }
+
+    /// <summary>更新条款时禁止修改构成稳定标识的标准和编号。</summary>
+    public async Task<(bool ok, string? message)> ValidateManualClauseUpdateAsync(ISOClause clause)
+    {
+        var current = await _db.Client.Queryable<ISOClause>()
+            .Where(c => c.Code == clause.Code && !c.IsDeleted)
+            .FirstAsync();
+        if (current == null) return (false, "条款不存在");
+        if (current.StandardCode != clause.StandardCode
+            || !string.Equals(current.ClauseNumber.Trim(), clause.ClauseNumber?.Trim(), StringComparison.OrdinalIgnoreCase))
+            return (false, "条款的所属标准和编号不能直接修改，请新建正确条款");
+
+        var standard = await _db.Client.Queryable<ISOStandard>()
+            .Where(s => s.Code == current.StandardCode && !s.IsDeleted)
+            .FirstAsync();
+        if (standard == null) return (false, "所属标准不存在");
+        try
+        {
+            if (!string.Equals(current.Code,
+                ClauseRefs.CreateStableCode(standard.StandardCode, standard.VersionYear, current.ClauseNumber),
+                StringComparison.Ordinal))
+                return (false, "该条款仍使用旧随机 Code，请先完成稳定标识切换");
+        }
+        catch (ArgumentException ex)
+        {
+            return (false, $"条款标识无效：{ex.Message}");
+        }
+        if (!string.Equals(current.Title, clause.Title, StringComparison.Ordinal)
+            || !string.Equals(current.Description, clause.Description, StringComparison.Ordinal))
+        {
+            var attributes = await _db.Client.Queryable<ClauseAttr>()
+                .Where(a => a.ClauseCode == current.Code && !a.IsDeleted && a.IsValid == 1)
+                .FirstAsync();
+            if (attributes != null)
+                return (false, "该条款已有有效属性，不能直接修改标题或正文；请通过标准原文同步并重新生成属性");
+        }
+        return (true, null);
+    }
+
+    /// <summary>有条款的标准不得直接变更稳定标识所依赖的短码和版本。</summary>
+    public async Task<(bool ok, string? message)> ValidateStandardIdentityUpdateAsync(ISOStandard standard)
+    {
+        var current = await _db.Client.Queryable<ISOStandard>()
+            .Where(s => s.Code == standard.Code && !s.IsDeleted)
+            .FirstAsync();
+        if (current == null) return (false, "标准不存在");
+        if (string.Equals(current.StandardCode?.Trim(), standard.StandardCode?.Trim(), StringComparison.OrdinalIgnoreCase)
+            && current.VersionYear == standard.VersionYear)
+            return (true, null);
+
+        var hasClauses = await _db.Client.Queryable<ISOClause>()
+            .Where(c => c.StandardCode == current.Code)
+            .AnyAsync();
+        return hasClauses
+            ? (false, "标准已有条款，不能直接修改标准编号或版本年份")
+            : (true, null);
+    }
 
     public async Task<StandardClauseApplyResult> ApplyAsync(string standardKey, bool overwrite)
     {
@@ -187,106 +319,136 @@ public class StandardSourceService
         if (parsed.Count == 0)
             return StandardClauseApplyResult.Fail("没有从 Markdown 中解析出条款（可先看预览确认原文结构）");
 
-        var existing = await _db.Client.Queryable<ISOClause>()
-            .Where(c => c.StandardCode == std.Code && !c.IsDeleted)
-            .ToListAsync();
-
-        // ★ 2026-11-11：overwrite = 「先清空，再增加」。
-        //   原来只覆盖同编号的行，上传错标准后遗留的其它编号会一直留在库里（132 条 vs 94 条）。
-        var cleared = 0;
-        if (overwrite && existing.Count > 0)
+        List<ISOClause> planned;
+        try
         {
-            foreach (var row in existing)
-            {
-                row.IsDeleted = true;
-                row.IsValid = 0;
-                row.DeleteTime = DateTime.Now;
-                row.UpdateTime = DateTime.Now;
-                await _db.UpdateAsync(row,
-                    nameof(ISOClause.IsDeleted), nameof(ISOClause.IsValid),
-                    nameof(ISOClause.DeleteTime), nameof(ISOClause.UpdateTime));
-            }
-            cleared = existing.Count;
-            existing = new List<ISOClause>();
-
-            // 条款重建后旧 ClauseCode 全部失效；属性行必须同步清掉，否则会留下
-            // 「挂在已删条款上的孤儿属性」（页面按新条款查不到，但库里一直占着）。
-            var attrs = await _db.Client.Queryable<ClauseAttr>()
-                .Where(a => a.StandardCode == std.StandardCode && !a.IsDeleted)
-                .ToListAsync();
-            foreach (var attr in attrs)
-            {
-                attr.IsDeleted = true;
-                attr.IsValid = 0;
-                attr.UpdateTime = DateTime.Now;
-                await _db.UpdateAsync(attr,
-                    nameof(ClauseAttr.IsDeleted), nameof(ClauseAttr.IsValid),
-                    nameof(ClauseAttr.UpdateTime));
-            }
+            planned = BuildRebuildPlan(std, parsed);
+        }
+        catch (ArgumentException ex)
+        {
+            return StandardClauseApplyResult.Fail($"条款标识生成失败：{ex.Message}");
         }
 
-        var byNumber = existing
-            .Where(c => !string.IsNullOrWhiteSpace(c.ClauseNumber))
-            .GroupBy(c => c.ClauseNumber.Trim(), StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
-
-        var maxSort = existing.Count == 0 ? 0 : existing.Max(c => c.Sort);
-        var added = 0; var updated = 0; var skipped = 0;
-        var codeByNumber = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var kv in byNumber) codeByNumber[kv.Key] = kv.Value.Code ?? "";
-
-        foreach (var item in parsed)
+        var existing = await _db.Client.Queryable<ISOClause>()
+            .Where(c => c.StandardCode == std.Code)
+            .ToListAsync();
+        try
         {
-            var number = item.ClauseNumber.Trim();
-            if (number.Length == 0) continue;
+            if (existing.Where(c => !c.IsDeleted).Any(c =>
+                !string.Equals(c.Code,
+                    ClauseRefs.CreateStableCode(std.StandardCode, std.VersionYear, c.ClauseNumber),
+                    StringComparison.Ordinal)))
+                return StandardClauseApplyResult.Fail("该标准仍有旧随机条款 Code，请先完成稳定标识切换，不能混用新旧关联");
+        }
+        catch (ArgumentException ex)
+        {
+            return StandardClauseApplyResult.Fail($"现有条款编号无效，无法重建：{ex.Message}");
+        }
 
-            if (byNumber.TryGetValue(number, out var row))
+        var plannedCodes = planned.Select(c => c.Code!).ToList();
+        var identityCodes = plannedCodes
+            .Concat(existing.Where(c => !c.IsDeleted).Select(c => c.Code!))
+            .Distinct(StringComparer.Ordinal).ToList();
+        var conflicts = await _db.Client.Queryable<ISOClause>()
+            .Where(c => identityCodes.Contains(c.Code!))
+            .ToListAsync();
+        if (conflicts.Any(c => c.StandardCode != std.Code)
+            || conflicts.GroupBy(c => c.Code, StringComparer.Ordinal).Any(g => g.Count() > 1))
+            return StandardClauseApplyResult.Fail("稳定条款 Code 存在重复或跨标准冲突，请先处理无效数据");
+
+        var byCode = conflicts.ToDictionary(c => c.Code!, StringComparer.Ordinal);
+        var retainedCodes = plannedCodes.ToHashSet(StringComparer.Ordinal);
+        var added = 0; var updated = 0; var skipped = 0; var cleared = 0;
+        var changedCodes = new HashSet<string>(StringComparer.Ordinal);
+        var parentCodes = (overwrite ? Enumerable.Empty<ISOClause>() : existing.Where(c => !c.IsDeleted))
+            .Concat(planned)
+            .GroupBy(c => c.ClauseNumber, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Last().Code!, StringComparer.OrdinalIgnoreCase);
+
+        using (var tran = _db.BeginTransaction())
+        {
+            try
             {
-                codeByNumber[number] = row.Code ?? "";
-                if (!overwrite) { skipped++; continue; }
-
-                row.Title = item.Title;
-                row.Description = item.Description;
-                row.IsValid = 1;
-                row.UpdateTime = DateTime.Now;
-                await _db.UpdateAsync(row,
-                    nameof(ISOClause.Title), nameof(ISOClause.Description),
-                    nameof(ISOClause.IsValid), nameof(ISOClause.UpdateTime));
-                updated++;
-                continue;
-            }
-
-            // 父条款 = 编号去掉最后一段后，已存在（本批或库内）的最近祖先
-            var parentNumber = TrimLastSegment(number);
-            string? parentCode = null;
-            while (parentNumber.Length > 0)
-            {
-                if (codeByNumber.TryGetValue(parentNumber, out var pc) && !string.IsNullOrEmpty(pc))
+                if (overwrite)
                 {
-                    parentCode = pc;
-                    break;
+                    foreach (var row in existing.Where(c => !c.IsDeleted && !retainedCodes.Contains(c.Code!)))
+                    {
+                        row.IsDeleted = true;
+                        row.IsValid = 0;
+                        row.DeleteTime = DateTime.Now;
+                        row.UpdateTime = DateTime.Now;
+                        var deletion = await _db.UpdateAsync(row,
+                            nameof(ISOClause.IsDeleted), nameof(ISOClause.IsValid),
+                            nameof(ISOClause.DeleteTime), nameof(ISOClause.UpdateTime));
+                        if (!deletion.Success) throw new InvalidOperationException(deletion.Error);
+                        changedCodes.Add(row.Code!);
+                        cleared++;
+                    }
                 }
-                parentNumber = TrimLastSegment(parentNumber);
-            }
 
-            maxSort += 10;
-            var entity = new ISOClause
+                foreach (var item in planned)
+                {
+                    var parentNumber = TrimLastSegment(item.ClauseNumber);
+                    while (parentNumber.Length > 0 && !parentCodes.TryGetValue(parentNumber, out _))
+                        parentNumber = TrimLastSegment(parentNumber);
+                    item.ParentCode = parentNumber.Length > 0 ? parentCodes[parentNumber] : null;
+
+                    if (byCode.TryGetValue(item.Code!, out var row))
+                    {
+                        if (!overwrite && !row.IsDeleted) { skipped++; continue; }
+                        if (row.IsDeleted || row.Title != item.Title || row.Description != item.Description)
+                            changedCodes.Add(row.Code!);
+                        row.Title = item.Title;
+                        row.Description = item.Description;
+                        row.ParentCode = item.ParentCode;
+                        row.Sort = item.Sort;
+                        row.IsValid = 1;
+                        row.IsDeleted = false;
+                        row.DeleteBy = null;
+                        row.DeleteTime = null;
+                        row.UpdateTime = DateTime.Now;
+                        var update = await _db.UpdateAsync(row,
+                            nameof(ISOClause.Title), nameof(ISOClause.Description), nameof(ISOClause.ParentCode),
+                            nameof(ISOClause.Sort), nameof(ISOClause.IsValid), nameof(ISOClause.IsDeleted),
+                            nameof(ISOClause.DeleteBy), nameof(ISOClause.DeleteTime), nameof(ISOClause.UpdateTime));
+                        if (!update.Success) throw new InvalidOperationException(update.Error);
+                        updated++;
+                    }
+                    else
+                    {
+                        item.CreateTime = DateTime.Now;
+                        var insert = await _db.InsertAsync(item);
+                        if (!insert.Success) throw new InvalidOperationException(insert.Error);
+                        added++;
+                    }
+                }
+
+                if (changedCodes.Count > 0)
+                {
+                    var changed = changedCodes.ToList();
+                    var attrs = await _db.Client.Queryable<ClauseAttr>()
+                        .Where(a => changed.Contains(a.ClauseCode) && !a.IsDeleted)
+                        .ToListAsync();
+                    foreach (var attr in attrs)
+                    {
+                        attr.IsDeleted = true;
+                        attr.IsValid = 0;
+                        attr.Status = "stale";
+                        attr.UpdateTime = DateTime.Now;
+                        var update = await _db.UpdateAsync(attr,
+                            nameof(ClauseAttr.IsDeleted), nameof(ClauseAttr.IsValid),
+                            nameof(ClauseAttr.Status), nameof(ClauseAttr.UpdateTime));
+                        if (!update.Success) throw new InvalidOperationException(update.Error);
+                    }
+                }
+                tran.Commit();
+            }
+            catch (Exception ex)
             {
-                Code = Guid.NewGuid().ToString("N"),
-                StandardCode = std.Code,
-                ClauseNumber = number,
-                Title = item.Title,
-                Description = item.Description,
-                ParentCode = parentCode,
-                IsValid = 1,
-                IsDeleted = false,
-                Sort = maxSort,
-                CreateTime = DateTime.Now,
-            };
-            await _db.InsertAsync(entity);
-            codeByNumber[number] = entity.Code;
-            byNumber[number] = entity;
-            added++;
+                tran.Rollback();
+                _logger.LogError(ex, "[StandardSource] 稳定条款重建失败 Standard={Standard}", std.Code);
+                return StandardClauseApplyResult.Fail($"条款写入失败，已回滚：{ex.Message}");
+            }
         }
 
         _logger.LogInformation("[StandardSource] 标准 {Std} 条款写入：新增 {Added} / 更新 {Updated} / 跳过 {Skipped}",
@@ -300,7 +462,7 @@ public class StandardSourceService
             Updated = updated,
             Skipped = skipped,
             Cleared = cleared,
-            Total = byNumber.Count,
+            Total = overwrite ? planned.Count : existing.Count(c => !c.IsDeleted) + added,
         };
 
         // 写入成功后立刻重建「条款 Markdown」——派生视图，失败不阻塞条款落库
@@ -561,10 +723,11 @@ public class StandardSourceService
 
         Flush();
 
-        // 去重（同编号重复出现时保留第一次）并按编号排序稳定
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        // 目录可能先于正文出现且没有点线；优先保留有正文的同编号条款。
         return result
-            .Where(c => c.ClauseNumber.Length > 0 && seen.Add(c.ClauseNumber))
+            .Where(c => c.ClauseNumber.Length > 0)
+            .GroupBy(c => c.ClauseNumber, StringComparer.Ordinal)
+            .Select(g => g.OrderByDescending(c => !string.IsNullOrWhiteSpace(c.Description)).First())
             .OrderBy(c => c.ClauseNumber, ClauseNumberComparer.Instance)
             .ToList();
     }

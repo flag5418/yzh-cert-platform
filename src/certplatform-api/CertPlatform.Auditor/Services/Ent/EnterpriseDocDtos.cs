@@ -89,5 +89,11 @@ namespace CertPlatform.Auditor.Services.Ent
 
         /// <summary>触发来源：<c>batch:{上传批次}</c> / <c>regen</c> / <c>plan-change</c></summary>
         public string BatchCode { get; set; } = "";
+
+        /// <summary>
+        /// ★ 强制重跑：<c>true</c> 时不走「指纹未变 ⇒ 沿用旧结果」的短路。
+        /// <para>「重新分析」按钮用它；普通「开始提取」保持 <c>false</c>。</para>
+        /// </summary>
+        public bool Force { get; set; }
     }
 }

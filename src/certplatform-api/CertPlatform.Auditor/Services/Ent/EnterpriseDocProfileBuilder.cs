@@ -254,10 +254,10 @@ public static class EnterpriseDocProfileBuilder
         if (cleaned.Length < 80 && headings.Count > 0)
         {
             var first = headings[0];
-            var end = first.CharStart + 1200;
+            var end = Math.Min(first.CharStart + 1200, text.Length);
             if (headings.Count > 1) end = Math.Min(end, headings[1].CharStart);
             var bodyStart = first.CharStart + FindLineEnd(text.Substring(first.CharStart));
-            if (bodyStart < end)
+            if (bodyStart >= 0 && bodyStart < end)
                 cleaned = CleanText(text.Substring(bodyStart, end - bodyStart));
         }
 
@@ -309,13 +309,21 @@ public static class EnterpriseDocProfileBuilder
 
     private static string GuessDocType(string fileName, string folder)
     {
+        var fn = fileName ?? "";
+        // ★ 索引类只看「文件名」：文件夹名里的“封面人名手写”是上传目录说明，
+        //   拼进判定会把同目录下的《管理评审控制程序》也误判成索引。
+        if (fn.Contains("封面") || fn.Contains("目录") || fn.Contains("汇编") || fn.Contains("清单"))
+            return "文件索引";
         var s = $"{folder}/{fileName}";
+        // ★ 文件名带“程序”优先：`24管理评审控制程序` 是程序文件，
+        //   不能因为“管理评审”四个字被当成评审记录。
+        if (fn.Contains("程序")) return "程序文件";
         if (s.Contains("手册")) return "质量手册";
-        if (s.Contains("程序")) return "程序文件";
+        if (s.Contains("内审")) return "审核记录";
+        if (s.Contains("管理评审")) return "评审记录";
         if (s.Contains("作业指导") || s.Contains("操作规程") || s.Contains("指导书")) return "作业指导书";
         if (s.Contains("记录") || s.Contains("表单") || s.Contains("表格")) return "记录表单";
         if (s.Contains("方针") || s.Contains("目标")) return "方针目标";
-        if (s.Contains("管理评审") || s.Contains("内审") || s.Contains("审核报告")) return "体系记录";
         return "体系文件";
     }
 

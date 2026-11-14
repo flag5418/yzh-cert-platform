@@ -158,6 +158,32 @@ public class DocExtractTests
         Assert.Empty(ClauseExtractExecutor.SplitIntoChunks("", 100, 8));
     }
 
+    [Theory]
+    [InlineData("第一段\r\n第二段\r\n第三段", 8)]
+    [InlineData("abcdefghijk\n最后一段", 5)]
+    [InlineData("第一段\n第二段\n", 5)]
+    public void SplitIntoChunks_PreservesExactOriginalText(string text, int size)
+    {
+        var chunks = ClauseExtractExecutor.SplitIntoChunks(text, size, 20);
+        Assert.All(chunks, chunk => Assert.True(chunk.Length <= size));
+        Assert.Equal(text, string.Concat(chunks));
+    }
+
+    [Fact]
+    public void SplitIntoChunks_DoesNotSplitSurrogatePairs()
+    {
+        const string text = "abc😀def";
+        var chunks = ClauseExtractExecutor.SplitIntoChunks(text, 4, 20);
+
+        Assert.Equal(text, string.Concat(chunks));
+        Assert.All(chunks, chunk =>
+        {
+            Assert.True(chunk.Length <= 4);
+            Assert.False(char.IsHighSurrogate(chunk[^1]));
+            Assert.False(char.IsLowSurrogate(chunk[0]));
+        });
+    }
+
     // ═══════════════════════════════════════════════
     // ④ 条款号自然序
     // ═══════════════════════════════════════════════
