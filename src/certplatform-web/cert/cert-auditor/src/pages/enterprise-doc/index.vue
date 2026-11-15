@@ -48,6 +48,7 @@ import type {
   EntDocVersionRow,
 } from '@share/api/ent/enterprise-doc'
 import { EnterpriseDocLogic } from './logic'
+import type { ExtractionTab } from './logic'
 import {
   confidenceBadge,
   convertBadge,
@@ -58,6 +59,7 @@ import {
   formatSize,
   isFolderNode,
   planActionBadge,
+  prettyJson,
   queueStatusBadge,
   standardExtractBadge,
   taskTypeText,
@@ -106,6 +108,49 @@ function collapseAll(): void {
 const {
   extractionVisible, extractionLoading, extractionFile, extractionTabs, extractionActive,
 } = logic
+
+// ── 完整提取 JSON（模式提取的结果不在 Clauses 里，必须能看原样） ──────────
+const rawJsonVisible = ref(false)
+const rawJsonTitle = ref('')
+const rawJsonText = ref('')
+
+function openRawJson(tab: ExtractionTab): void {
+  rawJsonTitle.value = `${extractionFile.value?.FileName || '提取结果'} / ${tab.standardName}`
+  rawJsonText.value = prettyJson(tab.rawJson)
+  rawJsonVisible.value = true
+}
+
+async function copyRawJson(): Promise<void> {
+  if (!rawJsonText.value) return
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(rawJsonText.value)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = rawJsonText.value
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    ElMessage.success('完整 JSON 已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动选择文本')
+  }
+}
+
+function downloadRawJson(): void {
+  if (!rawJsonText.value) return
+  const blob = new Blob([rawJsonText.value], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${(extractionFile.value?.FileName || 'extraction').replace(/[\\/:*?"<>|]/g, '_')}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // ── 原文核对抽屉 ────────────────────────────────────────────────
 const {
@@ -408,10 +453,10 @@ onBeforeUnmount(() => {
                 v-if="selectedCode"
                 type="primary"
                 size="small"
-                :disabled="!hasPlan"
-                @click="logic.startExtract()"
+                :disabled="!hasPlan || isBusy"
+                @click="logic.startExtract(selectedRows)"
               >
-                开始提取
+                {{ selectedRows.length > 0 ? '提取选中（' + selectedRows.length + '）' : '开始提取' }}
               </el-button>
               <el-button v-if="selectedCode" type="primary" size="small" :icon="Upload" @click="logic.openUpload()">
                 上传文件
@@ -739,7 +784,7 @@ onBeforeUnmount(() => {
             v-for="tab in extractionTabs"
             :key="tab.standardCode"
             :name="tab.standardCode"
-            :label="tab.standardName + '（' + tab.clauses.length + ' 条）'"
+            :label="tab.standardName + '（' + (tab.modeOutput ? '模式结果' : tab.clauses.length + ' 条') + '）'"
           >
             <div class="ed-drawer__head">
               <YzhStatusBadge
@@ -749,6 +794,15 @@ onBeforeUnmount(() => {
               <span class="ed-dim">标准编号：{{ tab.shortCode }}</span>
               <span v-if="tab.row?.ExtractedAt" class="ed-dim">提取时间：{{ tab.row.ExtractedAt }}</span>
               <span v-if="tab.row?.PromptVersion" class="ed-dim">提示词：{{ tab.row.PromptCode }} / {{ tab.row.PromptVersion }}</span>
+              <el-button
+                v-if="tab.rawJson"
+                type="primary"
+                text
+                size="small"
+                @click="openRawJson(tab)"
+              >
+                完整 JSON
+              </el-button>
             </div>
 
             <el-alert
@@ -773,14 +827,24 @@ onBeforeUnmount(() => {
               title="这份提取结果的数据格式有问题（无法解析），请重新提取。"
             />
 
+            <el-alert
+              v-if="tab.modeOutput"
+              type="success"
+              :closable="false"
+              show-icon
+              :title="'本份文档按「' + (tab.content?.ExtractionMode || '模式') + '」提取，结果在 ModeOutput；下方为完整字段。'"
+            />
+
+            <pre v-if="tab.modeOutput" class="ed-mode-json">{{ prettyJson(tab.modeOutput) }}</pre>
+
             <YzhEmptyState
-              v-if="tab.clauses.length === 0"
+              v-if="tab.clauses.length === 0 && !tab.modeOutput"
               title="这个标准没有提取到条款"
               :description="tab.row ? '模型没有在这份文件里找到可引用的原文，可看上面的提示了解原因。' : '计划里有这个标准，但还没有跑过提取。'"
             />
 
             <YzhTable
-              v-else
+              v-if="tab.clauses.length > 0"
               :columns="clauseColumns"
               :data="tab.clauses"
               :toolbar="false"
@@ -805,6 +869,21 @@ onBeforeUnmount(() => {
         </el-tabs>
       </div>
     </YzhDrawer>
+
+    <!-- ══════════════════ 完整提取 JSON ══════════════════ -->
+    <YzhDialog
+      v-model="rawJsonVisible"
+      :title="'完整提取 JSON — ' + rawJsonTitle"
+      width="1000px"
+      :show-footer="false"
+      :append-to-body="true"
+    >
+      <div class="ed-json-actions">
+        <el-button type="primary" text @click="copyRawJson">复制 JSON</el-button>
+        <el-button type="primary" text @click="downloadRawJson">下载 JSON</el-button>
+      </div>
+      <pre class="ed-json">{{ rawJsonText }}</pre>
+    </YzhDialog>
 
     <!-- ══════════════════ 原文核对抽屉（锚点高亮） ══════════════════ -->
     <YzhDrawer
@@ -1246,6 +1325,38 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
+/* 模式提取结果 / 完整 JSON：保留原样，供审核员核对字段 */
+.ed-mode-json,
+.ed-json {
+  margin: 0;
+  padding: var(--yzh-space-3, 12px);
+  background: var(--yzh-color-bg-subtle, #f9fafb);
+  border: 1px solid var(--yzh-color-border-light, #f1f5f9);
+  border-radius: var(--yzh-radius-sm, 4px);
+  font-family: var(--yzh-font-family-mono, monospace);
+  font-size: var(--yzh-font-size-xs, 12px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--yzh-color-text-body, var(--el-text-color-primary));
+  overflow: auto;
+}
+
+.ed-mode-json {
+  max-height: 46vh;
+}
+
+.ed-json {
+  max-height: 62vh;
+}
+
+.ed-json-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-2, 8px);
+  margin-bottom: var(--yzh-space-2, 8px);
+}
+
 .ed-anchor,
 .ed-excerpt {
   display: block;
@@ -1272,18 +1383,19 @@ onBeforeUnmount(() => {
 .ed-md {
   margin: 0;
   padding: var(--yzh-space-3, 12px);
-  background: var(--yzh-color-fill-light, #fafafa);
+  background: var(--yzh-color-bg-subtle, #f9fafb);
+  border: 1px solid var(--yzh-color-border-light, #f1f5f9);
   border-radius: var(--yzh-radius-sm, 4px);
   font-family: var(--yzh-font-family-mono, monospace);
   font-size: var(--yzh-font-size-xs, 12px);
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--el-text-color-primary);
+  color: var(--yzh-color-text-body, var(--el-text-color-primary));
 }
 
 .ed-md__hit {
-  background: var(--yzh-color-warning-light-5, #fdf6ec);
+  background: var(--yzh-color-warning-light-9, #fdf6ec);
   color: var(--yzh-color-warning, #e6a23c);
   font-weight: 600;
   padding: 0 var(--yzh-space-1, 4px);
@@ -1302,7 +1414,7 @@ onBeforeUnmount(() => {
   width: 100%;
   border: 0;
   border-radius: var(--yzh-radius-sm, 4px);
-  background: var(--yzh-color-fill-light, #fafafa);
+  background: var(--yzh-color-bg-subtle, #f9fafb);
 }
 
 /* ── 上传 ── */

@@ -45,6 +45,7 @@ import {
   entDocTree,
   entDocVersions,
   type EntDocClauseHit,
+  type EntDocExtractContent,
   type EntDocExtractionFull,
   type EntDocNode,
   type EntDocPlanInfo,
@@ -79,7 +80,13 @@ export interface ExtractionTab {
   standardName: string
   /** 该标准的产物行（`null` = 计划内但还没提取） */
   row: EntDocExtractionFull | null
+  /** 解析后的完整根（含 `ExtractionMode` / `ModeOutput`；坏 JSON 为 `null`） */
+  content: EntDocExtractContent | null
   clauses: EntDocClauseHit[]
+  /** ★ 模式提取的完整业务结果；`null` = 旧链/无结果 */
+  modeOutput: Record<string, unknown> | null
+  /** 原始 `ContentJson`（完整 JSON 查看/下载用；`null` = 无产物） */
+  rawJson: string | null
   /** JSON 解析失败的原文（排障用；`null` = 正常） */
   broken: string | null
 }
@@ -470,6 +477,10 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
       ElMessage.warning(this.planReason.value || '该企业还没有有效认证计划，请先创建计划')
       return
     }
+    if (this.isBusy.value) {
+      ElMessage.warning('当前企业已有未结束的队列，请等待队列结束再提交')
+      return
+    }
     try {
       const codes = rows && rows.length > 0 ? rows.map((r) => r.Code) : undefined
       const r = await entDocExtract(ent, codes, force)
@@ -566,12 +577,17 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
           shortCode: o.short,
           standardName: o.name,
           row: r,
+          content,
           clauses: content?.Clauses ? sortClauses(content.Clauses) : [],
+          modeOutput: content?.ModeOutput ?? null,
+          rawJson: r?.ContentJson ?? null,
           broken: r?.ContentJson && !content ? r.ContentJson : null,
         }
       })
 
-      const firstWithData = this.extractionTabs.value.find((t) => t.clauses.length > 0)
+      const firstWithData = this.extractionTabs.value.find(
+        (t) => t.clauses.length > 0 || t.modeOutput != null,
+      )
       this.extractionActive.value = (firstWithData ?? this.extractionTabs.value[0])?.standardCode ?? ''
     } catch (e) {
       this.reportError(e, '读取提取结果失败')

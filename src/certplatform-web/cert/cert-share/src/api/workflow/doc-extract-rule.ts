@@ -111,15 +111,21 @@ export interface DocExtractPromptDto {
 export interface DocExtractPromptSaveRequest {
   template: string
   standardCode?: string
+  /** 提示词代码；缺省 = doc_clause_extract */
+  promptCode?: string
 }
 
 /**
  * 读取某标准的文档提取提示词。
  * <para>标准级（ScopeKey=标准Code）优先；缺失回落到全局默认（ScopeKey=空）。</para>
  * @param standardCode 标准短码（如 iso9001）；空 = 取全局默认
+ * @param promptCode 提示词代码；缺省 = doc_clause_extract（条款逐条）
  */
-export async function getPrompt(standardCode?: string): Promise<DocExtractPromptDto> {
-  const query = standardCode ? `?standardCode=${encodeURIComponent(standardCode)}` : ''
+export async function getPrompt(standardCode?: string, promptCode?: string): Promise<DocExtractPromptDto> {
+  const params = new URLSearchParams()
+  if (standardCode) params.set('standardCode', standardCode)
+  if (promptCode) params.set('promptCode', promptCode)
+  const query = params.toString() ? `?${params.toString()}` : ''
   const res = await yzhApi.get<ApiResponse<DocExtractPromptDto>>(`${DOC_EXTRACT_RULE_BASE}/prompt${query}`)
   return res.data
 }
@@ -135,6 +141,7 @@ export async function savePrompt(data: DocExtractPromptSaveRequest): Promise<voi
   await yzhApi.post(`${DOC_EXTRACT_RULE_BASE}/prompt`, {
     Template: data.template,
     StandardCode: data.standardCode ?? '',
+    PromptCode: data.promptCode ?? 'doc_clause_extract',
   })
 }
 

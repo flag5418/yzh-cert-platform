@@ -140,20 +140,9 @@ namespace CertPlatform.Auditor.Services.Ent
                 // 仅在实际模板、标准、模型和转换文本均已读取后才能判断缓存。
                 var existing = await store.GetAsync(doc.Code!, payload.StandardCode);
 
-                // ── ④ 条款清单（DocCheckMode ≠ none） ──
-                var (clauses, clauseNote) = await ResolveClausesAsync(db, core, standard);
-                if (clauses.Count == 0)
-                {
-                    var why = string.IsNullOrEmpty(clauseNote)
-                        ? $"标准【{standard.StandardCode}】下没有需要核对企业资料的条款"
-                        : clauseNote;
-                    await store.UpsertAsync(doc.Code!, payload.StandardCode, doc.EnterpriseCode,
-                        null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
-                        DocExtractPromptService.PromptCode, DocExtractPromptService.PromptVersion,
-                        ExtractRowStatus.Skipped, why, null, cancellationToken);
-                    await docSvc.RecomputeExtractStatusAsync(doc.Code!);
-                    return new TaskExecutionResult { Success = true, Message = why, Retryable = false };
-                }
+                // ── ④ 条款清单（仅 clause_full 需要；模式提取不依赖条款清单） ──
+                // 注意：不能在模式分支前解析并因“条款数为 0”直接跳过，
+                // 否则过程/指导/记录这类本就不需要逐条款的文档会被整份丢弃。
 
                 // ── ⑤ 读 Markdown ──
                 string markdown;
@@ -203,6 +192,21 @@ namespace CertPlatform.Auditor.Services.Ent
                     return await ExecuteModePromptAsync(
                         db, llm, prompts, store, docSvc, doc, standard, existing,
                         markdown, extractionMode, payload.StandardCode, payload.Force, cancellationToken);
+
+                // ── ④ 条款清单：只有 clause_full/legacy 逐条款链才需要 ──
+                var (clauses, clauseNote) = await ResolveClausesAsync(db, core, standard);
+                if (clauses.Count == 0)
+                {
+                    var why = string.IsNullOrEmpty(clauseNote)
+                        ? $"标准【{standard.StandardCode}】下没有需要核对企业资料的条款"
+                        : clauseNote;
+                    await store.UpsertAsync(doc.Code!, payload.StandardCode, doc.EnterpriseCode,
+                        null, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                        DocExtractPromptService.PromptCode, DocExtractPromptService.PromptVersion,
+                        ExtractRowStatus.Skipped, why, null, cancellationToken);
+                    await docSvc.RecomputeExtractStatusAsync(doc.Code!);
+                    return new TaskExecutionResult { Success = true, Message = why, Retryable = false };
+                }
 
                 // 条款输入使用派生的条款 Markdown，不能退回原始标准 Markdown。
                 var fullStandardMarkdown = string.Empty;

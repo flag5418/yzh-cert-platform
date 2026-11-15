@@ -230,9 +230,12 @@ export function parseExtractContent(json?: string | null): EntDocExtractContent 
     if (!obj || typeof obj !== 'object') return null
     // ★ 大小写双读：后端序列化是 PascalCase，但历史行可能是 camelCase
     const clauses = obj.Clauses ?? obj.clauses
+    const modeOutput = obj.ModeOutput ?? obj.modeOutput
     return {
       DocMeta: obj.DocMeta ?? obj.docMeta ?? undefined,
       Clauses: Array.isArray(clauses) ? (clauses as EntDocClauseHit[]) : [],
+      ExtractionMode: obj.ExtractionMode ?? obj.extractionMode ?? undefined,
+      ModeOutput: modeOutput && typeof modeOutput === 'object' ? modeOutput : undefined,
     }
   } catch {
     return null
@@ -242,6 +245,30 @@ export function parseExtractContent(json?: string | null): EntDocExtractContent 
 /** 条款命中行排序（按条款号自然序） */
 export function sortClauses(list: EntDocClauseHit[]): EntDocClauseHit[] {
   return [...list].sort((a, b) => compareClauseNo(a.ClauseNumber ?? '', b.ClauseNumber ?? ''))
+}
+
+/**
+ * 任意 JSON 值 → 可读的多行文本。
+ *
+ * 用于提取抽屉的「完整 JSON / ModeOutput」查看：解析失败不抛，原样返回，
+ * 保证坏数据也能被审核员看到，而不是页面报错或显示空白。
+ */
+export function prettyJson(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (text.length === 0) return ''
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2)
+    } catch {
+      return text
+    }
+  }
+  try {
+    return JSON.stringify(value, null, 2) ?? ''
+  } catch {
+    return String(value)
+  }
 }
 
 /** 置信度 → 百分比文案（`0.85` → `85%`；缺省 `-`） */

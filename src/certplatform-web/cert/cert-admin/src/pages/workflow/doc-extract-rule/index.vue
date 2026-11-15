@@ -91,6 +91,21 @@ const treeData = computed(() => buildTree(ruleList.value))
 // ── 当前选中的标准 Code ──
 const selectedCode = ref<string>('')
 
+/** 提示词类型：条款逐条是旧口径；其余 8 条是 2026-11-14 V2 类型提示词 */
+const PROMPT_TYPES = [
+  { code: 'doc_clause_extract', name: '条款逐条提取（当前）' },
+  { code: 'doc_extract_process_profile', name: '程序 / 过程文件' },
+  { code: 'doc_extract_record_profile', name: '记录 / 表单' },
+  { code: 'doc_extract_index', name: '文件索引' },
+  { code: 'doc_extract_audit', name: '内审 / 管理评审' },
+  { code: 'doc_extract_document_control', name: '文件控制类' },
+  { code: 'doc_extract_work_instruction_citation', name: '作业指导书' },
+  { code: 'doc_extract_context_list', name: '组织环境 / 相关方清单' },
+  { code: 'doc_extract_policy_profile', name: '制度 / 管理办法' },
+] as const
+
+const promptType = ref<string>('doc_clause_extract')
+
 function onTreeNodeClick(node: StdStageTreeNode) {
   if (node.Type !== 'standard') return
   selectedCode.value = String(node.Code)
@@ -113,8 +128,12 @@ async function loadDetail(code: string) {
   }
 }
 
-// ★ 关键修复：selectedCode 变了立刻加载；同时首次加载完后也立刻加载第一个标准
-watch(selectedCode, loadDetail)
+// ★ 关键修复：selectedCode 变了立刻加载详情和提示词；同时首次加载完后也立刻加载第一个标准
+watch(selectedCode, async (code) => {
+  if (!code || code.startsWith('__')) return
+  await loadDetail(code)
+  await loadPrompt()
+})
 
 watch(ruleList, (list) => {
   if (list.length && !selectedCode.value) {
@@ -128,11 +147,14 @@ const promptLoading = ref(false)
 const promptData = ref<DocExtractPromptDto | null>(null)
 const markdownCollapsed = ref(false)
 
-async function loadPrompt(standardCode: string) {
-  if (!standardCode) return
+async function loadPrompt() {
+  // 条款逐条 = 标准级；8 条类型提示词 = 全局默认，不随标准变化
+  const scopeCode = promptType.value === 'doc_clause_extract'
+    ? (detail.value?.StandardCode ?? '')
+    : ''
   promptLoading.value = true
   try {
-    promptData.value = await getPrompt(standardCode)
+    promptData.value = await getPrompt(scopeCode, promptType.value)
     promptEditing.value = promptData.value?.Template ?? ''
   } catch (e: any) {
     ElMessage.error(`加载提示词失败: ${e?.message ?? e}`)
@@ -141,15 +163,8 @@ async function loadPrompt(standardCode: string) {
   }
 }
 
-// 选中标准变了 → 加载该标准的提示词
-watch(selectedCode, (code) => {
-  if (code && !code.startsWith('__')) {
-    const rule = ruleList.value.find(r => r.Code === code)
-    if (rule?.StandardCode) {
-      loadPrompt(rule.StandardCode)
-    }
-  }
-})
+// 切换提示词类型 → 重新加载；类型提示词是全局的，不受左侧标准影响
+watch(promptType, loadPrompt)
 
 // ── 保存（提示词写回 cert_prompt_template，ScopeKey = 标准Code） ──
 const saving = ref(false)
@@ -160,7 +175,8 @@ async function handleSave() {
   try {
     await savePrompt({
       template: promptEditing.value,
-      standardCode: detail.value.StandardCode,
+      standardCode: promptType.value === 'doc_clause_extract' ? detail.value.StandardCode : '',
+      promptCode: promptType.value,
     })
     ElMessage.success('保存成功')
   } catch (e: any) {
@@ -265,6 +281,22 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
           <div class="doc-extract-rule__info">
             <span class="doc-extract-rule__info-title">{{ detail.StandardName }}</span>
             <span class="doc-extract-rule__info-meta">v{{ detail.Version }} · {{ detail.IsPublished ? '已发布' : '草稿' }}</span>
+          </div>
+
+          <!-- 提示词类型：条款逐条 / 8 类文档模式 -->
+          <div class="doc-extract-rule__type-bar">
+            <span class="doc-extract-rule__type-label">提示词类型</span>
+            <el-select v-model="promptType" size="small" class="doc-extract-rule__type-select">
+              <el-option
+                v-for="t in PROMPT_TYPES"
+                :key="t.code"
+                :label="t.name"
+                :value="t.code"
+              />
+            </el-select>
+            <span v-if="promptType !== 'doc_clause_extract'" class="doc-extract-rule__type-hint">
+              类型提示词为全局默认，不随左侧标准变化
+            </span>
           </div>
 
           <!-- Prompt 编辑器 -->
@@ -422,6 +454,33 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
 }
 
 .doc-extract-rule__info-meta {
+  font-size: var(--yzh-font-size-sm, 13px);
+  color: var(--yzh-color-text-secondary, #909399);
+}
+
+.doc-extract-rule__type-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--yzh-space-3, 12px);
+  margin-bottom: var(--yzh-space-4, 16px);
+  padding: var(--yzh-space-3, 12px);
+  background: var(--yzh-color-bg-subtle, #1e1e1e);
+  border: 1px solid var(--yzh-color-border, #333);
+  border-radius: var(--yzh-border-radius, 4px);
+}
+
+.doc-extract-rule__type-label {
+  flex-shrink: 0;
+  font-size: var(--yzh-font-size-sm, 13px);
+  font-weight: 600;
+  color: var(--yzh-color-text-secondary, #bbb);
+}
+
+.doc-extract-rule__type-select {
+  width: 260px;
+}
+
+.doc-extract-rule__type-hint {
   font-size: var(--yzh-font-size-sm, 13px);
   color: var(--yzh-color-text-secondary, #909399);
 }

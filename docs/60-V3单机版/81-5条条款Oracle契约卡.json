@@ -1,0 +1,695 @@
+{
+  "ContractVersion": "v3",
+  "FrozenAt": "2026-11-15",
+  "Source": "manual_oracle",
+  "Note": "P0 冻结稿；不写库、不覆盖生产提示词。",
+  "DocFactModels": {
+    "Common": {
+      "fields": ["DocCode", "DocName", "DocClass", "DocRole", "ExtractionDepth", "NameMatch", "ApplicabilityMatch"],
+      "NameMatch": ["exact", "alias", "mismatch", "not_found"],
+      "ApplicabilityMatch": ["same", "different", "unknown"],
+      "ExtractionDepth": ["citation_only", "structured", "criteria", "fact_profile"]
+    },
+    "record": {
+      "questions": 6,
+      "fields": ["DocClass", "CoreRole", "KeyFields", "FillStatus", "SampleRows", "Coverage"],
+      "FillStatus": ["filled", "partial", "blank", "template_only", "unreadable", "absent"],
+      "InstanceStatus": ["has_instance", "template_only", "zero_event", "unknown"],
+      "Coverage": ["全量", "抽样", "无实例"]
+    },
+    "procedure": {
+      "questions": 6,
+      "fields": ["DocClass", "CoreRole", "Scope", "KeyControls", "RelatedForms", "RelatedDocs"]
+    },
+    "work_instruction": {
+      "questions": 6,
+      "fields": ["DocClass", "CoreRole", "Applicable", "InspectionItems", "AcceptanceCriteria", "RelatedRecords"]
+    },
+    "manual_policy": {
+      "questions": 4,
+      "fields": ["DocClass", "CoreRole", "ClauseAnchors", "KeyCommitments", "RelatedProcedures"]
+    }
+  },
+  "AuditEvidenceOutput": {
+    "fields": ["evidence_used", "coverage_gap", "report_only", "cross_check_results", "audit_evidence", "conclusion", "doubts"],
+    "Match": ["exact", "alias", "partial", "missing"],
+    "Gap": ["template_only", "blank", "partial", "not_found"],
+    "Conclusion": ["conformant", "minor_nc", "major_nc", "observation", "unknown"]
+  },
+  "Clauses": [
+    {
+      "ClauseCode": "7.5.1",
+      "ClauseNumber": "7.5.1",
+      "ChapterCode": "7",
+      "PDCAPhase": ["P", "D"],
+      "ContractVersion": "v3",
+      "EvidenceItems": [
+        {
+          "ItemId": "E1",
+          "DocRole": "procedure",
+          "EvidenceRole": "establishment",
+          "Name": "生产和服务提供控制程序",
+          "NameAliases": ["生产过程控制程序", "生产控制程序"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["生产计划", "作业指导", "过程确认", "标识", "包装", "放行", "交付后活动"],
+          "Frequency": "每批",
+          "Coverage": "全产品全批次",
+          "ReportUse": ["establishment", "coverage"]
+        },
+        {
+          "ItemId": "E2",
+          "DocRole": "work_instruction",
+          "EvidenceRole": "criteria",
+          "Name": "装配作业指导书",
+          "NameAliases": ["手动轮椅车装配作业指导书", "装配工艺卡"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["工序步骤", "使用设备", "工艺参数", "自检项目", "包装标识"],
+          "Frequency": "每批",
+          "Coverage": "全产品",
+          "ReportUse": ["criteria"]
+        },
+        {
+          "ItemId": "E3",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "生产记录",
+          "NameAliases": ["随工单", "生产过程自检记录", "生产指令单"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["产品名称", "规格型号", "批号", "数量", "工序", "过程参数", "检验结果", "操作人员", "日期", "放行人"],
+          "Frequency": "每批",
+          "Coverage": "全批次",
+          "ReportUse": ["sample", "coverage", "counter"]
+        },
+        {
+          "ItemId": "E4",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "产品放行记录",
+          "NameAliases": ["产品放行审核记录"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["批号", "放行数量", "放行人", "日期", "结论"],
+          "Frequency": "每批",
+          "Coverage": "全批次",
+          "ReportUse": ["sample", "counter"]
+        },
+        {
+          "ItemId": "E5",
+          "DocRole": "record",
+          "EvidenceRole": "support",
+          "Name": "交付后活动记录",
+          "NameAliases": ["交付后服务记录"],
+          "Required": false,
+          "Condition": "当存在交付后活动（安装、维修、服务）时",
+          "ExpectedFields": ["产品/批次", "活动内容", "执行人", "日期"],
+          "Frequency": "每事件",
+          "Coverage": "抽样",
+          "ReportUse": ["support"]
+        }
+      ],
+      "Dependencies": [
+        {"Clause": "7.5.9", "Role": "support", "Use": "批号追溯"},
+        {"Clause": "4.2.5", "Role": "evidence_rule", "Use": "记录控制要求"}
+      ],
+      "CrossChecks": [
+        {
+          "CheckId": "C1",
+          "Question": "生产记录、放行记录与 7.5.9 追溯记录中的批号/数量是否一致",
+          "Docs": ["生产记录", "产品放行记录", "追溯记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C2",
+          "Question": "生产记录中的设备与设备台账/校准状态是否一致",
+          "Docs": ["生产记录", "设备台账", "校准记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C3",
+          "Question": "生产记录中的操作人员与培训/岗位资格是否一致",
+          "Docs": ["生产记录", "培训记录", "岗位资格记录"],
+          "MismatchUse": "doubts"
+        }
+      ],
+      "AuditorRules": [
+        "批记录模板存在但抽样为空 = template_only，不判未执行",
+        "报告中的 3 个批次/现场批次只作 report_only，不回填文档事实",
+        "未提供批准流通数量时，不推断未批准",
+        "未提供 7.5.9 追溯记录时，只进 doubts"
+      ]
+    },
+    {
+      "ClauseCode": "8.2.4",
+      "ClauseNumber": "8.2.4",
+      "ChapterCode": "8",
+      "PDCAPhase": ["C"],
+      "ContractVersion": "v3",
+      "EvidenceItems": [
+        {
+          "ItemId": "E1",
+          "DocRole": "procedure",
+          "EvidenceRole": "establishment",
+          "Name": "内部审核程序",
+          "NameAliases": ["内部审核控制程序", "内审程序"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["审核方案", "审核范围", "审核频次", "审核方法", "审核员独立性", "不符合处理", "跟踪验证"],
+          "Frequency": "每年至少一次",
+          "Coverage": "全部门全条款",
+          "ReportUse": ["establishment"]
+        },
+        {
+          "ItemId": "E2",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "内部审核计划",
+          "NameAliases": ["内审计划", "年度内审计划"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["审核目的", "审核范围", "审核准则", "日期", "部门", "审核组长", "审核员"],
+          "Frequency": "每年至少一次",
+          "Coverage": "全部门",
+          "ReportUse": ["coverage"]
+        },
+        {
+          "ItemId": "E3",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "内审签到表",
+          "NameAliases": ["内部审核签到表", "签到表"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["日期", "部门", "姓名", "角色"],
+          "Frequency": "每次",
+          "Coverage": "全部门",
+          "ReportUse": ["support"]
+        },
+        {
+          "ItemId": "E4",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "内审检查表",
+          "NameAliases": ["内部审核检查表", "检查表"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["条款", "检查内容", "抽样", "发现", "审核员"],
+          "Frequency": "每次",
+          "Coverage": "全条款",
+          "ReportUse": ["sample", "coverage"]
+        },
+        {
+          "ItemId": "E5",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "内审不合格报告",
+          "NameAliases": ["内审不合格项报告", "不合格报告"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["不合格事实", "条款", "部门", "严重程度", "纠正措施", "验证"],
+          "Frequency": "每事件",
+          "Coverage": "全部门",
+          "ReportUse": ["counter"]
+        },
+        {
+          "ItemId": "E6",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "内部质量审核报告",
+          "NameAliases": ["内审报告", "内部审核报告"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["审核范围", "日期", "审核员", "不合格统计", "结论", "分发"],
+          "Frequency": "每次",
+          "Coverage": "全部门",
+          "ReportUse": ["combination", "coverage"]
+        },
+        {
+          "ItemId": "E7",
+          "DocRole": "record",
+          "EvidenceRole": "support",
+          "Name": "审核员任命/能力记录",
+          "NameAliases": ["内审员任命", "内审员资格"],
+          "Required": false,
+          "Condition": "当内审员为兼职或跨部门审核时",
+          "ExpectedFields": ["姓名", "资格", "任命", "独立性声明"],
+          "Frequency": "每年",
+          "Coverage": "抽样",
+          "ReportUse": ["support"]
+        }
+      ],
+      "Dependencies": [
+        {"Clause": "4.2.5", "Role": "evidence_rule", "Use": "记录控制要求"},
+        {"Clause": "6.2", "Role": "support", "Use": "审核员能力"}
+      ],
+      "CrossChecks": [
+        {
+          "CheckId": "C1",
+          "Question": "计划中的审核员与检查表、内审报告中的审核员是否一致",
+          "Docs": ["内审计划", "内审检查表", "内部质量审核报告"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C2",
+          "Question": "计划中的受审核部门与检查表、不合格报告中的部门是否一致",
+          "Docs": ["内审计划", "内审检查表", "内审不合格报告"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C3",
+          "Question": "不合格报告数量与内审报告统计是否一致",
+          "Docs": ["内审不合格报告", "内部质量审核报告"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C4",
+          "Question": "审核员是否审核了本部门工作",
+          "Docs": ["内审计划", "内审检查表", "审核员任命/能力记录"],
+          "MismatchUse": "doubts"
+        }
+      ],
+      "AuditorRules": [
+        "单份文档不能得出本次内审结论；必须组合计划/签到/检查表/不合格报告/内审报告",
+        "名单不一致只进 doubts，不直接开不符合项",
+        "NC 不作为核心，可忽略；但组合结论必须可追溯",
+        "报告结论为符合时，仍需并列具体不合格项"
+      ]
+    },
+    {
+      "ClauseCode": "8.2.6",
+      "ClauseNumber": "8.2.6",
+      "ChapterCode": "8",
+      "PDCAPhase": ["C"],
+      "ContractVersion": "v3",
+      "EvidenceItems": [
+        {
+          "ItemId": "E1",
+          "DocRole": "procedure",
+          "EvidenceRole": "establishment",
+          "Name": "过程和产品监视测量程序",
+          "NameAliases": ["产品的监视和测量控制程序", "过程和产品监视和测量程序"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["监视测量对象", "阶段", "方法", "接收准则", "记录", "放行"],
+          "Frequency": "每批",
+          "Coverage": "全产品",
+          "ReportUse": ["establishment"]
+        },
+        {
+          "ItemId": "E2",
+          "DocRole": "work_instruction",
+          "EvidenceRole": "criteria",
+          "Name": "成品检验作业指导书",
+          "NameAliases": ["手动轮椅车成品检验作业指导书", "成品检验规程"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["检验项目", "检验方法", "接收准则", "抽样"],
+          "Frequency": "每批",
+          "Coverage": "全产品",
+          "ReportUse": ["criteria"]
+        },
+        {
+          "ItemId": "E3",
+          "DocRole": "work_instruction",
+          "EvidenceRole": "criteria",
+          "Name": "过程检验规程",
+          "NameAliases": ["手动轮椅车过程检验规程", "过程检验指导书"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["工序", "检验项目", "检验方法", "接收准则"],
+          "Frequency": "每批",
+          "Coverage": "全工序",
+          "ReportUse": ["criteria"]
+        },
+        {
+          "ItemId": "E4",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "过程检验记录",
+          "NameAliases": ["过程检验记录表"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["产品名称", "型号", "批号", "工序", "检验项目", "结果", "检验员", "日期"],
+          "Frequency": "每批",
+          "Coverage": "全批次",
+          "ReportUse": ["sample", "coverage"]
+        },
+        {
+          "ItemId": "E5",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "成品检验记录",
+          "NameAliases": ["成品检验记录表", "产品终检报告"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["产品名称", "型号", "批号", "数量", "检验项目", "结果", "接收准则", "检验员", "日期"],
+          "Frequency": "每批",
+          "Coverage": "全批次",
+          "ReportUse": ["sample", "coverage", "counter"]
+        },
+        {
+          "ItemId": "E6",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "产品放行审核记录",
+          "NameAliases": ["产品放行记录", "放行审核记录"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["批号", "数量", "放行人", "日期", "结论"],
+          "Frequency": "每批",
+          "Coverage": "全批次",
+          "ReportUse": ["sample", "counter"]
+        },
+        {
+          "ItemId": "E7",
+          "DocRole": "record",
+          "EvidenceRole": "support",
+          "Name": "检测设备使用/校准记录",
+          "NameAliases": ["设备使用记录", "校准记录"],
+          "Required": false,
+          "Condition": "当检验使用测量设备时",
+          "ExpectedFields": ["设备名称/编号", "校准状态", "使用日期"],
+          "Frequency": "每批",
+          "Coverage": "抽样",
+          "ReportUse": ["support"]
+        },
+        {
+          "ItemId": "E8",
+          "DocRole": "record",
+          "EvidenceRole": "support",
+          "Name": "第三方检验报告",
+          "NameAliases": ["第三方检测报告", "型式检验报告"],
+          "Required": false,
+          "Condition": "当标准/法规要求第三方检验时",
+          "ExpectedFields": ["样品", "检验项目", "结论", "机构", "日期"],
+          "Frequency": "每事件",
+          "Coverage": "抽样",
+          "ReportUse": ["support"]
+        }
+      ],
+      "Dependencies": [
+        {"Clause": "4.2.5", "Role": "evidence_rule", "Use": "记录控制要求"},
+        {"Clause": "7.6", "Role": "support", "Use": "检测设备校准"}
+      ],
+      "CrossChecks": [
+        {
+          "CheckId": "C1",
+          "Question": "过程检验记录与成品检验记录的批号/数量是否一致",
+          "Docs": ["过程检验记录", "成品检验记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C2",
+          "Question": "成品检验记录与放行记录的批号/数量是否一致",
+          "Docs": ["成品检验记录", "产品放行审核记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C3",
+          "Question": "检验项目与检验规程的接收准则是否一致",
+          "Docs": ["成品检验记录", "成品检验作业指导书"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C4",
+          "Question": "检验记录中的设备与 7.6 台账/校准状态是否一致",
+          "Docs": ["成品检验记录", "设备台账", "校准记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C5",
+          "Question": "报告中的批次在文件夹中是否有对应记录",
+          "Docs": ["成品检验记录", "过程检验记录", "产品放行审核记录"],
+          "MismatchUse": "report_only"
+        }
+      ],
+      "AuditorRules": [
+        "记录空白 = template_only；报告批次只作 report_only",
+        "产品名称/型号/规程不匹配 -> ApplicabilityMatch=different，不直接判符合",
+        "植入性医疗器械条件不适用于本企业时，整条仍 general，条件项 not_applicable",
+        "无放行人时不推断未放行"
+      ]
+    },
+    {
+      "ClauseCode": "8.3.2",
+      "ClauseNumber": "8.3.2",
+      "ChapterCode": "8",
+      "PDCAPhase": ["A"],
+      "ContractVersion": "v3",
+      "EvidenceItems": [
+        {
+          "ItemId": "E1",
+          "DocRole": "procedure",
+          "EvidenceRole": "establishment",
+          "Name": "不合格品控制程序",
+          "NameAliases": ["不合格品控制程序", "不合格品管理程序"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["标识", "隔离", "评审", "处置", "让步", "法规符合性"],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": ["establishment"]
+        },
+        {
+          "ItemId": "E2",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "不合格品通知及评审处置表",
+          "NameAliases": ["不合格品评审处置表", "不合格品通知单"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["不合格描述", "发现阶段", "数量/批次", "评审", "处置方式", "批准人", "日期"],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": ["sample", "counter"]
+        },
+        {
+          "ItemId": "E3",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "让步接收申请表",
+          "NameAliases": ["让步接收申请单", "让步放行申请"],
+          "Required": false,
+          "Condition": "当采用让步接收时",
+          "ExpectedFields": ["让步理由", "数量", "批准人", "法规符合性"],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": ["counter"]
+        },
+        {
+          "ItemId": "E4",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "报废申请单",
+          "NameAliases": ["报废单", "报废申请"],
+          "Required": false,
+          "Condition": "当采用报废处置时",
+          "ExpectedFields": ["数量", "原因", "批准人", "日期"],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": ["counter"]
+        },
+        {
+          "ItemId": "E5",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "返工/返修记录",
+          "NameAliases": ["返工记录", "返修记录"],
+          "Required": false,
+          "Condition": "当采用返工/返修时",
+          "ExpectedFields": ["返工要求", "重新检验", "批准人", "日期"],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": ["counter"]
+        },
+        {
+          "ItemId": "E6",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "进货/过程/成品不合格检验记录",
+          "NameAliases": ["进货不合格检验记录", "来料不合格记录"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["品名", "数量", "不良描述", "处置", "结论", "检验员", "复核"],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": ["sample", "counter"]
+        }
+      ],
+      "Dependencies": [
+        {"Clause": "4.2.5", "Role": "evidence_rule", "Use": "记录控制要求"},
+        {"Clause": "8.3.1", "Role": "support", "Use": "不合格品总要求"},
+        {"Clause": "7.4.2", "Role": "support", "Use": "进货检验"}
+      ],
+      "CrossChecks": [
+        {
+          "CheckId": "C1",
+          "Question": "不合格记录、处置记录、让步/报废/返工记录是否互相对应",
+          "Docs": ["不合格品通知及评审处置表", "让步接收申请表", "报废申请单", "返工/返修记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C2",
+          "Question": "数量是否平衡：不合格数量 = 退回 + 返修 + 报废 + 入库",
+          "Docs": ["进货/过程/成品不合格检验记录", "处置记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C3",
+          "Question": "处置方式是否在程序允许范围内",
+          "Docs": ["不合格品控制程序", "不合格品通知及评审处置表"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C4",
+          "Question": "让步/报废是否有法规符合性声明",
+          "Docs": ["让步接收申请表", "报废申请单", "不合格品控制程序"],
+          "MismatchUse": "doubts"
+        }
+      ],
+      "AuditorRules": [
+        "报告里的进货不合格只作 report_only；QR-020/021/022/024/025 空白 = template_only",
+        "不推断未处置/未批准",
+        "数量不平衡只进 doubts",
+        "法规符合性缺失只进 doubts"
+      ]
+    },
+    {
+      "ClauseCode": "7.6",
+      "ClauseNumber": "7.6",
+      "ChapterCode": "7",
+      "PDCAPhase": ["C"],
+      "ContractVersion": "v3",
+      "EvidenceItems": [
+        {
+          "ItemId": "E1",
+          "DocRole": "procedure",
+          "EvidenceRole": "establishment",
+          "Name": "监视和测量装置控制程序",
+          "NameAliases": ["监视和测量设备控制程序", "计量器具控制程序"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["采购", "验收", "校准", "标识", "使用", "偏离", "报废", "软件"],
+          "Frequency": "每设备",
+          "Coverage": "全设备",
+          "ReportUse": ["establishment"]
+        },
+        {
+          "ItemId": "E2",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "监视和测量设备台账",
+          "NameAliases": ["计量器具台账", "设备台账"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["设备名称", "编号", "型号/规格", "量程", "校准日期", "下次校准", "状态", "使用部门"],
+          "Frequency": "每设备",
+          "Coverage": "全设备",
+          "ReportUse": ["coverage"]
+        },
+        {
+          "ItemId": "E3",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "计量设备周期检定计划",
+          "NameAliases": ["周期校准计划", "检定计划"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["设备编号", "检定周期", "计划日期", "机构"],
+          "Frequency": "每年/每周期",
+          "Coverage": "全设备",
+          "ReportUse": ["coverage"]
+        },
+        {
+          "ItemId": "E4",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "校准/检定记录",
+          "NameAliases": ["校准证书", "检定证书", "校准记录"],
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": ["设备编号", "校准日期", "结果", "机构", "证书号", "下次日期"],
+          "Frequency": "每设备/每周期",
+          "Coverage": "全设备",
+          "ReportUse": ["sample", "coverage"]
+        },
+        {
+          "ItemId": "E5",
+          "DocRole": "record",
+          "EvidenceRole": "support",
+          "Name": "校准状态标识/使用记录",
+          "NameAliases": ["设备标识", "使用记录"],
+          "Required": false,
+          "Condition": "当设备使用于检验/生产时",
+          "ExpectedFields": ["标识", "有效期", "使用人"],
+          "Frequency": "每设备",
+          "Coverage": "抽样",
+          "ReportUse": ["support"]
+        },
+        {
+          "ItemId": "E6",
+          "DocRole": "record",
+          "EvidenceRole": "implementation",
+          "Name": "计算机软件确认记录",
+          "NameAliases": ["软件确认记录", "软件验证记录"],
+          "Required": false,
+          "Condition": "当使用监视测量软件时",
+          "ExpectedFields": ["软件名称", "版本", "确认方法", "风险", "结论"],
+          "Frequency": "每软件",
+          "Coverage": "全软件",
+          "ReportUse": ["support"]
+        }
+      ],
+      "Dependencies": [
+        {"Clause": "4.2.5", "Role": "evidence_rule", "Use": "记录控制要求"},
+        {"Clause": "8.2.6", "Role": "support", "Use": "检验设备使用"}
+      ],
+      "CrossChecks": [
+        {
+          "CheckId": "C1",
+          "Question": "台账设备编号与校准记录/证书是否一致",
+          "Docs": ["监视和测量设备台账", "校准/检定记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C2",
+          "Question": "校准日期 + 周期与下次校准日期是否一致",
+          "Docs": ["监视和测量设备台账", "计量设备周期检定计划", "校准/检定记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C3",
+          "Question": "检验记录中的设备与台账/校准状态是否一致",
+          "Docs": ["成品检验记录", "设备台账", "校准记录"],
+          "MismatchUse": "doubts"
+        },
+        {
+          "CheckId": "C4",
+          "Question": "报告中的 4 台设备在台账中是否有对应编号",
+          "Docs": ["监视和测量设备台账"],
+          "MismatchUse": "report_only"
+        }
+      ],
+      "AuditorRules": [
+        "台账半填 = partial，不标 blank/filled",
+        "报告 4 台校准只作 report_only",
+        "企业无软件 -> not_applicable，不判缺失",
+        "无偏离校准样本 -> zero_event，不判未执行"
+      ]
+    }
+  ],
+  "ValidationRules": [
+    {"Id": "V1", "Rule": "ContractVersion=v3"},
+    {"Id": "V2", "Rule": "EvidenceItems >= 3"},
+    {"Id": "V3", "Rule": "ItemId unique"},
+    {"Id": "V4", "Rule": "Required=true implies ExpectedFields non-empty"},
+    {"Id": "V5", "Rule": "Condition non-empty implies Required=false"},
+    {"Id": "V6", "Rule": "MismatchUse in doubts/report_only/gap"},
+    {"Id": "V7", "Rule": "ReportUse in enum"},
+    {"Id": "V8", "Rule": "AuditorRules must not instruct NC"},
+    {"Id": "V9", "Rule": "DocFact must not contain report_only data"},
+    {"Id": "V10", "Rule": "FillStatus in 6 states"}
+  ]
+}

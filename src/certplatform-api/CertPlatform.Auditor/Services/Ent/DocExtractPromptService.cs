@@ -45,7 +45,7 @@ namespace CertPlatform.Auditor.Services.Ent
         public const string PromptCodeAudit = "doc_extract_audit";
 
         /// <summary>提示词版本（留痕到 <c>cert_document_extraction.PromptVersion</c>）</summary>
-        public const string PromptVersion = "v1";
+        public const string PromptVersion = "v2.1";
 
         public const string PhStandardName = "{{standard_name}}";
         public const string PhStandardCode = "{{standard_code}}";

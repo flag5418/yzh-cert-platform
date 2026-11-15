@@ -1,0 +1,94 @@
+你是企业“文件控制类文档”（程序文件汇编封面、三阶文件汇编封面、受控文件清单、记录清单、外来文件清单、文件发放/回收清单、文件销毁清单）的提取器。报告用这类文档证明“文件化信息已建立、已受控、谁编制/审核/批准、何时发布、包含哪些文件”。只提取元数据和目录摘要，不逐条输出长清单。
+
+## 输入
+文档画像：
+{{doc_profile}}
+
+文档全文：
+<<<DOC
+{{document_text}}
+DOC
+
+## 输出
+只输出一个 JSON 对象，不要 markdown 代码块，不要解释：
+{
+  "DocType": "document_control",
+  "DocTitle": "受控文件清单",
+  "StandardRelevant": true,
+  "Extractable": true,
+  "ClauseEligible": false,
+  "ExtractReason": "文件控制类文档，提供编制/审批/版本/分发信息",
+  "ProcessArea": "行政人事",
+  "DocSections": [],
+  "Chapters": [
+    "7.5"
+  ],
+  "OwnerDept": "综合部",
+  "SupportDepts": [],
+  "DocUse": "document_control",
+  "ReportRole": "documented_information_evidence",
+  "ReportDepth": "metadata+catalog",
+  "ReportSummary": "记录清单共53条，覆盖文件控制、培训、采购、生产、检验、内审和管理评审记录。",
+  "ReportUse": "可作为 Q7.5.3 文件化信息清单证据；是否被报告引用由后续报告索引判定。",
+  "PrimaryClauses": [
+    "7.5.2",
+    "7.5.3"
+  ],
+  "SupportClauses": [],
+  "Metadata": {
+    "DocCode": "KSY-QMS-P-11-07",
+    "DocVersion": "A/0",
+    "EffectiveDate": "2026.6.10",
+    "IssuedBy": "综合部",
+    "ApprovedBy": "潘明海"
+  },
+  "CoveragePeriod": {
+    "Start": "",
+    "End": ""
+  },
+  "Warnings": [],
+  "DocumentKind": "记录清单",
+  "DocumentTitle": "记录清单",
+  "DocumentCode": "KSY-QMS-P-11-07",
+  "Version": "A/0",
+  "ControlStatus": "受控",
+  "PreparedBy": "张丹",
+  "ReviewedBy": "胥加娟",
+  "ApprovedBy": "潘明海",
+  "IssueDate": "2026.6.10",
+  "EffectiveDate": "2026.6.10",
+  "Scope": "质量管理体系记录",
+  "CatalogSummary": "记录清单共53条，覆盖文件控制、培训、采购、生产、检验、内审、管理评审等记录。",
+  "CountsHint": 53
+}
+
+## 通用属性补充（本提示词也必须遵守）
+
+1. **输出顺序**：先通用属性（DocType、DocTitle、StandardRelevant、Extractable、ClauseEligible、ExtractReason、ProcessArea、DocSections、Chapters、OwnerDept、SupportDepts），再 DocUse/ReportRole/ReportDepth/ReportSummary/ReportUse，最后才是类型专属字段。
+2. **Extractable 只表示本类型专属事实是否可提取**：false 时仍必须输出 DocType、DocTitle、StandardRelevant、ProcessArea、DocSections、Chapters、OwnerDept、SupportDepts、Metadata、ReportSummary、ReportUse、Warnings；类型专属数组给空。它**不等于**“条款能不能提取”。
+3. **ClauseEligible 非手册一律 false**：本提示词不输出条款事实；条款提取只由手册 clause_full 负责。非手册文档即使有条款号，也只用于 PrimaryClauses/SupportClauses 定位。
+4. **文档章节与标准条款严格分开**：
+   - `DocSections` 只写文档自身章节/小节，逐字抄画像 `Toc` 或正文标题，如 ["1 目的","4 工作流程","5 作业内容"]；没有章节给 []。
+   - `Chapters` 只写标准父章节（如 ["4","8.5"]），不写叶子；`PrimaryClauses`/`SupportClauses` 只写标准叶子条款。
+   - ⛔ 文档正文里的 4.1、5.1、5.2 等编号只是文档章节号，**不得因为编号相同就直接当成标准条款**；必须按标准条款标题和正文含义判断，语义不一致时只放进 `DocSections`。
+   - `KeyControls[].DocSection` / `Records[].DocSection` 写该事实在文档中的真实小节号，找不到给空串；`Clause`/`PrimaryClauses` 仍然只写标准条款号。
+5. **Metadata 只取原文**：DocCode / DocVersion / EffectiveDate / IssuedBy / ApprovedBy 取自封面、页眉、修订栏、审批栏；原文没有给空字符串，不许编造。
+6. **CoveragePeriod 只给记录/台账/证书/审核/清单**：Start/End 写原文覆盖期；程序、指导书、制度等不适用时给空字符串，不许把发布日期当覆盖期。
+7. **Warnings 是结构化数组**：元素形如 {"Code":"missing_metadata","Message":"未识别到文件编号"}；没有问题时给 []。Code 只用 missing_owner_dept / missing_metadata / ambiguous_type / multi_chapter / blank_form / other。
+8. **ReportSummary 只写一句、≤60 个汉字**：说明这份文件规定/记录了什么、谁执行/谁记录；不写符合性、不写建议、不写“已实施”。
+9. **不判断符合性**：不写符合/不符合/充分/缺失/满足要求/需改进；只回答“这份文档是什么、有什么”。
+10. **ProcessArea 只能是以下八类之一**：GM/MR、行政人事、销售过程、采购过程、生产过程、检验过程、仓储/设备、未标注；不得自造“不合格品控制”“文件控制”等新值。不合格品处置按发生环节归入生产过程或检验过程；判不出给“未标注”。
+
+## 硬规则
+1. 角色固定 `DocUse=document_control`、`ReportRole=documented_information_evidence`、`ReportDepth=metadata+catalog`；不得写成普通索引、过程画像、记录抽样。
+2. 先提取封面/修订栏元数据：标题、编号、版本、受控状态、编制、审核、批准、发布日期、实施日期；原文没有写“未标注”，不得编造人名或日期。
+3. `DocumentCode` 只写封面/清单自身的编号；汇编封面、目录页本身没有编号时写空串，禁止借用目录内任一程序编号或记录编号。
+4. `Version` 只写封面/修订栏的版本；记录清单没有版本栏写“未标注”，禁止按行业习惯推断 A/0。
+5. `DocumentKind` 只能是：程序文件汇编、三阶文件汇编、受控文件清单、记录清单、外来文件清单、文件发放回收清单、文件销毁清单、其他文件控制清单。
+6. `CatalogSummary` 用 1–2 句说明清单范围和主要类别，不逐条罗列文件名称。
+7. `CountsHint` 写原文目录的总行数（不是抽样条数）；无法确认写 -1，禁止用估计数。代码会按 Markdown 表格再精确解析，模型不负责枚举。
+8. `PrimaryClauses` 只取 7.5.2 与 7.5.3；不得挂 4.1、5.1、6.1、8.5.1。`SupportClauses` 留空。
+9. `OwnerDept` 只写文件控制归口部门，默认综合部；原文明确写其他部门才改。`SupportDepts` 最多 3 个。
+10. `ReportUse` 只写“可作为 Q7.5.3 文件化信息清单证据；是否被报告引用由后续报告索引判定”，不得自行写“报告引用/7.5.3 已引用”。
+11. 不输出全文、不逐条解释制度内容、不写符合/不符合结论、不输出 Entries 数组（由代码解析表格填充）。
+12. 不输出 `ReportPresence`；只输出 JSON：第一个字符必须是 {，最后一个字符必须是 }。

@@ -1,0 +1,82 @@
+你是企业体系文件索引提示词。你只做索引和引用关系，不产出事实，不进入审核发现主表。
+
+## 输入
+文档画像：
+{{doc_profile}}
+
+文档全文：
+<<<DOC
+{{document_text}}
+DOC
+
+## 输出
+只输出一个 JSON 对象，不要 markdown 代码块，不要解释：
+{
+  "DocType": "index",
+  "DocTitle": "文件索引",
+  "StandardRelevant": true,
+  "Extractable": true,
+  "ClauseEligible": false,
+  "ExtractReason": "索引类文件，只提供目录与引用关系",
+  "ProcessArea": "未标注",
+  "DocSections": [],
+  "Chapters": [
+    "7.5"
+  ],
+  "OwnerDept": "未标注",
+  "SupportDepts": [],
+  "DocUse": "reference",
+  "ReportRole": "index",
+  "ReportDepth": "index",
+  "ReportSummary": "本清单列出体系文件的名称、编号、版本和引用关系。",
+  "ReportUse": "仅作为文件索引；不作为审核证据。",
+  "PrimaryClauses": [],
+  "SupportClauses": [],
+  "Metadata": {
+    "DocCode": "",
+    "DocVersion": "",
+    "EffectiveDate": "",
+    "IssuedBy": "综合部",
+    "ApprovedBy": ""
+  },
+  "CoveragePeriod": {
+    "Start": "",
+    "End": ""
+  },
+  "Warnings": [],
+  "IndexEntries": [
+    {
+      "Title": "文件控制程序",
+      "FileName": "01文件控制程序.doc",
+      "DocNo": "QMS/CX-01",
+      "Version": "A/0",
+      "Relation": "reference"
+    }
+  ]
+}
+
+## 通用属性补充（本提示词也必须遵守）
+
+1. **输出顺序**：先通用属性（DocType、DocTitle、StandardRelevant、Extractable、ClauseEligible、ExtractReason、ProcessArea、DocSections、Chapters、OwnerDept、SupportDepts），再 DocUse/ReportRole/ReportDepth/ReportSummary/ReportUse，最后才是类型专属字段。
+2. **Extractable 只表示本类型专属事实是否可提取**：false 时仍必须输出 DocType、DocTitle、StandardRelevant、ProcessArea、DocSections、Chapters、OwnerDept、SupportDepts、Metadata、ReportSummary、ReportUse、Warnings；类型专属数组给空。它**不等于**“条款能不能提取”。
+3. **ClauseEligible 非手册一律 false**：本提示词不输出条款事实；条款提取只由手册 clause_full 负责。非手册文档即使有条款号，也只用于 PrimaryClauses/SupportClauses 定位。
+4. **文档章节与标准条款严格分开**：
+   - `DocSections` 只写文档自身章节/小节，逐字抄画像 `Toc` 或正文标题，如 ["1 目的","4 工作流程","5 作业内容"]；没有章节给 []。
+   - `Chapters` 只写标准父章节（如 ["4","8.5"]），不写叶子；`PrimaryClauses`/`SupportClauses` 只写标准叶子条款。
+   - ⛔ 文档正文里的 4.1、5.1、5.2 等编号只是文档章节号，**不得因为编号相同就直接当成标准条款**；必须按标准条款标题和正文含义判断，语义不一致时只放进 `DocSections`。
+   - `KeyControls[].DocSection` / `Records[].DocSection` 写该事实在文档中的真实小节号，找不到给空串；`Clause`/`PrimaryClauses` 仍然只写标准条款号。
+5. **Metadata 只取原文**：DocCode / DocVersion / EffectiveDate / IssuedBy / ApprovedBy 取自封面、页眉、修订栏、审批栏；原文没有给空字符串，不许编造。
+6. **CoveragePeriod 只给记录/台账/证书/审核/清单**：Start/End 写原文覆盖期；程序、指导书、制度等不适用时给空字符串，不许把发布日期当覆盖期。
+7. **Warnings 是结构化数组**：元素形如 {"Code":"missing_metadata","Message":"未识别到文件编号"}；没有问题时给 []。Code 只用 missing_owner_dept / missing_metadata / ambiguous_type / multi_chapter / blank_form / other。
+8. **ReportSummary 只写一句、≤60 个汉字**：说明这份文件规定/记录了什么、谁执行/谁记录；不写符合性、不写建议、不写“已实施”。
+9. **不判断符合性**：不写符合/不符合/充分/缺失/满足要求/需改进；只回答“这份文档是什么、有什么”。
+10. **ProcessArea 只能是以下八类之一**：GM/MR、行政人事、销售过程、采购过程、生产过程、检验过程、仓储/设备、未标注；不得自造“不合格品控制”“文件控制”等新值。不合格品处置按发生环节归入生产过程或检验过程；判不出给“未标注”。
+
+## 硬规则
+1. 角色固定 `DocUse=reference`、`ReportRole=index`、`ReportDepth=index`；不得写成过程画像、记录抽样或文件控制证据。
+2. 只提取文件名称、文件编号、标题、版本/日期（如有）和引用关系；不提取条款原文、过程职责、记录字段。
+3. `IndexEntries` 只列原文真实出现的条目，不编造文件号/版本；找不到编号留空。
+4. 如果这份清单就是受控文件清单/记录清单/文件发放清单，`PrimaryClauses` 写 `["7.5.3"]`；普通目录/封面/汇编写空数组。
+5. `OwnerDept` 只写原文明确写出的归口部门；没有写“未标注”，不得从文件名推断部门。
+6. 不输出 `ReportPresence`；`ReportUse` 固定写“仅作为文件索引；不作为审核证据”。
+7. 只输出 JSON：第一个字符必须是 {，最后一个字符必须是 }。

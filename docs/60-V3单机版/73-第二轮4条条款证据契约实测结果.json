@@ -1,0 +1,237 @@
+[
+  {
+    "ClauseNumber": "7.5.1",
+    "Title": "生产和服务提供的控制",
+    "Output": {
+      "ClauseIntent": "对生产和服务提供过程进行策划、实施、监视和控制，以确保产品符合规范。",
+      "Obligation": "shall",
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Process": [
+        "production",
+        "inspection",
+        "after_sales"
+      ],
+      "Severity": "critical",
+      "EvidenceForm": "sample",
+      "EvidenceFamily": "f1f2",
+      "Role": "r5",
+      "EvidenceContract": {
+        "EvidenceType": [
+          "record"
+        ],
+        "EvidenceName": [
+          "生产记录",
+          "产品放行记录",
+          "交付后活动记录"
+        ],
+        "MustHaveFields": [
+          "产品名称",
+          "规格型号",
+          "生产批号",
+          "数量",
+          "过程参数监视结果",
+          "产品特性检验结果",
+          "操作人员",
+          "日期",
+          "放行人",
+          "交付后活动执行情况"
+        ],
+        "Frequency": "每批",
+        "Coverage": "全产品/全批次",
+        "Signer": [
+          "操作人员",
+          "检验员",
+          "放行人",
+          "交付后活动执行人"
+        ],
+        "JudgementRules": [
+          "有完整填写的记录，含批号、参数/特性结果、签署与日期 = 符合",
+          "缺关键字段（如批号、结果、签署）或仅模板未填写 = 缺失",
+          "记录中未体现监视和测量设备使用信息 = 部分",
+          "记录覆盖范围与组织医疗器械范围不一致 = 不适用"
+        ],
+        "ReportUse": [
+          "sample",
+          "coverage",
+          "counter"
+        ]
+      }
+    },
+    "Raw": "{\n  \"ClauseIntent\": \"对生产和服务提供过程进行策划、实施、监视和控制，以确保产品符合规范。\",\n  \"Obligation\": \"shall\",\n  \"Applicability\": \"general\",\n  \"ApplicabilityCondition\": \"\",\n  \"Process\": [\"production\", \"inspection\", \"after_sales\"],\n  \"Severity\": \"critical\",\n  \"EvidenceForm\": \"sample\",\n  \"EvidenceFamily\": \"f1f2\",\n  \"Role\": \"r5\",\n  \"EvidenceContract\": {\n    \"EvidenceType\": [\"record\"],\n    \"EvidenceName\": [\"生产记录\", \"产品放行记录\", \"交付后活动记录\"],\n    \"MustHaveFields\": [\"产品名称\", \"规格型号\", \"生产批号\", \"数量\", \"过程参数监视结果\", \"产品特性检验结果\", \"操作人员\", \"日期\", \"放行人\", \"交付后活动执行情况\"],\n    \"Frequency\": \"每批\",\n    \"Coverage\": \"全产品/全批次\",\n    \"Signer\": [\"操作人员\", \"检验员\", \"放行人\", \"交付后活动执行人\"],\n    \"JudgementRules\": [\n      \"有完整填写的记录，含批号、参数/特性结果、签署与日期 = 符合\",\n      \"缺关键字段（如批号、结果、签署）或仅模板未填写 = 缺失\",\n      \"记录中未体现监视和测量设备使用信息 = 部分\",\n      \"记录覆盖范围与组织医疗器械范围不一致 = 不适用\"\n    ],\n    \"ReportUse\": [\"sample\", \"coverage\", \"counter\"]\n  }\n}"
+  },
+  {
+    "ClauseNumber": "7.4.1",
+    "Title": "采购过程",
+    "Output": {
+      "ClauseIntent": "组织应建立并实施采购过程，确保采购产品符合规定要求，并基于供方能力、绩效、采购产品对医疗器械质量的影响及风险水平评价、选择、监视和再评价供方。",
+      "Obligation": "shall",
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Process": [
+        "purchase"
+      ],
+      "Severity": "critical",
+      "EvidenceForm": "cite",
+      "EvidenceFamily": "f1f2",
+      "Role": "r5",
+      "EvidenceContract": {
+        "EvidenceType": [
+          "procedure",
+          "list",
+          "record"
+        ],
+        "EvidenceName": [
+          "供方评价与选择准则",
+          "合格供方名录",
+          "供方绩效监视记录",
+          "供方再评价报告"
+        ],
+        "MustHaveFields": [
+          "供方名称",
+          "评价/选择/监视/再评价日期",
+          "评价依据（能力/绩效/影响/风险）",
+          "结果结论",
+          "处置措施（如适用）",
+          "审批人"
+        ],
+        "Frequency": "每事件",
+        "Coverage": "全供应商",
+        "Signer": [
+          "采购负责人",
+          "质量负责人"
+        ],
+        "JudgementRules": [
+          "有成文准则 + 名录 + 监视记录 + 再评价报告 + 审批 = 符合",
+          "缺监视记录或再评价报告 = 部分",
+          "仅有名录无评价依据或审批 = 缺失",
+          "未覆盖所有采购产品所涉供方 = 不适用"
+        ],
+        "ReportUse": [
+          "coverage",
+          "counter"
+        ]
+      }
+    },
+    "Raw": "{\n  \"ClauseIntent\": \"组织应建立并实施采购过程，确保采购产品符合规定要求，并基于供方能力、绩效、采购产品对医疗器械质量的影响及风险水平评价、选择、监视和再评价供方。\",\n  \"Obligation\": \"shall\",\n  \"Applicability\": \"general\",\n  \"ApplicabilityCondition\": \"\",\n  \"Process\": [\"purchase\"],\n  \"Severity\": \"critical\",\n  \"EvidenceForm\": \"cite\",\n  \"EvidenceFamily\": \"f1f2\",\n  \"Role\": \"r5\",\n  \"EvidenceContract\": {\n    \"EvidenceType\": [\"procedure\", \"list\", \"record\"],\n    \"EvidenceName\": [\"供方评价与选择准则\", \"合格供方名录\", \"供方绩效监视记录\", \"供方再评价报告\"],\n    \"MustHaveFields\": [\"供方名称\", \"评价/选择/监视/再评价日期\", \"评价依据（能力/绩效/影响/风险）\", \"结果结论\", \"处置措施（如适用）\", \"审批人\"],\n    \"Frequency\": \"每事件\",\n    \"Coverage\": \"全供应商\",\n    \"Signer\": [\"采购负责人\", \"质量负责人\"],\n    \"JudgementRules\": [\n      \"有成文准则 + 名录 + 监视记录 + 再评价报告 + 审批 = 符合\",\n      \"缺监视记录或再评价报告 = 部分\",\n      \"仅有名录无评价依据或审批 = 缺失\",\n      \"未覆盖所有采购产品所涉供方 = 不适用\"\n    ],\n    \"ReportUse\": [\"coverage\", \"counter\"]\n  }\n}"
+  },
+  {
+    "ClauseNumber": "8.3.2",
+    "Title": "交付前发现不合格品的响应措施",
+    "Output": {
+      "ClauseIntent": "组织应处置交付前发现的不合格品，包括消除不合格、防止原预期使用或应用、授权让步接收。",
+      "Obligation": "shall",
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Process": [
+        "inspection",
+        "production",
+        "sales"
+      ],
+      "Severity": "critical",
+      "EvidenceForm": "sample",
+      "EvidenceFamily": "f2",
+      "Role": "r5",
+      "EvidenceContract": {
+        "EvidenceType": [
+          "record"
+        ],
+        "EvidenceName": [
+          "不合格品处置记录",
+          "让步接收审批记录",
+          "不合格品评审报告"
+        ],
+        "MustHaveFields": [
+          "不合格品描述",
+          "发现工序/阶段",
+          "数量/批次",
+          "处置方式（a/b/c）",
+          "让步理由",
+          "批准人员",
+          "批准日期",
+          "法规符合性声明"
+        ],
+        "Frequency": "每事件",
+        "Coverage": "全批次",
+        "Signer": [
+          "不合格品评审小组成员",
+          "授权让步人员",
+          "质量负责人"
+        ],
+        "JudgementRules": [
+          "有完整填写的处置记录 + 明确处置方式 + 让步理由 + 批准签名 + 法规符合性确认 = 符合",
+          "缺批准签名/日期/让步理由/法规声明 = 部分",
+          "仅存空白表单或无记录 = 缺失",
+          "记录未覆盖交付前环节（如仅含来料不合格） = 不适用"
+        ],
+        "ReportUse": [
+          "sample",
+          "counter"
+        ]
+      }
+    },
+    "Raw": "{\n  \"ClauseIntent\": \"组织应处置交付前发现的不合格品，包括消除不合格、防止原预期使用或应用、授权让步接收。\",\n  \"Obligation\": \"shall\",\n  \"Applicability\": \"general\",\n  \"ApplicabilityCondition\": \"\",\n  \"Process\": [\"inspection\", \"production\", \"sales\"],\n  \"Severity\": \"critical\",\n  \"EvidenceForm\": \"sample\",\n  \"EvidenceFamily\": \"f2\",\n  \"Role\": \"r5\",\n  \"EvidenceContract\": {\n    \"EvidenceType\": [\"record\"],\n    \"EvidenceName\": [\"不合格品处置记录\", \"让步接收审批记录\", \"不合格品评审报告\"],\n    \"MustHaveFields\": [\"不合格品描述\", \"发现工序/阶段\", \"数量/批次\", \"处置方式（a/b/c）\", \"让步理由\", \"批准人员\", \"批准日期\", \"法规符合性声明\"],\n    \"Frequency\": \"每事件\",\n    \"Coverage\": \"全批次\",\n    \"Signer\": [\"不合格品评审小组成员\", \"授权让步人员\", \"质量负责人\"],\n    \"JudgementRules\": [\n      \"有完整填写的处置记录 + 明确处置方式 + 让步理由 + 批准签名 + 法规符合性确认 = 符合\",\n      \"缺批准签名/日期/让步理由/法规声明 = 部分\",\n      \"仅存空白表单或无记录 = 缺失\",\n      \"记录未覆盖交付前环节（如仅含来料不合格） = 不适用\"\n    ],\n    \"ReportUse\": [\"sample\", \"counter\"]\n  }\n}"
+  },
+  {
+    "ClauseNumber": "7.6",
+    "Title": "监视和测量设备的控制",
+    "Output": {
+      "ClauseIntent": "组织应控制监视和测量设备，确保其校准、标识、防护和记录可追溯，以提供产品符合要求的证据。",
+      "Obligation": "shall",
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Process": [
+        "metrology",
+        "inspection",
+        "production"
+      ],
+      "Severity": "critical",
+      "EvidenceForm": "sample",
+      "EvidenceFamily": "f1f2",
+      "Role": "r4",
+      "EvidenceContract": {
+        "EvidenceType": [
+          "record",
+          "list",
+          "procedure"
+        ],
+        "EvidenceName": [
+          "监视和测量设备校准计划",
+          "设备校准/检定记录",
+          "监视和测量设备台账",
+          "计算机软件确认记录"
+        ],
+        "MustHaveFields": [
+          "设备名称/编号",
+          "型号/规格",
+          "校准/检定日期",
+          "下次校准/检定日期",
+          "校准状态标识",
+          "校准机构/依据",
+          "调整/再调整记录",
+          "软件确认方法与风险评估依据",
+          "确认结论与措施"
+        ],
+        "Frequency": "每事件",
+        "Coverage": "全设备/全软件应用",
+        "Signer": [
+          "计量管理员",
+          "质量负责人",
+          "使用部门负责人"
+        ],
+        "JudgementRules": [
+          "有完整校准记录+有效标识+状态更新+软件确认证据 = 符合",
+          "缺校准日期/下次日期/状态标识/确认依据 = 部分",
+          "仅台账无校准记录或无确认证据 = 缺失",
+          "设备未纳入台账或软件未确认 = 不适用"
+        ],
+        "ReportUse": [
+          "sample",
+          "coverage",
+          "counter"
+        ]
+      }
+    },
+    "Raw": "{\n  \"ClauseIntent\": \"组织应控制监视和测量设备，确保其校准、标识、防护和记录可追溯，以提供产品符合要求的证据。\",\n  \"Obligation\": \"shall\",\n  \"Applicability\": \"general\",\n  \"ApplicabilityCondition\": \"\",\n  \"Process\": [\"metrology\", \"inspection\", \"production\"],\n  \"Severity\": \"critical\",\n  \"EvidenceForm\": \"sample\",\n  \"EvidenceFamily\": \"f1f2\",\n  \"Role\": \"r4\",\n  \"EvidenceContract\": {\n    \"EvidenceType\": [\"record\", \"list\", \"procedure\"],\n    \"EvidenceName\": [\"监视和测量设备校准计划\", \"设备校准/检定记录\", \"监视和测量设备台账\", \"计算机软件确认记录\"],\n    \"MustHaveFields\": [\"设备名称/编号\", \"型号/规格\", \"校准/检定日期\", \"下次校准/检定日期\", \"校准状态标识\", \"校准机构/依据\", \"调整/再调整记录\", \"软件确认方法与风险评估依据\", \"确认结论与措施\"],\n    \"Frequency\": \"每事件\",\n    \"Coverage\": \"全设备/全软件应用\",\n    \"Signer\": [\"计量管理员\", \"质量负责人\", \"使用部门负责人\"],\n    \"JudgementRules\": [\n      \"有完整校准记录+有效标识+状态更新+软件确认证据 = 符合\",\n      \"缺校准日期/下次日期/状态标识/确认依据 = 部分\",\n      \"仅台账无校准记录或无确认证据 = 缺失\",\n      \"设备未纳入台账或软件未确认 = 不适用\"\n    ],\n    \"ReportUse\": [\"sample\", \"coverage\", \"counter\"]\n  }\n}"
+  }
+]

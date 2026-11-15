@@ -1,0 +1,158 @@
+{
+  "ValidationSet": ["7.5.1", "8.2.4", "8.2.6", "8.3.2", "7.6"],
+  "Model": "ChapterProfile + ClauseProfile + DocFact + ReportEvidence",
+  "Clauses": [
+    {
+      "ClauseCode": "7.5.1",
+      "ChapterCode": "7",
+      "PDCAPhase": ["P", "D"],
+      "ModelExpectation": {
+        "DefaultDocRoles": ["procedure", "work_instruction", "record"],
+        "ClauseOverride": ["基础设施鉴定", "标识与包装", "制造数量", "批准流通数量", "7.5.9 追溯"],
+        "RequiredFields": ["产品名称", "规格型号", "批号", "数量", "过程参数", "检验结果", "操作人员", "日期", "放行人", "交付后活动"]
+      },
+      "DocumentFacts": [
+        {"DocCode": "XASL-QP-021", "DocName": "生产和服务提供控制程序", "DocRole": "procedure", "FillStatus": "filled"},
+        {"DocCode": "XASL-PR-025", "DocName": "生产指令单", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-PR-027", "DocName": "生产过程自检记录", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-PR-028", "DocName": "随工单", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"}
+      ],
+      "ReportEvidence": {
+        "Batches": [
+          {"Date": "2026-06-23", "Batch": "20260623", "Model": "SYⅣ100-SL-01A", "Qty": 100},
+          {"Date": "2026-05-15", "Batch": "20260515", "Model": "SYⅣ100-SL-01B", "Qty": 50},
+          {"Date": "2026-07-02", "Batch": "20260702", "Model": "SYⅣ100-SL-01A", "Qty": 60}
+        ],
+        "Site": {"Model": "SYⅣ100-SL-03B", "Batch": "20260716", "Qty": 65},
+        "People": ["左岩", "徐翠姣", "刘兴杰"],
+        "Equipment": ["风批", "手电钻", "空压机"],
+        "InFolder": false
+      },
+      "Match": {"NameMatch": "exact", "ApplicabilityMatch": "same", "EvidenceRole": "implementation"},
+      "Gap": ["批记录空白", "过程参数缺失", "制造数量/批准流通数量缺失", "7.5.9 追溯跨条款"]
+    },
+    {
+      "ClauseCode": "8.2.4",
+      "ChapterCode": "8",
+      "PDCAPhase": ["C"],
+      "ModelExpectation": {
+        "DefaultDocRoles": ["procedure", "audit_pack"],
+        "ClauseOverride": ["审核方案", "审核员独立性", "审核范围", "审核准则", "不符合项闭环"],
+        "RequiredPack": ["内审计划", "签到表", "检查表", "不合格报告", "内审报告"]
+      },
+      "DocumentFacts": [
+        {"DocCode": "XASL-QP-007", "DocName": "内部审核程序", "DocRole": "procedure", "FillStatus": "filled"},
+        {"DocCode": "XASL-QR-015", "DocName": "内部审核计划", "DocRole": "record", "FillStatus": "filled"},
+        {"DocCode": "XASL-QR-016", "DocName": "内部审核会议签到表", "DocRole": "record", "FillStatus": "filled"},
+        {"DocCode": "XASL-QR-017", "DocName": "内部审核检查表", "DocRole": "record", "FillStatus": "filled"},
+        {"DocCode": "XASL-QR-018", "DocName": "内审不合格报告", "DocRole": "record", "FillStatus": "filled"},
+        {"DocCode": "XASL-QR-019", "DocName": "内部质量审核报告", "DocRole": "record", "FillStatus": "filled"}
+      ],
+      "ReportEvidence": {
+        "CitedRecords": ["内部审核计划", "内部审核检查表", "内审不合格报告", "内部质量审核报告"],
+        "Conclusion": "组织的内审实施符合标准要求",
+        "IndependenceClaim": "内审组成员未审核本部门工作",
+        "InFolder": true
+      },
+      "Match": {"NameMatch": "exact", "ApplicabilityMatch": "same", "EvidenceRole": "implementation"},
+      "Gap": ["计划只列王倩、检查表出现董晶晶、报告只写王倩", "无独立性声明", "单文档读不到本次内审结论"]
+    },
+    {
+      "ClauseCode": "8.2.6",
+      "ChapterCode": "8",
+      "PDCAPhase": ["C"],
+      "ModelExpectation": {
+        "DefaultDocRoles": ["procedure", "work_instruction", "record"],
+        "ClauseOverride": ["接收准则", "放行人身份", "检测设备", "植入性医疗器械条件"],
+        "RequiredFields": ["产品名称", "规格型号", "批号", "检验项目", "检验结果", "接收准则", "检验员", "放行人", "检测设备"]
+      },
+      "DocumentFacts": [
+        {"DocCode": "XASL-QP-024", "DocName": "过程和产品监视测量程序", "DocRole": "procedure", "FillStatus": "filled"},
+        {"DocCode": "XASL-QR-037", "DocName": "过程检验记录", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-027", "DocName": "成品检验记录", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-028", "DocName": "产品放行审核记录", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-038", "DocName": "产品终检报告", "DocRole": "record", "FillStatus": "partial", "InstanceStatus": "has_instance", "Note": "跨产品，髓腔锉技术要求"},
+        {"DocCode": "XASL-QD-018", "DocName": "原材料检验验证规程", "DocRole": "work_instruction", "FillStatus": "filled", "Applicability": "原材料"},
+        {"DocCode": "XASL-QD-019", "DocName": "注塑件检验规程", "DocRole": "work_instruction", "FillStatus": "filled", "Applicability": "注塑件"},
+        {"DocCode": "XASL-QD-020", "DocName": "真空拔罐器成品检验规程", "DocRole": "work_instruction", "FillStatus": "filled", "Applicability": "真空拔罐器"}
+      ],
+      "ReportEvidence": {
+        "ProcessInspections": [
+          {"Date": "2026-05-08", "Model": "SYⅣ100-SL01A", "Inspector": "尚月茂"},
+          {"Date": "2026-06-15", "Model": "SYⅣ100-SL03AB", "Inspector": "尚月茂"}
+        ],
+        "FinishedInspections": [
+          {"Date": "2026-06-23", "Model": "SYⅣ100-SL01A", "Qty": 100, "Inspector": "尚月茂"},
+          {"Date": "2026-05-15", "Model": "SYⅣ100-SL01B", "Qty": 50, "Inspector": "尚月茂"},
+          {"Date": "2026-07-09", "Model": "SYⅣ100-SL03B", "Qty": 80, "Inspector": "尚月茂"}
+        ],
+        "ThirdParty": ["155/2025", "153/2025"],
+        "Conclusion": "所有产品经过成品检验合格后入库",
+        "InFolder": false
+      },
+      "Match": {"NameMatch": "mismatch", "ApplicabilityMatch": "different", "EvidenceRole": "implementation"},
+      "Gap": ["过程/成品/放行记录空白", "产品线/检验规程不匹配", "报告证据不在文件夹", "无检测设备编号/放行人"]
+    },
+    {
+      "ClauseCode": "8.3.2",
+      "ChapterCode": "8",
+      "PDCAPhase": ["A"],
+      "ModelExpectation": {
+        "DefaultDocRoles": ["procedure", "record"],
+        "ClauseOverride": ["交付前发现", "标识/隔离", "评审", "处置方式", "让步批准", "法规符合性"],
+        "RequiredFields": ["不合格描述", "发现阶段", "数量/批次", "处置方式", "让步理由", "批准人", "批准日期", "法规符合性声明"]
+      },
+      "DocumentFacts": [
+        {"DocCode": "XASL-QP-013", "DocName": "不合格品控制程序", "DocRole": "procedure", "FillStatus": "filled"},
+        {"DocCode": "XASL-QR-020", "DocName": "不合格品通知及评审处置表", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-021", "DocName": "让步接收申请表", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-022", "DocName": "报废申请单", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-024", "DocName": "原材料请验单", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-025", "DocName": "来料检验报告", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"}
+      ],
+      "ReportEvidence": {
+        "RecordName": "进货不合格检验记录",
+        "Date": "2026-06-30",
+        "Product": "黑色车架",
+        "Qty": 100,
+        "Defects": 2,
+        "Disposition": ["1 件退回厂家重新褪色氧化", "1 件返修重新补焊"],
+        "Conclusion": "两件不良品退回厂家，其余 98 件入库",
+        "Inspector": "尚月茂",
+        "Reviewer": "王倩",
+        "InFolder": false
+      },
+      "Match": {"NameMatch": "not_found", "ApplicabilityMatch": "unknown", "EvidenceRole": "implementation"},
+      "Gap": ["处置记录全部空白", "报告证据只在报告里", "无让步/报废/返工记录", "无法规符合性声明"]
+    },
+    {
+      "ClauseCode": "7.6",
+      "ChapterCode": "7",
+      "PDCAPhase": ["C"],
+      "ModelExpectation": {
+        "DefaultDocRoles": ["procedure", "record"],
+        "ClauseOverride": ["设备编号", "校准状态", "校准机构/依据", "偏离校准状态处理", "软件确认"],
+        "RequiredFields": ["设备名称/编号", "型号/规格", "校准日期", "下次校准日期", "校准状态", "校准机构/依据", "软件确认"]
+      },
+      "DocumentFacts": [
+        {"DocCode": "XASL-QP-020", "DocName": "监视和测量装置控制程序", "DocRole": "procedure", "FillStatus": "filled"},
+        {"DocCode": "XASL-QR-006", "DocName": "监视和测量设备台账", "DocRole": "record", "FillStatus": "partial", "InstanceStatus": "has_instance", "Note": "有表头和 4 行类别，编号/检定日期为空"},
+        {"DocCode": "XASL-QR-007", "DocName": "计量设备周期检定计划", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-041", "DocName": "检具台账", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"},
+        {"DocCode": "XASL-QR-042", "DocName": "硬度测试记录", "DocRole": "record", "FillStatus": "blank", "InstanceStatus": "template_only"}
+      ],
+      "ReportEvidence": {
+        "Devices": [
+          {"Name": "数显角度尺", "Code": "HC2512240022", "Range": "0-180°", "CalibrationDate": "2025-12-24", "Result": "合格"},
+          {"Name": "百分表", "Code": "HC2512240019", "Range": "0-10mm", "CalibrationDate": "2025-12-24", "Result": "合格"},
+          {"Name": "数显卡尺", "Code": "HC2512240020", "Range": "0-150mm", "CalibrationDate": "2025-12-24", "Result": "合格"},
+          {"Name": "钢卷尺", "Code": "HC2512240021", "Range": "3m", "CalibrationDate": "2025-12-24", "Result": "合格"}
+        ],
+        "Software": "无",
+        "InFolder": false
+      },
+      "Match": {"NameMatch": "exact", "ApplicabilityMatch": "same", "EvidenceRole": "implementation"},
+      "Gap": ["台账缺编号/日期", "周期检定计划空白", "校准记录只在报告里", "无偏离校准状态样本"]
+    }
+  ]
+}

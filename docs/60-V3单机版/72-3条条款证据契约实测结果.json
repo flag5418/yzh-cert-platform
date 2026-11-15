@@ -1,0 +1,180 @@
+[
+  {
+    "ClauseNumber": "4.2.5",
+    "Title": "记录控制",
+    "Output": {
+      "ClauseIntent": "组织应建立并保持程序，以控制记录的标识、收集、索引、存取、存档、维护、检索、保存期限和处置。",
+      "Obligation": "shall",
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Process": [
+        "management",
+        "inspection",
+        "production",
+        "purchase",
+        "warehouse",
+        "after_sales"
+      ],
+      "Severity": "major",
+      "EvidenceForm": "cite",
+      "EvidenceFamily": "f1",
+      "Role": "r4",
+      "EvidenceContract": {
+        "EvidenceType": [
+          "procedure",
+          "list",
+          "record"
+        ],
+        "EvidenceName": [
+          "记录控制程序",
+          "记录清单",
+          "记录保存期限表"
+        ],
+        "MustHaveFields": [
+          "记录名称",
+          "标识方式",
+          "保存期限",
+          "存档方式",
+          "处置方法",
+          "责任部门",
+          "检索方法"
+        ],
+        "Frequency": "未明确",
+        "Coverage": "全条款",
+        "Signer": [
+          "管理者代表",
+          "文件控制负责人"
+        ],
+        "JudgementRules": [
+          "有成文程序 + 明确标识/保存期限/处置要求 = 符合",
+          "缺保存期限或处置规定 = 部分",
+          "无程序或仅标题无内容 = 缺失",
+          "未覆盖委托方/顾客提供记录的保密性要求 = 不符合"
+        ],
+        "ReportUse": [
+          "sample",
+          "coverage"
+        ]
+      }
+    },
+    "Raw": "{\n  \"ClauseIntent\": \"组织应建立并保持程序，以控制记录的标识、收集、索引、存取、存档、维护、检索、保存期限和处置。\",\n  \"Obligation\": \"shall\",\n  \"Applicability\": \"general\",\n  \"ApplicabilityCondition\": \"\",\n  \"Process\": [\"management\", \"inspection\", \"production\", \"purchase\", \"warehouse\", \"after_sales\"],\n  \"Severity\": \"major\",\n  \"EvidenceForm\": \"cite\",\n  \"EvidenceFamily\": \"f1\",\n  \"Role\": \"r4\",\n  \"EvidenceContract\": {\n    \"EvidenceType\": [\"procedure\", \"list\", \"record\"],\n    \"EvidenceName\": [\"记录控制程序\", \"记录清单\", \"记录保存期限表\"],\n    \"MustHaveFields\": [\"记录名称\", \"标识方式\", \"保存期限\", \"存档方式\", \"处置方法\", \"责任部门\", \"检索方法\"],\n    \"Frequency\": \"未明确\",\n    \"Coverage\": \"全条款\",\n    \"Signer\": [\"管理者代表\", \"文件控制负责人\"],\n    \"JudgementRules\": [\n      \"有成文程序 + 明确标识/保存期限/处置要求 = 符合\",\n      \"缺保存期限或处置规定 = 部分\",\n      \"无程序或仅标题无内容 = 缺失\",\n      \"未覆盖委托方/顾客提供记录的保密性要求 = 不符合\"\n    ],\n    \"ReportUse\": [\"sample\", \"coverage\"]\n  }\n}"
+  },
+  {
+    "ClauseNumber": "8.2.4",
+    "Title": "内部审核",
+    "Output": {
+      "ClauseIntent": "组织按策划的时间间隔进行内部审核以确定质量管理体系是否符合要求并得到有效实施和保持。",
+      "Obligation": "shall",
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Process": [
+        "management"
+      ],
+      "Severity": "major",
+      "EvidenceForm": "cite",
+      "EvidenceFamily": "f1f2",
+      "Role": "r6",
+      "EvidenceContract": {
+        "EvidenceType": [
+          "procedure",
+          "record",
+          "report"
+        ],
+        "EvidenceName": [
+          "内部审核程序",
+          "年度内部审核计划",
+          "内部审核报告",
+          "内部审核检查表"
+        ],
+        "MustHaveFields": [
+          "审核准则",
+          "审核范围",
+          "审核时间间隔",
+          "审核方法",
+          "审核员姓名及独立性声明",
+          "受审核区域",
+          "不合格项描述",
+          "纠正措施要求",
+          "验证结果"
+        ],
+        "Frequency": "每事件",
+        "Coverage": "全条款",
+        "Signer": [
+          "审核组长",
+          "管理者代表",
+          "受审核区域负责人"
+        ],
+        "JudgementRules": [
+          "有已发布程序+年度计划+每次审核的检查表+报告+纠正措施跟踪记录 = 符合",
+          "缺审核员独立性声明/未覆盖全部过程/无纠正措施验证 = 部分",
+          "仅有空白模板或无任何审核活动证据 = 缺失",
+          "无内审安排且无合理暂停说明 = 不适用"
+        ],
+        "ReportUse": [
+          "coverage",
+          "counter"
+        ]
+      }
+    },
+    "Raw": "{\n  \"ClauseIntent\": \"组织按策划的时间间隔进行内部审核以确定质量管理体系是否符合要求并得到有效实施和保持。\",\n  \"Obligation\": \"shall\",\n  \"Applicability\": \"general\",\n  \"ApplicabilityCondition\": \"\",\n  \"Process\": [\"management\"],\n  \"Severity\": \"major\",\n  \"EvidenceForm\": \"cite\",\n  \"EvidenceFamily\": \"f1f2\",\n  \"Role\": \"r6\",\n  \"EvidenceContract\": {\n    \"EvidenceType\": [\"procedure\", \"record\", \"report\"],\n    \"EvidenceName\": [\"内部审核程序\", \"年度内部审核计划\", \"内部审核报告\", \"内部审核检查表\"],\n    \"MustHaveFields\": [\"审核准则\", \"审核范围\", \"审核时间间隔\", \"审核方法\", \"审核员姓名及独立性声明\", \"受审核区域\", \"不合格项描述\", \"纠正措施要求\", \"验证结果\"],\n    \"Frequency\": \"每事件\",\n    \"Coverage\": \"全条款\",\n    \"Signer\": [\"审核组长\", \"管理者代表\", \"受审核区域负责人\"],\n    \"JudgementRules\": [\n      \"有已发布程序+年度计划+每次审核的检查表+报告+纠正措施跟踪记录 = 符合\",\n      \"缺审核员独立性声明/未覆盖全部过程/无纠正措施验证 = 部分\",\n      \"仅有空白模板或无任何审核活动证据 = 缺失\",\n      \"无内审安排且无合理暂停说明 = 不适用\"\n    ],\n    \"ReportUse\": [\"coverage\", \"counter\"]\n  }\n}"
+  },
+  {
+    "ClauseNumber": "8.2.6",
+    "Title": "产品的监视和测量",
+    "Output": {
+      "ClauseIntent": "对产品特性进行监视和测量以验证产品要求已得到满足",
+      "Obligation": "shall",
+      "Applicability": "conditional",
+      "ApplicabilityCondition": "对于植入性医疗器械",
+      "Process": [
+        "inspection",
+        "production"
+      ],
+      "Severity": "critical",
+      "EvidenceForm": "sample",
+      "EvidenceFamily": "f2",
+      "Role": "r5",
+      "EvidenceContract": {
+        "EvidenceType": [
+          "record"
+        ],
+        "EvidenceName": [
+          "成品检验记录",
+          "产品放行审核记录",
+          "植入性医疗器械检验人员身份记录"
+        ],
+        "MustHaveFields": [
+          "产品名称",
+          "规格型号",
+          "生产批号",
+          "检验项目",
+          "检验结果",
+          "接收准则",
+          "检验员",
+          "放行人",
+          "日期",
+          "检测设备（适当时）",
+          "检验人员身份（植入性医疗器械）"
+        ],
+        "Frequency": "每批",
+        "Coverage": "全产品/全批次",
+        "Signer": [
+          "检验员",
+          "放行人"
+        ],
+        "JudgementRules": [
+          "有已填记录 + 接收准则 + 检验结果 + 放行人 + 日期 = 符合",
+          "缺放行人/日期/检测设备（适当时）/检验人员身份（植入性医疗器械） = 部分",
+          "只有空白模板或无记录 = 缺失",
+          "未覆盖所有批次或植入性医疗器械未单独标识检验人员身份 = 不适用"
+        ],
+        "ReportUse": [
+          "sample",
+          "coverage",
+          "counter"
+        ]
+      }
+    },
+    "Raw": "{\n  \"ClauseIntent\": \"对产品特性进行监视和测量以验证产品要求已得到满足\",\n  \"Obligation\": \"shall\",\n  \"Applicability\": \"conditional\",\n  \"ApplicabilityCondition\": \"对于植入性医疗器械\",\n  \"Process\": [\"inspection\", \"production\"],\n  \"Severity\": \"critical\",\n  \"EvidenceForm\": \"sample\",\n  \"EvidenceFamily\": \"f2\",\n  \"Role\": \"r5\",\n  \"EvidenceContract\": {\n    \"EvidenceType\": [\"record\"],\n    \"EvidenceName\": [\"成品检验记录\", \"产品放行审核记录\", \"植入性医疗器械检验人员身份记录\"],\n    \"MustHaveFields\": [\"产品名称\", \"规格型号\", \"生产批号\", \"检验项目\", \"检验结果\", \"接收准则\", \"检验员\", \"放行人\", \"日期\", \"检测设备（适当时）\", \"检验人员身份（植入性医疗器械）\"],\n    \"Frequency\": \"每批\",\n    \"Coverage\": \"全产品/全批次\",\n    \"Signer\": [\"检验员\", \"放行人\"],\n    \"JudgementRules\": [\n      \"有已填记录 + 接收准则 + 检验结果 + 放行人 + 日期 = 符合\",\n      \"缺放行人/日期/检测设备（适当时）/检验人员身份（植入性医疗器械） = 部分\",\n      \"只有空白模板或无记录 = 缺失\",\n      \"未覆盖所有批次或植入性医疗器械未单独标识检验人员身份 = 不适用\"\n    ],\n    \"ReportUse\": [\"sample\", \"coverage\", \"counter\"]\n  }\n}"
+  }
+]

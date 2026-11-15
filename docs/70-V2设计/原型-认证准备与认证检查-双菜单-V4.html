@@ -292,6 +292,58 @@ body.sb-open.clause-open .main{margin-right:460px;}
 .evrow .body{flex:1;min-width:0;}
 .evrow .src{font-size:11px;color:var(--i);margin-top:3px;}
 
+/* ── 分析证据：合并成一段话，带出处；下挂「每份资料找到什么」明细 ── */
+.narr{border:1px solid #d9ecff;border-left:3px solid var(--p);border-radius:5px;
+  background:#fff;padding:9px 11px;font-size:12.5px;line-height:2;color:var(--txt);}
+.narr p{margin:0 0 8px;}
+.narr p:last-child{margin:0;}
+.narr .cite{display:inline-block;font-size:11px;color:var(--p);background:#ecf5ff;
+  border-radius:3px;padding:0 5px;margin:0 2px;white-space:nowrap;cursor:pointer;}
+.narr .cite:hover{text-decoration:underline;}
+.narr .judge{color:#b88230;font-weight:600;}
+.narr .ok{color:#529b2e;font-weight:600;}
+.narr .bad{color:var(--d);font-weight:600;}
+.narr textarea{width:100%;border:1px dashed #cfe3fb;border-radius:4px;background:#fff;
+  padding:7px 8px;font-family:inherit;font-size:12.5px;line-height:1.95;color:var(--txt);
+  resize:vertical;min-height:120px;}
+.narr textarea:focus{outline:none;border-color:var(--p);border-style:solid;}
+.narr-ft{display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap;}
+.narr-ft .sp{flex:1;}
+.evcell{white-space:nowrap;}
+
+.dep{margin-top:8px;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#fff;}
+.dep-hd{background:#fafafa;font-size:11px;color:var(--i);padding:4px 9px;
+  display:flex;justify-content:space-between;align-items:center;}
+.dep-row{display:flex;gap:7px;align-items:flex-start;padding:6px 9px;font-size:11.5px;
+  border-top:1px solid var(--line2);line-height:1.7;}
+.dep-row .who{flex:0 0 auto;font-size:10.5px;padding:0 5px;border-radius:3px;
+  background:#f0f4f8;color:#4a5a6a;margin-top:1px;white-space:nowrap;}
+.dep-row .who.hu{background:#f8fdf5;color:#529b2e;}
+.dep-row .who.site{background:#ecf5ff;color:var(--p);}
+.dep-row .t{flex:1;min-width:0;color:var(--txt2);}
+.dep-row .t b{color:var(--txt);font-weight:600;}
+.dep-row .go{flex:0 0 auto;}
+
+/* 应查证据：只列合理项，齐不齐由审核员勾 */
+.req{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px dotted var(--line2);}
+.req:last-child{border-bottom:none;}
+.req .box{flex:0 0 auto;margin-top:3px;}
+.req .t{flex:1;min-width:0;line-height:1.7;}
+.req .t b{font-weight:600;}
+.req .why{font-size:11px;color:var(--i);display:block;margin-top:2px;}
+.req .ops{flex:0 0 auto;white-space:nowrap;}
+.req.on .t b{color:var(--txt);}
+.evbtn{background:#fff;border:1px dashed #a8c8ee;color:var(--p);font-size:11px;
+  padding:1px 6px;border-radius:3px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.evbtn:hover{background:#ecf5ff;border-style:solid;}
+.evbtn.mut{border-color:#dcdfe6;color:var(--i);}
+.evbtn.mut:hover{background:#f5f7fa;color:var(--txt2);}
+button.chip{font-family:inherit;cursor:pointer;}
+button.chip.on{background:#ecf5ff;border-color:#a8c8ee;color:var(--p);font-weight:600;}
+.dropzone{border:1px dashed #c8d6e5;border-radius:5px;background:#fbfcfd;color:var(--i);
+  font-size:12px;text-align:center;padding:14px 10px;cursor:pointer;}
+.dropzone:hover{border-color:var(--p);color:var(--p);background:#f8fcff;}
+
 .sus{border:1px solid #fcd3d3;border-radius:6px;background:#fff;padding:8px 10px;margin-bottom:7px;}
 .sus:last-child{margin-bottom:0;}
 .sus .h{font-weight:600;color:#a94442;font-size:12px;margin-bottom:3px;}
@@ -451,7 +503,7 @@ textarea{resize:vertical;}
         <h2>一 · 审核员在页面上只做两件事</h2>
         <table>
           <tr><th style="width:120px">动作</th><th style="width:300px">做什么</th><th>什么时候用</th></tr>
-          <tr><td><b>补充证据</b></td><td>补充证据：上传文件 / 拍照 / 录音 / 写一段访谈记录；准备阶段还可以「请企业补资料」</td><td>分析前先给料，或分析后发现证据不够再补。<b>没有证据也能分析</b>，只是结论会落到「待判断」</td></tr>
+          <tr><td><b>补充证据</b></td><td><b>按检查项</b>录：点表里「证据」列的 <b>+</b>，或在条款里点「+ 补充本项证据」。可上传文件、拍照、录音、写一段访谈记录；准备阶段还能「请企业补资料」</td><td>分析前先给料，或分析后发现证据不够再补。<b>没有证据也能分析</b>，只是结论会落到「待判断」。录入的证据与文件同权，一起进本项分析</td></tr>
           <tr><td><b>分析</b></td><td>对勾选的检查项跑一轮自动分析，跑完直接出「证据 + 疑点 + 建议结论」</td><td>资料齐了就分析；企业补了新资料、现场又取了证，再分析一次</td></tr>
         </table>
         <p>收尾动作只有三个：<b>锁定</b>（人确认过的结论不再被后续分析改动）、<b>导出报告</b>（检查阶段）、<b>生成入场计划</b>（准备阶段的可选产出，不是必经步骤）。</p>
@@ -461,13 +513,13 @@ textarea{resize:vertical;}
           <tr><th style="width:110px">菜单</th><th style="width:210px">给审核员的东西</th><th>用途</th><th style="width:190px">不会出现</th></tr>
           <tr>
             <td><b style="color:#b88230">认证准备</b></td>
-            <td>① <b>条款要点</b>（这段条款到底要什么，人话）<br>② <b>检查内容</b>（本项要核对哪些事，可增删）<br>③ <b>认证证据</b>（从企业资料里按条款抽出来的原文与出处）<br>④ <b>疑点</b>（材料矛盾、缺失、看不出真假的地方）<br>⑤ <b>证据缺口</b>（要企业补哪几份，审核员维护）</td>
-            <td>让审核员在进场前就知道：这条要不要现场查、去了问谁、要什么材料。<b>疑点 → 入场检查项</b>是自然产物，不是强制流程</td>
+            <td>① <b>条款要点</b>（这段条款到底要什么，人话）<br>② <b>检查内容</b>（本项要核对哪些事，可增删）<br>③ <b>分析证据 = 本项结论</b>（<b>一段话写完</b>：查见哪份资料、从中找到什么、据此得出什么结论，出处夹在文中）<br>④ <b>疑点</b>（材料矛盾、缺失、看不出真假的地方）<br>⑤ <b>应查证据</b>（这条正常该有哪些证据；<b>齐不齐由审核员勾</b>）</td>
+            <td>让审核员在进场前就知道：这条要不要现场查、去了问谁、要什么材料。<b>结论直接给出、可直接改</b>，疑点 → 入场检查项是自然产物，不是强制流程</td>
             <td>结论（符合/不符合）、NC 签发、整改要求</td>
           </tr>
           <tr>
             <td><b style="color:#337ecc">认证检查</b></td>
-            <td>① <b>证据</b>（现场取证 + 企业资料，按条款归档）<br>② <b>NC 疑点</b>（事实 + 违反哪条 + 建议档次 + 建议怎么问）<br>③ <b>建议结论</b>（符合 / 观察项 / 不符合 + 严重度）<br>④ <b>项目总结论建议</b></td>
+            <td>① <b>检查证据 = 检查结论</b>（<b>同一段话</b>：现场取证 + 企业资料 + 审核员录入，按条款合并写成审核记录；系统起草、审核员直接改，导出报告就用这段）<br>② <b>NC 疑点</b>（事实 + 违反哪条 + 建议档次 + 建议怎么问）<br>③ <b>结论与严重度</b>（人拍板，改了就生效）<br>④ <b>项目总结论建议</b></td>
             <td>让审核员快速把现场变成可签发的东西：证据齐、疑点清、NC 一次签对</td>
             <td>提示词、模型名、规则参数、装配命中数</td>
           </tr>
@@ -477,7 +529,7 @@ textarea{resize:vertical;}
         <table>
           <tr><th style="width:44px">#</th><th style="width:300px">意见</th><th>落点</th></tr>
           <tr><td>1</td><td>准备与检查虽是独立菜单，但从计划转过去应<b>直达详情</b>——一份计划对应一份准备、一份检查（1:1）</td><td>计划表的「准备 / 检查」状态标签、更多菜单全部改为<b>直达该计划的详情</b>，不再落到列表首页；详情面包屑可回计划。列表仍保留，用于跨计划查看与统计</td></tr>
-          <tr><td>2</td><td>锁定的是<b>一个条款一个结论</b>，不是条款里的每个细节；<b>证据缺口由审核员补充</b>；准备增加<b>检查内容</b></td><td>行内锁定改为「本项结论」整条锁定（<b>已锁 / 锁定</b>），去掉 1/4 这类细项计数；准备新增「检查内容」列与编辑区（本项要核对什么，可增删）；证据缺口改为审核员维护的清单（可新增 / 删减 / 改状态），系统建议只作预填</td></tr>
+          <tr><td>2</td><td>锁定的是<b>一个条款一个结论</b>，不是条款里的每个细节；<b>证据缺口由审核员补充</b>；准备增加<b>检查内容</b></td><td>行内锁定改为「本项结论」整条锁定（<b>已锁 / 锁定</b>），去掉 1/4 这类细项计数；准备新增「检查内容」列与编辑区（本项要核对什么，可增删）；原「证据缺口」重构为<b>应查证据</b>（清单由系统列、齐全与否由人勾，见「三之三」）</td></tr>
           <tr><td>3</td><td>页面要清晰，不要塞满辅助说明；一个页面或板块一个 <b>?</b>，讲清怎么操作即可</td><td>工作页移除成段说明块，改为页头 <b>?</b> 打开说明抽屉（做什么 / 三步操作 / 字段含义 / 锁定规则）；条款抽屉也有 <b>?</b>。说明不占工作区，关掉即回到原状态</td></tr>
         </table>
 
@@ -491,6 +543,15 @@ textarea{resize:vertical;}
           <tr><td><b>可逆</b></td><td>随时「恢复」：恢复后重新进入认证检查，结论回到准备阶段的结果，可再次分析。</td></tr>
         </table>
 
+        <h2>三之三 · 补充口径（证据的写法 · 结论的位置 · 应查证据 · 按项补证）</h2>
+        <table>
+          <tr><th style="width:170px">口径</th><th>怎么落</th></tr>
+          <tr><td><b>证据不拆成一条条，合并成一段</b></td><td>参照归档案例里的真实审核记录写法：<b>一段话按资料顺序写下来</b>（查见《质量手册》5.5.1…；查见《组织架构图》…；据审核员现场核实…；综合判定…）。出处不另开一栏，直接夹在句子里；下面挂「这段结论从哪来」明细，<b>逐份资料 / 逐条录入</b>说明「从中找到了什么」并可回原文。不再出现「证据 1 / 证据 2 …」的分条列表。</td></tr>
+          <tr><td><b>分析出的证据就是结论</b></td><td>不再分「证据区」与「判定区」两块。系统写的那段就是<b>结论正文</b>（报告里的审核记录），审核员在同一个文本框里直接改；改完即生效，不弹「你改了系统判断」。检查阶段额外给「结论 / 严重度」两个下拉，用于报告归类。</td></tr>
+          <tr><td><b>应查证据 = 合理清单，齐不齐由人判断</b></td><td>系统只列「这条条款正常应有哪些证据」（每条带条款依据），<b>不判定状态、不打「待提交 / 未响应」标签</b>。审核员逐条打勾表示「这份已经齐了」；没打勾的才会进「发企业补」。</td></tr>
+          <tr><td><b>补充证据按检查项，不在顶部</b></td><td>顶部工具栏只留<b>批量动作</b>（开始分析 / 导出 / 签发 NC）。补证入口两个，都在“项”上：<b>①表格「证据」列</b>的 <code>N 份 +</code>；<b>②条款抽屉</b>里「+ 补充本项证据」。弹窗里选形式（文件 / 拍照 / 录音 / 文字）、写事实、挂到具体一条检查内容。保存即挂在本项，<b>下一轮 LLM 把它与文件证据同等看待</b>，结论里会引用。</td></tr>
+        </table>
+
         <h2>四 · V3 的 8 条意见落在哪里</h2>
         <table>
           <tr><th style="width:44px">#</th><th style="width:300px">意见</th><th>落点</th></tr>
@@ -498,7 +559,7 @@ textarea{resize:vertical;}
           <tr><td>2</td><td>所有检查项可勾选，勾选后重新分析；锁定在检查项列表也能单独操作</td><td>准备 / 检查详情表首列<b>复选框</b>，勾选后浮出蓝色操作条（重新分析已选 / 锁定已选 / 清除）；每行仍有独立<b>锁定</b>按钮——V4 起统一为<b>锁该条款的整条结论</b>，不再按细节计数</td></tr>
           <tr><td>3</td><td>可增加条款原文，只是一个小按钮，让审核员直接查看</td><td>每个检查项后一个灰色小按钮<b>「条款原文」</b>，点开右侧窄抽屉（460px）：标准原文 + 关键要求 + 常见取证点 + 本企业已有证据数；<b>不离开当前页</b></td></tr>
           <tr><td>4</td><td>入场计划不是必要结果；不要完整流程示意图；只有两个操作；部门与联系人在认证计划里定义好，准备可完善，审核员在详情可改</td><td>删除两处步骤条；入场计划降级为「可选产出」，从准备详情导出，侧栏不再单列；计划页新增<b>部门 / 联系人</b>两列（事实源）；准备详情中「部门 · 联系人」「审核员」均带 <span class="tag hu">可改</span>，改的是本检查项</td></tr>
-          <tr><td>5</td><td>准备是为审核员提供便利：快速了解条款细节、看分析出的档案证据，为制定入场计划做准备；检查是快速录入证据、全面分析、形成证据与 NC 疑点，辅助判断</td><td>准备的抽屉改为四段：<b>条款要点 / 企业资料里的证据 / 疑点 / 证据缺口</b>；检查的抽屉为：<b>证据 / NC 疑点 / 判定 / 已签 NC</b>；两者共用「补充证据 → 分析」的交互</td></tr>
+          <tr><td>5</td><td>准备是为审核员提供便利：快速了解条款细节、看分析出的档案证据，为制定入场计划做准备；检查是快速录入证据、全面分析、形成证据与 NC 疑点，辅助判断</td><td>准备抽屉：<b>条款要点 / 检查内容 / 分析证据 = 本项结论 / 疑点 / 应查证据</b>；检查抽屉：<b>条款要点 / 检查证据 = 检查结论 / NC 疑点 / 已签 NC</b>；两者共用「按项补证 → 分析 → 改结论 → 锁定」的交互</td></tr>
           <tr><td>6</td><td>执行 LLM 的逻辑和界面设计分开，先重点研究界面</td><td>本文件只描述界面与交互；执行细节集中在「附录 · 术语对照」与本页第四节（后台实现），<b>工作页面不出现</b></td></tr>
           <tr><td>7</td><td>只要执行一遍重新分析，可以是 1 轮自动分析</td><td>「重新分析」= <b>一轮自动分析</b>：一次提交、系统分批跑完勾选项，中途不用人盯；按钮文案统一为「开始分析（约 N 分钟）」</td></tr>
           <tr><td>8</td><td>准备的结论是认证证据与疑点；检查的 AI 结果也类似</td><td>两端统一用「<b>证据 + 疑点</b>」这套语言；差异只在检查多一步「定 NC」</td></tr>
@@ -516,10 +577,11 @@ textarea{resize:vertical;}
 
         <h2>六 · 界面语言约定</h2>
         <ul>
-          <li><b>证据</b>：企业资料里读到的原文、现场拍的照、访谈记录。都带出处（文件 / 时间 / 部门）。</li>
+          <li><b>证据</b>：企业资料里读到的原文、现场拍的照、访谈记录、审核员写的一段话。<b>按条款合并成一段写</b>，出处夹在句子里（文件 / 页码 / 时间 / 部门）。</li>
           <li><b>疑点</b>：需要人再看一眼的地方。写法固定三句：<b>看到了什么 · 为什么可疑 · 建议怎么核实</b>。</li>
           <li><b>检查内容</b>（准备阶段）：这条条款要核对的事，按「查文件 / 现场核对 / 访谈」列出来；系统给预填，审核员可增删。</li>
-          <li><b>证据缺口</b>：要企业补的资料清单，由审核员维护（新增 / 删减 / 改状态），系统建议只作预填。</li>
+          <li><b>应查证据</b>（原「证据缺口」）：这条条款正常应有哪些证据，系统列清单、<b>不判状态</b>；齐不齐由审核员打勾。没打勾的才发企业补。</li>
+          <li><b>结论</b>：系统起草的那段证据文字就是结论正文，审核员在同一个框里改，改完即最终结论。</li>
           <li><b>锁定</b>：<b>一个条款一个结论</b>。锁的是这条结论，不是条款里的每个细节；锁定后该条款不参与重算，证据与疑点仍可补。</li>
           <li><b>建议结论</b>：系统给的建议，永远可被审核员直接改掉，不留「你改了系统判断」的提示。</li>
           <li><b>待判断</b>：材料不足以下结论时用，<b>不等于不符合</b>（灰，不是红）。</li>
@@ -529,7 +591,8 @@ textarea{resize:vertical;}
         <h2>七 · 数据现实（影响界面预期，不影响交互）</h2>
         <p>企业资料的可读性目前偏低：119 份文档里只有 7 份能按条款定位原文。
         所以界面上要能承受「<b>证据很少、疑点很多、结论多为待判断</b>」的状态——这不是异常，是当前常态。
-        因此准备详情把 <b>证据缺口</b> 放在显眼位置（要企业补什么），检查详情允许 <b>0 份证据也能分析</b>。</p>
+        因此准备详情要能一眼看出<b>哪些应查证据还没齐</b>，检查详情允许 <b>0 份证据也能分析</b>；
+        而分析出来的那段话就是结论草稿——<b>哪怕只有一两条证据，也给审核员一段能直接改的文字</b>，而不是空白让他从零写。</p>
 
         <div class="hint gray" style="margin-top:16px">
           本原型只有界面与交互，无后端。所有按钮点击给出提示语，用于确认文案与位置；
@@ -723,7 +786,7 @@ textarea{resize:vertical;}
               <th style="width:62px">检查项</th>
               <th style="width:124px">进度</th>
               <th style="width:108px">证据 / 疑点</th>
-              <th style="width:96px">证据缺口</th>
+              <th style="width:100px">应查证据</th>
               <th style="width:128px">预计完成</th>
               <th style="width:92px">状态</th>
               <th style="width:118px">操作</th>
@@ -738,7 +801,7 @@ textarea{resize:vertical;}
               <td>12</td>
               <td><span class="prog"><span class="bar"><div style="width:66%"></div></span><span class="num">8/12</span></span></td>
               <td>14 份 / 9 处</td>
-              <td><span class="chip o">待补 5 份</span></td>
+              <td><span class="chip g">齐全 7</span> <span class="chip o">未齐 5</span></td>
               <td><b style="font-weight:600">10:56</b> <span class="muted" style="font-size:11px">（剩 4 项 · 约 4 分钟）</span></td>
               <td><span class="tag run click" title="running" onclick="event.stopPropagation();openStatus('prep')">分析中</span></td>
               <td>
@@ -748,7 +811,7 @@ textarea{resize:vertical;}
                   <div class="dd-item" onclick="openDlg('dlg-rerun')">重新分析已选项…</div>
                   <div class="dd-item" onclick="toast('已暂停：正在跑的那一项跑完就停')">暂停分析</div>
                   <div class="dd-sep"></div>
-                  <div class="dd-item" onclick="toast('已生成证据缺口清单（5 份），可发给企业')">发送资料补充清单</div>
+                  <div class="dd-item" onclick="toast('已把未打勾的 5 条应查证据发给企业（附条款依据）')">把未齐全的应查证据发企业</div>
                   <div class="dd-item" onclick="go('planitems')">生成入场计划（可选）</div>
                 </div>
               </td>
@@ -783,7 +846,7 @@ textarea{resize:vertical;}
               <td>9</td>
               <td><span class="prog"><span class="bar"><div style="width:33%;background:#e6a23c"></div></span><span class="num">3/9</span></span></td>
               <td>4 份 / 2 处</td>
-              <td><span class="chip b">缺 9 份</span></td>
+              <td><span class="chip b">齐全 0</span> <span class="chip o">未齐 9</span></td>
               <td class="muted">已暂停 · 继续后约 6 分钟</td>
               <td><span class="tag pause click" title="paused" onclick="event.stopPropagation();openStatus('prep')">已暂停</span></td>
               <td>
@@ -793,7 +856,7 @@ textarea{resize:vertical;}
                   <div class="dd-item" onclick="toast('继续分析：从第 4 项开始，约 6 分钟')">继续分析</div>
                   <div class="dd-item" onclick="openDlg('dlg-rerun')">重新分析已选项…</div>
                   <div class="dd-sep"></div>
-                  <div class="dd-item" onclick="toast('已生成证据缺口清单（9 份），可发给企业')">发送资料补充清单</div>
+                  <div class="dd-item" onclick="toast('已把未打勾的 9 条应查证据发给企业（附条款依据）')">把未齐全的应查证据发企业</div>
                 </div>
               </td>
             </tr>
@@ -825,22 +888,21 @@ textarea{resize:vertical;}
       </div>
 
       <div class="lockbar">
-        <b>分析中</b> · 已完成 8 / 12 · 剩余 4 项约 4 分钟（预计 10:56）· 分析期间可继续补充证据，新证据会并入下一轮
+        <b>分析中</b> · 已完成 8 / 12 · 剩余 4 项约 4 分钟（预计 10:56）· 补证据按检查项（点表里「证据」列）· 分析期间补的证据并入下一轮
       </div>
 
       <div class="toolbar">
         <div class="grp">
           <button class="btn btn-p" onclick="analyze('prep')">开始分析（约 4 分钟）</button>
-          <button class="btn btn-w" onclick="openSb('prep')">补充证据</button>
         </div>
         <div class="grp">
-          <button class="btn btn-o" onclick="toast('已按“疑点 + 证据缺口”生成 31 条入场检查项（草稿），可在入场计划里逐条确认')">生成入场计划</button>
+          <button class="btn btn-o" onclick="toast('已按“疑点 + 未齐的应查证据”生成 31 条入场检查项（草稿），可在入场计划里逐条确认')">生成入场计划</button>
           <button class="btn btn-o" onclick="exportReport('prep')">导出准备结果</button>
         </div>
         <div class="sp"></div>
         <span class="tag done">已有证据 14</span>
         <span class="tag nc-min">疑点 9</span>
-        <span class="tag nc-maj">证据缺口 5</span>
+        <span class="tag nc-maj">应查证据未齐 5</span>
         <span class="tag lock">锁定 3 个条款</span>
         <span class="tag off">准备阶段关闭 1 项</span>
       </div>
@@ -871,13 +933,13 @@ textarea{resize:vertical;}
             <tr>
               <th style="width:30px" class="ctr"><input type="checkbox" class="chk" onclick="toggleSelAll('prep',this)"></th>
               <th style="width:26px">#</th>
-              <th style="width:224px">检查项 / 条款</th>
+              <th style="width:208px">检查项 / 条款</th>
               <th style="width:146px">部门 · 联系人 <span style="font-weight:400;color:var(--w)">可完善</span></th>
               <th style="width:84px">审核员 <span style="font-weight:400;color:var(--w)">可改</span></th>
               <th style="width:92px">检查内容</th>
-              <th style="width:46px">证据</th>
+              <th style="width:64px">证据</th>
               <th style="width:144px">疑点（需核实的事）</th>
-              <th style="width:108px">证据缺口</th>
+              <th style="width:108px">应查证据</th>
               <th style="width:124px">本项结论</th>
               <th style="width:120px" class="ctr">本轮处置</th>
             </tr>
@@ -893,7 +955,7 @@ textarea{resize:vertical;}
               <td><div class="contact"><span class="avatar">王</span>总经办 · 王主任</div></td>
               <td><div class="contact"><span class="avatar g">李</span>李振华</div></td>
               <td><button class="btn-t" onclick="event.stopPropagation();openSb('prep')">已备 3/3</button></td>
-              <td>2 份</td>
+              <td class="evcell"><button class="evbtn" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">3 份 <span style="font-weight:600">+</span></button></td>
               <td class="muted">—</td>
               <td class="muted">—</td>
               <td class="concl"><span class="tag nc-ok">资料齐全</span> <span class="tag idle">文件即可</span></td>
@@ -909,9 +971,9 @@ textarea{resize:vertical;}
               <td><div class="contact"><span class="avatar">王</span>总经办 · 王主任</div><div class="contact"><span class="avatar o">周</span>品管部 · 周敏</div></td>
               <td><div class="contact"><span class="avatar g">李</span>李振华</div></td>
               <td><button class="btn-t" onclick="event.stopPropagation();openSb('prep')">已备 3/5</button></td>
-              <td>2 份</td>
+              <td class="evcell"><button class="evbtn" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">3 份 <span style="font-weight:600">+</span></button></td>
               <td><div class="chips"><span class="chip b">人数与架构图不一致</span><span class="chip o">职责未传达到岗位</span></div></td>
-              <td><div class="chips"><span class="chip o">待补 3 份</span></div></td>
+              <td><div class="chips"><span class="chip g">齐全 1</span><span class="chip o">未齐 3</span></div></td>
               <td class="concl"><span class="tag nc-min">资料不齐</span> <span class="tag nc-maj">需现场</span></td>
               <td class="ctr"><div class="act-cell"><button class="lk" onclick="event.stopPropagation();toggleLock(this)">锁定</button><button class="lk off" onclick="event.stopPropagation();closeItem(this)" title="关闭 = 本轮不查 + 默认符合，不进入认证检查">关闭</button></div></td>
             </tr>
@@ -925,9 +987,9 @@ textarea{resize:vertical;}
               <td><div class="contact"><span class="avatar o">周</span>品管部 · 周敏</div></td>
               <td><div class="contact"><span class="avatar o">周</span>周敏</div></td>
               <td><button class="btn-t" onclick="event.stopPropagation();openSb('prep')">已备 2/4</button></td>
-              <td class="muted">0 份</td>
+              <td class="evcell"><button class="evbtn mut" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">0 份 <span style="font-weight:600">+</span></button></td>
               <td><div class="chips"><span class="chip b">找不到受控文件清单</span></div></td>
-              <td><div class="chips"><span class="chip b">缺 2 份</span></div></td>
+              <td><div class="chips"><span class="chip b">齐全 0</span><span class="chip o">未齐 2</span></div></td>
               <td class="concl"><span class="tag nc-maj">缺资料</span> <span class="tag nc-maj">需现场</span></td>
               <td class="ctr"><div class="act-cell"><button class="lk" onclick="event.stopPropagation();toggleLock(this)">锁定</button><button class="lk off" onclick="event.stopPropagation();closeItem(this)" title="关闭 = 本轮不查 + 默认符合，不进入认证检查">关闭</button></div></td>
             </tr>
@@ -957,9 +1019,9 @@ textarea{resize:vertical;}
               <td><div class="contact"><span class="avatar g">赵</span>生产部 · 赵经理</div></td>
               <td><div class="contact"><span class="avatar n">—</span><span class="muted">未指定</span></div></td>
               <td><button class="btn-t" onclick="event.stopPropagation();openSb('prep')">已备 3/6</button></td>
-              <td>1 份</td>
+              <td class="evcell"><button class="evbtn" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">1 份 <span style="font-weight:600">+</span></button></td>
               <td><div class="chips"><span class="chip b">作业指导书缺 2 工位</span><span class="chip o">点检表有空白项</span></div></td>
-              <td><div class="chips"><span class="chip b">待补 3 份</span></div></td>
+              <td><div class="chips"><span class="chip g">齐全 3</span><span class="chip o">未齐 3</span></div></td>
               <td class="concl"><span class="tag nc-min">资料不齐</span> <span class="tag nc-maj">需现场</span></td>
               <td class="ctr"><div class="act-cell"><button class="lk" onclick="event.stopPropagation();toggleLock(this)">锁定</button><button class="lk off" onclick="event.stopPropagation();closeItem(this)" title="关闭 = 本轮不查 + 默认符合，不进入认证检查">关闭</button></div></td>
             </tr>
@@ -973,7 +1035,7 @@ textarea{resize:vertical;}
               <td><div class="contact"><span class="avatar n">刘</span>销售部 · 刘经理</div></td>
               <td><div class="contact"><span class="avatar n">—</span><span class="muted">未指定</span></div></td>
               <td><button class="btn-t" onclick="event.stopPropagation();openSb('prep')">待确认 3</button></td>
-              <td>1 份</td>
+              <td class="evcell"><button class="evbtn" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">1 份 <span style="font-weight:600">+</span></button></td>
               <td><div class="chips"><span class="chip o">投诉处理只有摘要</span></div></td>
               <td class="muted">—</td>
               <td class="concl"><span class="tag pause">待确认适用性</span></td>
@@ -1009,7 +1071,7 @@ textarea{resize:vertical;}
         <div>
           <h1><span class="bar-accent prep"></span>入场计划 <span class="tag ghost">可选产出</span> <button class="help" onclick="openHelp('planitems')" title="本页说明">?</button></h1>
           <div class="sub">
-            <b>不是必经步骤</b>：准备阶段出的疑点与证据缺口，可以直接在检查页边查边记；
+            <b>不是必经步骤</b>：准备阶段出的疑点与未齐的应查证据，可以直接在检查页边查边记；
             想把它们整理成进场清单再行动，就在这里确认一遍。结构是<b>一个检查项 → 多条现场动作</b>（去哪、查什么、怎么查、抽多少、应发现什么）。
           </div>
         </div>
@@ -1131,7 +1193,7 @@ textarea{resize:vertical;}
           <span class="caret">▶</span><span class="no">#5</span>
           <span class="nm">7.5.1 生产和服务提供的控制</span>
           <span class="tag std">7.5.1 / 7.5.2</span>
-          <span class="tag nc-maj">证据缺口 3 份</span>
+          <span class="tag nc-maj">应查未齐 3</span>
           <span class="sp"></span>
           <span class="muted" style="font-size:11px">3 条现场动作 · 全部草稿</span>
           <button class="btn-t" onclick="event.stopPropagation();toast('新增动作')">+ 动作</button>
@@ -1180,8 +1242,9 @@ textarea{resize:vertical;}
         <div>
           <h1><span class="bar-accent onsite"></span>认证检查 <button class="help" onclick="openHelp('onsite-list')" title="本页说明">?</button></h1>
           <div class="sub">
-            审核员在检查页做两件事：<b>录入现场证据</b> 与 <b>一键分析</b>。分析完直接给「证据 + NC 疑点 + 建议结论」，
-            审核员只需要判断与签发。检查可以直接从计划开启，<b>不依赖准备完成</b>。
+            审核员在检查页做两件事：<b>按项录现场证据</b> 与 <b>一键分析</b>。分析完直接给一段
+            <b>检查结论</b>（现场取证 + 企业资料 + 你录的证据合并写成）与 <b>NC 疑点</b>，
+            审核员只改结论、签 NC。检查可以直接从计划开启，<b>不依赖准备完成</b>。
           </div>
         </div>
         <div class="acts">
@@ -1311,7 +1374,6 @@ textarea{resize:vertical;}
 
       <div class="toolbar">
         <div class="grp">
-          <button class="btn btn-w" onclick="openSb('onsite')">补充证据</button>
           <button class="btn btn-p" onclick="analyze('onsite')">开始分析（约 2 分钟）</button>
         </div>
         <div class="grp">
@@ -1343,10 +1405,10 @@ textarea{resize:vertical;}
             <tr>
               <th style="width:30px" class="ctr"><input type="checkbox" class="chk" onclick="toggleSelAll('onsite',this)"></th>
               <th style="width:26px">#</th>
-              <th style="width:200px">检查项 / 条款</th>
+              <th style="width:184px">检查项 / 条款</th>
               <th style="width:180px">部门 · 联系人</th>
               <th style="width:72px">审核员</th>
-              <th style="width:56px">证据</th>
+              <th style="width:74px">证据</th>
               <th style="width:126px">结论</th>
               <th style="width:168px">NC 疑点</th>
               <th style="width:92px">NC</th>
@@ -1380,7 +1442,7 @@ textarea{resize:vertical;}
               </td>
               <td><div class="contact"><span class="avatar">王</span>总经办 · 王主任</div><div class="contact"><span class="avatar o">周</span>品管部 · 周敏</div></td>
               <td class="muted">李振华</td>
-              <td>2 份</td>
+              <td class="evcell"><button class="evbtn" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">2 份 <span style="font-weight:600">+</span></button></td>
               <td><span class="tag nc-min">不符合</span> <span class="tag nc-min">一般</span></td>
               <td><div class="chips"><span class="chip b">缺岗位说明书与职责分配表</span><span class="chip o">人数与架构图不一致</span></div></td>
               <td><span class="ncno">NC-2026-007</span></td>
@@ -1396,7 +1458,7 @@ textarea{resize:vertical;}
               </td>
               <td><div class="contact"><span class="avatar o">周</span>品管部 · 周敏</div></td>
               <td class="muted">周敏</td>
-              <td><b style="color:var(--w)">0 份</b></td>
+              <td class="evcell"><button class="evbtn mut" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">0 份 <span style="font-weight:600">+</span></button></td>
               <td><span class="tag nc-na">待判断</span><div class="smallnote">材料不足，不等于不符合</div></td>
               <td><div class="chips"><span class="chip o">现场未看到受控清单</span></div></td>
               <td class="muted">—</td>
@@ -1412,7 +1474,7 @@ textarea{resize:vertical;}
               </td>
               <td><div class="contact"><span class="avatar g">赵</span>生产部 · 赵经理</div></td>
               <td class="muted">李振华</td>
-              <td>1 份</td>
+              <td class="evcell"><button class="evbtn" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">1 份 <span style="font-weight:600">+</span></button></td>
               <td><span class="tag nc-ok">观察项</span></td>
               <td><div class="chips"><span class="chip o">车间照明记录不完整</span></div></td>
               <td class="muted">—</td>
@@ -1428,7 +1490,7 @@ textarea{resize:vertical;}
               </td>
               <td><div class="contact"><span class="avatar g">赵</span>生产部 · 赵经理</div></td>
               <td class="muted">李振华</td>
-              <td>4 份</td>
+              <td class="evcell"><button class="evbtn" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">4 份 <span style="font-weight:600">+</span></button></td>
               <td><span class="tag nc-maj">不符合</span> <span class="tag nc-maj">严重</span></td>
               <td><div class="chips"><span class="chip b">现场版本与受控清单不一致</span><span class="chip o">点检表有空白项</span></div></td>
               <td><button class="btn-t d" onclick="event.stopPropagation();openDlg('dlg-nc')">签发</button></td>
@@ -1444,7 +1506,7 @@ textarea{resize:vertical;}
               </td>
               <td><div class="contact"><span class="avatar n">刘</span>销售部 · 刘经理</div></td>
               <td class="muted">周敏</td>
-              <td>2 份</td>
+              <td class="evcell"><button class="evbtn" onclick="event.stopPropagation();openEvRow(this)" title="补充本项证据：文件 / 拍照 / 录音 / 一段话">2 份 <span style="font-weight:600">+</span></button></td>
               <td><span class="tag nc-ok">符合</span> <span class="tag hu">人改</span></td>
               <td><div class="chips"><span class="chip">投诉处理记录摘要（已核实）</span></div></td>
               <td class="muted">—</td>
@@ -1482,7 +1544,7 @@ textarea{resize:vertical;}
           <tr><th style="width:120px">落库值</th><th style="width:130px">界面文案</th><th>含义</th><th style="width:130px">会不会出 NC</th></tr>
           <tr><td><code>found</code></td><td>资料齐全</td><td>资料齐且互不矛盾</td><td>否</td></tr>
           <tr><td><code>partial</code></td><td>资料不齐</td><td>有资料但缺关键要素，或互相矛盾</td><td>否（转疑点）</td></tr>
-          <tr><td><code>missing</code></td><td>缺资料</td><td>完全找不到</td><td>否（转证据缺口）</td></tr>
+          <tr><td><code>missing</code></td><td>缺资料</td><td>完全找不到</td><td>否（转应查证据未齐）</td></tr>
           <tr><td><code>unknown</code></td><td>无法判断</td><td>资料不足以下判断，<b>不等于不符合</b></td><td><b>绝不</b></td></tr>
           <tr><td><code>na</code></td><td>不适用</td><td>该条款不适用于本企业 / 本阶段（只能人确认）</td><td>否</td></tr>
         </table>
@@ -1510,11 +1572,13 @@ textarea{resize:vertical;}
         </table>
         <p class="smallnote">阈值规则当前为<b>初稿未确认</b>，界面只在项目结论旁标“建议”，不强断言。审核员改了就是最终结论。</p>
 
-        <h2>四 · 准备阶段的检查内容 / 证据缺口 / 锁定</h2>
+        <h2>四 · 准备阶段的检查内容 / 应查证据 / 本项结论正文 / 锁定</h2>
         <table>
-          <tr><th style="width:110px">对象</th><th style="width:210px">粒度</th><th style="width:190px">谁维护</th><th>落库值（只存不显）</th></tr>
+          <tr><th style="width:120px">对象</th><th style="width:200px">粒度</th><th style="width:180px">谁维护</th><th>落库值（只存不显）</th></tr>
           <tr><td><b>检查内容</b></td><td>一个条款 N 条「要核对的事」</td><td>系统按条款预填，<b>审核员可增删 / 改说法</b></td><td><code>Method</code>：file / record / onsite / interview；<code>Status</code>：todo / done / na；<code>Source</code>：system / manual</td></tr>
-          <tr><td><b>证据缺口</b></td><td>一个条款 N 份「要企业补的资料」</td><td><b>审核员维护</b>（新增 / 删减 / 改状态），系统建议只预填</td><td><code>Status</code>：pending / sent / received / missing</td></tr>
+          <tr><td><b>应查证据</b><br><span class="smallnote">原「证据缺口」</span></td><td>一个条款 N 条「正常应有哪份证据」，<b>带条款依据</b></td><td>系统列清单（可增删）；<b>齐不齐由审核员打勾</b>，系统不判状态</td><td><code>IsRequired</code>(0/1) + <code>IsReceived</code>(0/1，人工勾) + <code>ClauseBasis</code>；<b>不再有 pending / sent / received / missing 状态机</b></td></tr>
+          <tr><td><b>本项结论正文</b></td><td>一个条款 <b>一段话</b>（分析证据 = 结论 / 检查证据 = 结论）</td><td>系统起草（合并叙述，出处夹在句中），<b>审核员在同一文本框直接改</b></td><td><code>ConclusionText</code>(text) + <code>ConclusionSource</code>：system / manual / edited；<code>DraftVersion</code> 保留系统原稿以便「恢复草稿」</td></tr>
+          <tr><td><b>补充证据（按项）</b></td><td>一条证据挂到一个条款 / 一条检查内容</td><td>审核员录入（文件 / 拍照 / 录音 / 文字），可改可删</td><td><code>Kind</code>：file / photo / audio / text；<code>CheckItemCode</code>（挂哪条检查内容，可空 = 整条条款）；<code>Origin</code>：enterprise / auditor；<b>作为 LLM 输入与文件同等权</b></td></tr>
           <tr><td><b>锁定</b></td><td><b>一个条款 = 一条结论</b></td><td>审核员</td><td><code>IsLocked</code> + <code>LockBy</code>（用户 Code） + <code>LockTime</code></td></tr>
           <tr><td><b>关闭检查项</b></td><td><b>一个条款</b>（整条，不分细节）</td><td>审核员，<b>只能在准备阶段</b></td><td><code>IsClosed</code>（0/1）+ <code>CloseBy</code>（用户 Code）+ <code>CloseTime</code> + <code>CloseReason</code>：na / verified / doc_only</td></tr>
         </table>
@@ -1541,7 +1605,9 @@ textarea{resize:vertical;}
           <li><b>分析 = 一轮自动跑完</b>：不需要人分批点，提交后系统依次跑完全部勾选项，跑完提示。</li>
           <li><b>勾选 = 分析范围</b>：勾了只跑勾选的，不勾就跑全部未锁定项；重新分析同理。</li>
           <li><b>锁定 = 一个条款一个结论</b>：锁的是这条结论；行内可单独锁，也可勾选后批量锁；条款里的细节不单独锁。</li>
-          <li><b>检查内容 / 证据缺口可编辑</b>：系统预填，审核员增删改；证据缺口的状态由审核员维护。</li>
+          <li><b>检查内容 / 应查证据可编辑</b>：系统预填，审核员增删改；应查证据只列清单，<b>齐不齐由审核员勾</b>。</li>
+          <li><b>结论就是一段话</b>：系统起草的那段（合并叙述、出处夹在句中）就是结论正文，审核员直接改，导出报告用它。</li>
+          <li><b>补充证据按检查项</b>：入口在表格「证据」列与条款抽屉，不在顶部工具栏；录入的证据与文件一起进本项 LLM。</li>
           <li><b>准备阶段可关闭检查项</b>：关闭 = 本轮不查 + 默认符合，不进入认证检查、不可签 NC；导出仍是完整报告，导出前提示「其中 N 项未现场验证」。</li>
           <li><b>补充证据随时可做</b>：分析中也行；新证据并入下一轮，不会丢。</li>
           <li><b>结论可改</b>：审核员改了就是最终结论，不弹对比、不做差异页。</li>
@@ -1599,10 +1665,9 @@ textarea{resize:vertical;}
   <div class="sb-body">
     <div class="summary">
       <span><span class="k">本项结论</span> <span class="tag nc-min">资料不齐</span> <span class="tag nc-maj">需现场</span></span>
-      <span><span class="k">检查内容</span> 5 条 · 待备 2</span>
-      <span><span class="k">证据</span> 2 份</span>
+      <span><span class="k">证据</span> 3 份 + 2 录入</span>
+      <span><span class="k">应查</span> 4 项 · 齐全 1</span>
       <span><span class="k">疑点</span> 2 处</span>
-      <span><span class="k">证据缺口</span> 3 份</span>
     </div>
 
     <div class="zone z-clause">
@@ -1672,21 +1737,56 @@ textarea{resize:vertical;}
     </div>
 
     <div class="zone z-ev">
-      <div class="zone-hd"><span>企业资料里找到的证据</span><span class="badge">2 份 · 都带出处</span></div>
+      <div class="zone-hd"><span>分析证据 = 本项结论</span><span class="badge">系统写成一段 · 你直接改</span></div>
       <div class="zone-body">
-        <div class="evrow">
-          <div class="body">
-            <div>「总经理任命李××为管理者代表，负责质量体系的建立、实施和保持；品管部负责进料、过程、成品检验；生产部负责作业标准执行…」</div>
-            <div class="src">质量手册.docx · 第 12 页 · 条款 5.5.1 · 2026-10-20 上传</div>
+        <div class="narr">
+          <textarea rows="8" onchange="toast('本项结论已按你的改法保存（下轮分析以此为基线）')">查见《质量手册》(5.5.1)，2026-10-20 上传 v3：总经理任命李××为管理者代表，负责质量体系的建立、实施和保持；手册 5.5.1 按采购、品管、生产、销售四个部门分条写了职责与权限。查见《组织架构图（2026-09）》：品管部 8 人、生产部 46 人、销售部 6 人；同一批资料里的《部门职责表》写品管部 5 人，与架构图不一致。另据审核员录入（2026-11-02 10:31 电话确认）：新入职 3 人尚未纳入职责分配表，企业承诺月底更新。综合看：职责与权限已在部门层面形成文件，但没有岗位层岗位说明书与职责权限分配表，人数口径两处不一致，也没有职责传达到岗位的签收或培训记录。据此判断：资料不齐，需现场核实岗位职责是否传达到人。</textarea>
+          <div class="narr-ft">
+            <span class="smallnote">系统起草 · 11-02 10:42 · 2 份文档 + 2 条录入 · 改了就是最终结论，不弹对比</span>
+            <div class="sp"></div>
+            <button class="btn-t" onclick="toast('已恢复系统草稿（你的修改保留在版本里）')">恢复草稿</button>
+            <button class="btn-t i" onclick="toast('已保存本项结论')">保存</button>
           </div>
-          <button class="btn-t" onclick="toast('打开原文对应页')">看原文</button>
         </div>
-        <div class="evrow">
-          <div class="body">
-            <div>「部门职责：品管部 8 人，负责IQC/IPQC/OQC；生产部 46 人…」</div>
-            <div class="src">组织架构图（2026-09）.pdf · 条款 5.5.1 · 与流程图同一附件</div>
+
+        <div class="dep">
+          <div class="dep-hd"><span>这段结论从哪来：每份资料 / 每条录入找到了什么</span><span>4 条</span></div>
+          <div class="dep-row">
+            <span class="who">文档</span>
+            <div class="t"><b>质量手册.docx · 第 12 页</b> — 管理者代表任命；四个部门的职责与权限分条</div>
+            <button class="btn-t go" onclick="toast('打开原文第 12 页')">看原文</button>
           </div>
-          <button class="btn-t" onclick="toast('打开原文对应页')">看原文</button>
+          <div class="dep-row">
+            <span class="who">文档</span>
+            <div class="t"><b>组织架构图（2026-09）.pdf</b> — 品管部 8 人 / 生产部 46 人 / 销售部 6 人</div>
+            <button class="btn-t go" onclick="toast('打开原文')">看原文</button>
+          </div>
+          <div class="dep-row">
+            <span class="who">文档</span>
+            <div class="t"><b>部门职责表.xlsx</b> — 品管部 5 人（<span style="color:var(--d)">与架构图不一致</span>）</div>
+            <button class="btn-t go" onclick="toast('打开原文')">看原文</button>
+          </div>
+          <div class="dep-row">
+            <span class="who hu">录入</span>
+            <div class="t"><b>电话确认 · 李振华 · 11-02 10:31 · 文字</b> — 新入职 3 人未纳入职责分配表，月底更新</div>
+            <button class="btn-t go" onclick="openEv('5.5 职责、权限与沟通','prep')">改</button>
+          </div>
+          <div class="dep-row">
+            <span class="who hu">录入</span>
+            <div class="t"><b>企业补发《岗位说明书（2026-10）》v2 · 11-02 10:38 · 文件</b> — 含 12 个岗位，未含职责分配表</div>
+            <button class="btn-t go" onclick="openEv('5.5 职责、权限与沟通','prep')">改</button>
+          </div>
+        </div>
+
+        <div class="one-lock" style="margin-top:9px">
+          <button class="btn btn-w btn-xs" onclick="openEv('5.5 职责、权限与沟通','prep')">+ 补充本项证据</button>
+          <span class="smallnote">你录入的（拍照 / 文件 / 录音 / 一段话）会和文件证据<b>一起</b>进本项分析，结论里照样引用</span>
+        </div>
+
+        <div class="one-lock" style="margin-top:9px;padding-top:9px;border-top:1px solid var(--line)">
+          <button class="lk" onclick="toggleLock(this)">锁定本项结论</button>
+          <button class="lk off" onclick="closeSb();closeByIndex('prep',1)">关闭本项（本轮不查）</button>
+          <span class="stat2"><b>资料不齐 · 需现场</b> · 锁定后不参与重算；关闭 = 默认符合、不进认证检查</span>
         </div>
       </div>
     </div>
@@ -1716,40 +1816,33 @@ textarea{resize:vertical;}
     </div>
 
     <div class="zone z-sup">
-      <div class="zone-hd"><span>证据缺口（要企业补的资料）</span><span class="badge">由审核员维护</span></div>
+      <div class="zone-hd"><span>应查证据（正常该有哪些，齐不齐你判断）</span><span class="badge">4 项 · 你打勾</span></div>
       <div class="zone-body">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px">
-          <button class="btn btn-o btn-xs" onclick="toast('新增一条证据缺口')">+ 补充证据缺口</button>
-          <button class="btn btn-o btn-xs" onclick="toast('已将 3 份资料补充请求发给企业联系人')">发给企业</button>
+        <div class="smallnote" style="margin-bottom:4px">系统只列「这条条款正常需要哪些证据」，<b>不替你判齐全</b>。你觉得够了就打勾；没打勾的才会进「请企业补」。</div>
+        <div class="req on">
+          <span class="box"><input type="checkbox" class="chk" checked onchange="updReq(this)"></span>
+          <div class="t"><b>岗位说明书（覆盖 12 个岗位）</b><span class="why">5.5.1 要求职责、权限有文件规定 · 企业 11-02 已交 v2</span></div>
+          <div class="ops"><button class="btn-t i" onclick="toast('已移出清单')">删</button></div>
         </div>
-        <div class="evrow">
-          <div class="body">岗位说明书（含 12 个岗位）<div class="src">系统建议 · 2026-10-31 已通知 · 企业口头确认月底提交</div></div>
-          <span class="chip o">待提交</span>
-          <button class="btn-t i" onclick="toast('删除这条缺口')">删</button>
+        <div class="req">
+          <span class="box"><input type="checkbox" class="chk" onchange="updReq(this)"></span>
+          <div class="t"><b>职责权限分配表（经批准）</b><span class="why">5.5.1 要求分配到岗位、有批准 · 资料里没有</span></div>
+          <div class="ops"><button class="btn-t w" onclick="toast('已标记：请企业补这份')">请企业补</button><button class="btn-t i" onclick="toast('已移出清单')">删</button></div>
         </div>
-        <div class="evrow">
-          <div class="body">职责权限分配表<div class="src">系统建议 · 2026-10-31 已通知</div></div>
-          <span class="chip o">待提交</span>
-          <button class="btn-t i" onclick="toast('删除这条缺口')">删</button>
+        <div class="req">
+          <span class="box"><input type="checkbox" class="chk" onchange="updReq(this)"></span>
+          <div class="t"><b>职责传达记录（签收 / 培训 / 考核）</b><span class="why">5.5.1 要求让岗位知道自己的职责 · 现场可访谈替代</span></div>
+          <div class="ops"><button class="btn-t w" onclick="toast('已标记：请企业补这份')">请企业补</button><button class="btn-t i" onclick="toast('已移出清单')">删</button></div>
         </div>
-        <div class="evrow">
-          <div class="body">职责传达记录（签收 / 培训 / 考核）<div class="src">人工补充 · 2026-11-01 已通知</div></div>
-          <span class="chip b">未响应</span>
-          <button class="btn-t i" onclick="toast('删除这条缺口')">删</button>
+        <div class="req">
+          <span class="box"><input type="checkbox" class="chk" onchange="updReq(this)"></span>
+          <div class="t"><b>管理者代表任命文件</b><span class="why">5.5.2 要求指定管理者代表并赋予职责 · 手册里已有表述</span></div>
+          <div class="ops"><button class="btn-t i" onclick="toast('已移出清单')">删</button></div>
         </div>
-      </div>
-    </div>
-
-    <div class="zone z-ev">
-      <div class="zone-hd"><span>审核员补充的证据</span><button class="btn-t" onclick="toast('新增：文件 / 拍照 / 录音 / 文字均可')">+ 新增</button></div>
-      <div class="zone-body">
-        <div class="evrow">
-          <div class="body">电话确认：新入职 3 人尚未纳入职责分配表，将于月底更新。<div class="src">李振华 · 2026-11-02 10:31 · 文字</div></div>
-          <button class="btn-t d" onclick="toast('删除')">删</button>
-        </div>
-        <div class="evrow">
-          <div class="body">企业补发《岗位说明书（2026-10）》v2，含 12 个岗位。<div class="src">李振华 · 2026-11-02 10:38 · 文件</div></div>
-          <button class="btn-t d" onclick="toast('删除')">删</button>
+        <div class="one-lock" style="margin-top:8px">
+          <button class="btn btn-o btn-xs" onclick="addReq()">+ 添加应查证据</button>
+          <button class="btn btn-o btn-xs" onclick="toast('已把未打勾的 3 项发给企业联系人（附条款依据）')">把未打勾的发企业</button>
+          <span class="smallnote" id="req-note">已齐全 1 / 4</span>
         </div>
       </div>
     </div>
@@ -1775,33 +1868,8 @@ textarea{resize:vertical;}
         <div class="smallnote">只改本检查项，不改认证计划；检查阶段这一项只读。</div>
       </div>
     </div>
-
-    <div class="zone z-gray">
-      <div class="zone-hd"><span>本项结论与锁定</span><span class="badge">一个条款 = 一条结论</span></div>
-      <div class="zone-body">
-        <div class="row2">
-          <div class="field"><label>资料情况</label>
-            <select onchange="toast('本项结论改为：' + this.value + '（保存后生效）')">
-              <option>资料齐全</option><option selected>资料不齐</option><option>缺资料</option><option>无法判断</option><option>不适用</option>
-            </select>
-          </div>
-          <div class="field"><label>入场建议</label>
-            <select onchange="toast('入场建议改为：' + this.value + '（保存后生效）')">
-              <option>文件即可</option><option>远程核验</option><option selected>需现场</option><option>抽样测试</option>
-            </select>
-          </div>
-        </div>
-        <div class="one-lock" style="margin-top:2px">
-          <button class="lk" onclick="toggleLock(this)">锁定本项结论</button>
-          <span class="stat2"><b>未锁</b> · 锁定后本条款不参与重算，证据与疑点仍可补</span>
-        </div>
-        <div class="one-lock" style="margin-top:6px">
-          <button class="lk off" onclick="closeSb();closeByIndex('prep',1)">关闭本项（本轮不查）</button>
-          <span class="stat2"><b>关闭 = 默认符合</b> · 不进入认证检查、不重复取证；导出仍计入完整报告，并标注「准备阶段关闭」</span>
-        </div>
-      </div>
-    </div>
   </div>
+
   <div class="sb-ft">
     <div><button class="btn btn-p" onclick="toast('已保存本项，下轮分析会带上新证据')">保存</button></div>
     <div style="display:flex;gap:8px">
@@ -1827,7 +1895,7 @@ textarea{resize:vertical;}
   <div class="sb-body">
     <div class="summary">
       <span><span class="k">结论</span> <span class="tag nc-min">不符合</span> <span class="tag nc-min">一般</span></span>
-      <span><span class="k">证据</span> 2 份</span>
+      <span><span class="k">证据</span> 3 份 + 1 录入</span>
       <span><span class="k">NC 疑点</span> 2 处</span>
       <span><span class="k">锁定</span> <span class="tag idle">未锁</span></span>
     </div>
@@ -1845,21 +1913,62 @@ textarea{resize:vertical;}
     </div>
 
     <div class="zone z-ev">
-      <div class="zone-hd"><span>证据</span><button class="btn-t" onclick="toast('挂接：拍照 / 文件 / 录音 / 文字')">+ 补充证据</button></div>
+      <div class="zone-hd"><span>检查证据 = 检查结论</span><span class="badge">系统写成一段 · 你直接改</span></div>
       <div class="zone-body">
-        <div class="evrow">
-          <div class="body">现场照片：总经办墙上的组织架构图（2026-09 版）<div class="src">现场取证 · 09:40 · 总经办</div></div>
-          <span class="chip g">已归档</span>
+        <div class="narr">
+          <textarea rows="9" onchange="toast('本项结论已按你的改法保存（导出报告用这段）')">查见企业《质量手册》5.5.1（2026-10-20 版 v3）：部门职责与权限有分条描述；未查见岗位说明书与职责权限分配表。现场查看总经办墙上《组织架构图（2026-09）》：品管部标注 8 人；与品管部周敏访谈（10:05）称检验岗位实际 5 人，3 人已于年初离职、文件未更新，检验岗位无书面职责分配。另据审核员录入（11-02 09:52 企业微信回复）：新入职 3 人尚未纳入职责分配表。综合判定：职责与权限在部门层面有规定，但未落实到岗位，人数口径与文件不一致，且无职责传达记录，不满足 5.5.1「职责、权限得到规定并在组织内得到沟通」的要求 → 不符合（一般）。</textarea>
+          <div class="narr-ft">
+            <span class="smallnote">系统起草 · 11-02 11:12 · 改了就是最终结论，导出报告直接用这段</span>
+            <div class="sp"></div>
+            <button class="btn-t" onclick="toast('已恢复系统草稿（你的修改保留在版本里）')">恢复草稿</button>
+            <button class="btn-t i" onclick="toast('已保存本项结论')">保存</button>
+          </div>
         </div>
-        <div class="evrow">
-          <div class="body">访谈记录：与品管部周敏确认检验岗位 5 人，均无书面职责分配<div class="src">现场取证 · 10:05 · 品管部 · 转录 480 字</div></div>
-          <span class="chip g">已归档</span>
+
+        <div class="dep">
+          <div class="dep-hd"><span>这段结论从哪来：每份证据找到了什么</span><span>4 条</span></div>
+          <div class="dep-row">
+            <span class="who site">现场</span>
+            <div class="t"><b>照片 · 09:40 · 总经办</b> — 组织架构图标注品管部 8 人</div>
+            <button class="btn-t go" onclick="toast('看大图')">看</button>
+          </div>
+          <div class="dep-row">
+            <span class="who site">现场</span>
+            <div class="t"><b>访谈 · 10:05 · 品管部 · 转录 480 字</b> — 检验岗实际 5 人、无书面职责分配</div>
+            <button class="btn-t go" onclick="toast('看转录')">看</button>
+          </div>
+          <div class="dep-row">
+            <span class="who">资料</span>
+            <div class="t"><b>质量手册 5.5.1 · 第 12 页</b> — 部门职责与权限分条，无岗位说明书</div>
+            <button class="btn-t go" onclick="toast('打开原文')">看原文</button>
+          </div>
+          <div class="dep-row">
+            <span class="who hu">录入</span>
+            <div class="t"><b>企业微信回复 · 李振华 · 11-02 09:52 · 文字</b> — 新入职 3 人未纳入职责分配表</div>
+            <button class="btn-t go" onclick="openEv('5.5 职责、权限与沟通','onsite')">改</button>
+          </div>
         </div>
-        <div class="evrow">
-          <div class="body">质量手册 5.5.1（企业资料）<div class="src">企业上传 · 第 12 页</div></div>
-          <button class="btn-t" onclick="toast('打开原文')">看原文</button>
+
+        <div class="one-lock" style="margin-top:9px">
+          <button class="btn btn-w btn-xs" onclick="openEv('5.5 职责、权限与沟通','onsite')">+ 补充本项证据</button>
+          <span class="smallnote">现场拍的、问到的、企业刚发来的，先记在这一项上；<b>录入会与文件一起进 LLM 分析</b>，不是备注</span>
         </div>
-        <div class="smallnote" style="margin-top:6px">证据不足也可以分析，结论会落到“待判断”并告诉你还缺什么。</div>
+
+        <div class="row2" style="margin-top:10px">
+          <div class="field"><label>结论（人拍板）</label>
+            <select onchange="toast('结论改为：' + this.value + '（已记入报告）')">
+              <option>符合</option><option>观察项</option><option selected>不符合</option><option>不适用</option>
+            </select>
+          </div>
+          <div class="field"><label>严重度</label>
+            <select onchange="toast('严重度改为：' + this.value)"><option selected>一般</option><option>严重</option></select>
+          </div>
+        </div>
+
+        <div class="one-lock" style="margin-top:8px;padding-top:9px;border-top:1px solid var(--line)">
+          <button class="lk" onclick="toggleLock(this)">锁定本项结论</button>
+          <span class="stat2"><b>不符合 · 一般</b> · 未锁 · 锁定后本条款不参与重算；已签 NC 不受影响</span>
+        </div>
       </div>
     </div>
 
@@ -1887,26 +1996,6 @@ textarea{resize:vertical;}
       </div>
     </div>
 
-    <div class="zone z-plan">
-      <div class="zone-hd"><span>判定（人拍板）</span><span class="badge">改了就是最终结论</span></div>
-      <div class="zone-body">
-        <div class="row2">
-          <div class="field"><label>结论</label>
-            <select><option>符合</option><option>观察项</option><option selected>不符合</option><option>不适用</option></select>
-          </div>
-          <div class="field"><label>严重度</label>
-            <select><option selected>一般</option><option>严重</option></select>
-          </div>
-        </div>
-        <div class="field"><label>判定依据（写事实，不写“AI 认为”）</label>
-          <textarea rows="3">职责权限已规定但未形成岗位说明书与分配表，且人数与组织架构图不一致，不满足 5.5.1 对职责、权限“规定和沟通”的要求。</textarea>
-        </div>
-        <div class="field"><label>本项审核员（检查阶段只读）</label>
-          <input type="text" value="李振华 · 来自入场计划" readonly style="background:#fafafa;color:var(--i)">
-        </div>
-      </div>
-    </div>
-
     <div class="zone z-nc">
       <div class="zone-hd"><span>已签发 NC</span><span class="badge">NC-2026-007 · 只能人签</span></div>
       <div class="zone-body">
@@ -1922,18 +2011,8 @@ textarea{resize:vertical;}
         </div>
       </div>
     </div>
-
-    <div class="zone z-gray">
-      <div class="zone-hd"><span>本项结论与锁定</span><span class="badge">一个条款 = 一条结论</span></div>
-      <div class="zone-body">
-        <div class="one-lock">
-          <span class="stat2">当前结论 <b>不符合 · 一般</b> · 状态 <b>未锁</b></span>
-          <button class="lk" onclick="toggleLock(this)">锁定本项结论</button>
-        </div>
-        <div class="smallnote" style="margin-top:6px">锁定后本条款不参与重算；已签 NC 不受重算影响。</div>
-      </div>
-    </div>
   </div>
+
   <div class="sb-ft">
     <div><button class="btn btn-p" onclick="toast('已保存判定')">保存</button></div>
     <div style="display:flex;gap:8px">
@@ -2093,23 +2172,24 @@ textarea{resize:vertical;}
           <tr>
             <th style="width:36px" class="ctr"><input type="checkbox" class="chk" onclick="toast('已全选未锁定项')"></th>
             <th style="min-width:260px">检查项 / 条款</th>
-            <th style="width:150px">当前结果</th>
-            <th style="width:110px">锁定</th>
+            <th style="width:132px">当前结果</th>
+            <th style="width:76px">证据</th>
+            <th style="width:96px">锁定</th>
             <th style="width:150px">重跑说明</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td class="ctr"><input type="checkbox" class="chk" checked></td><td>5.5 职责权限与沟通</td><td><span class="tag nc-min">资料不齐</span></td><td class="muted">未锁</td><td class="muted">会重算本条款</td></tr>
-          <tr class="locked"><td class="ctr"><input type="checkbox" class="chk" disabled></td><td>4.1 组织环境 <span class="tag lock">已锁</span></td><td><span class="tag nc-ok">资料齐全</span></td><td><span class="tag lock">已锁</span></td><td class="muted">需先解锁</td></tr>
-          <tr><td class="ctr"><input type="checkbox" class="chk" checked></td><td>4.2.3 文件控制</td><td><span class="tag nc-na">无法判断</span></td><td class="muted">未锁</td><td class="muted">建议先补证据再跑</td></tr>
-          <tr><td class="ctr"><input type="checkbox" class="chk" checked></td><td>7.5.1 生产服务控制</td><td><span class="tag nc-maj">缺资料</span></td><td class="muted">未锁</td><td class="muted">会重算本条款</td></tr>
-          <tr class="locked"><td class="ctr"><input type="checkbox" class="chk" disabled></td><td>6.4.1 工作环境 <span class="tag lock">已锁</span></td><td><span class="tag nc-ok">资料齐全</span></td><td><span class="tag lock">已锁</span></td><td class="muted">需先解锁</td></tr>
+          <tr><td class="ctr"><input type="checkbox" class="chk" checked></td><td>5.5 职责权限与沟通</td><td><span class="tag nc-min">资料不齐</span></td><td><button class="evbtn" onclick="openEv('5.5 职责、权限与沟通','prep')" title="重跑前先补这一项的证据">4 份 +</button></td><td class="muted">未锁</td><td class="muted">会重算本条款（结论已改则以你的版本为基线）</td></tr>
+          <tr class="locked"><td class="ctr"><input type="checkbox" class="chk" disabled></td><td>4.1 组织环境 <span class="tag lock">已锁</span></td><td><span class="tag nc-ok">资料齐全</span></td><td class="muted">2 份</td><td><span class="tag lock">已锁</span></td><td class="muted">需先解锁</td></tr>
+          <tr><td class="ctr"><input type="checkbox" class="chk" checked></td><td>4.2.3 文件控制</td><td><span class="tag nc-na">无法判断</span></td><td><button class="evbtn mut" onclick="openEv('4.2.3 文件控制','prep')" title="这一项还没有证据">0 份 +</button></td><td class="muted">未锁</td><td class="muted">建议先补证据再跑</td></tr>
+          <tr><td class="ctr"><input type="checkbox" class="chk" checked></td><td>7.5.1 生产服务控制</td><td><span class="tag nc-maj">缺资料</span></td><td><button class="evbtn" onclick="openEv('7.5.1 生产和服务提供的控制','prep')" title="重跑前先补这一项的证据">1 份 +</button></td><td class="muted">未锁</td><td class="muted">会重算本条款</td></tr>
+          <tr class="locked"><td class="ctr"><input type="checkbox" class="chk" disabled></td><td>6.4.1 工作环境 <span class="tag lock">已锁</span></td><td><span class="tag nc-ok">资料齐全</span></td><td class="muted">1 份</td><td><span class="tag lock">已锁</span></td><td class="muted">需先解锁</td></tr>
         </tbody>
       </table>
     </div>
     <div class="hint gray" style="margin:10px 0 0">
       已选 <b>3 项</b>（共 11 条）· 预计 <b>约 2 分钟</b>跑完。<br>
-      分析期间可以继续补充证据，新证据会并入这一次；已签 NC 不受影响。
+      分析期间可以继续补充证据，新证据会并入这一次；你改过的结论会作为重跑基线，不会被系统覆盖；已签 NC 不受影响。
     </div>
   </div>
   <div class="dlg-ft">
@@ -2133,7 +2213,7 @@ textarea{resize:vertical;}
       <table class="mtbl">
         <thead>
           <tr>
-            <th style="width:200px">检查项 / 条款</th>
+            <th style="width:184px">检查项 / 条款</th>
             <th style="width:96px">本轮处置</th>
             <th style="width:150px">准备阶段结论</th>
             <th>关闭原因</th>
@@ -2147,6 +2227,67 @@ textarea{resize:vertical;}
   <div class="dlg-ft">
     <button class="btn btn-o" onclick="closeDlg()">取消</button>
     <button class="btn btn-p" id="exp-ok" onclick="closeDlg();toast('已导出')">知道了，导出</button>
+  </div>
+</div>
+
+<!-- ══════════ 弹窗：补充证据（按检查项） ══════════ -->
+<div class="dlg" id="dlg-ev" style="width:640px">
+  <div class="dlg-hd">
+    <div>
+      <h3>补充证据</h3>
+      <div class="sub" id="ev-sub">本项：5.5 职责、权限与沟通</div>
+    </div>
+    <button class="btn btn-o btn-xs" onclick="closeDlg()">关闭</button>
+  </div>
+  <div class="dlg-bd">
+    <div class="field"><label>证据形式</label>
+      <div class="chips" style="gap:6px">
+        <button class="chip on" onclick="pickEvType(this)">文件</button>
+        <button class="chip" onclick="pickEvType(this)">拍照</button>
+        <button class="chip" onclick="pickEvType(this)">录音</button>
+        <button class="chip" onclick="pickEvType(this)">文字</button>
+      </div>
+    </div>
+    <div class="field"><label>你看到 / 听到 / 查到的事实</label>
+      <textarea rows="4" placeholder="写事实，不写评价。例：与品管部周敏确认，检验岗位实际 5 人，均无书面职责分配；3 人已于年初离职，架构图未更新。"></textarea>
+    </div>
+    <div class="field"><label>文件 / 照片 / 录音</label>
+      <div class="dropzone" onclick="toast('选择文件（jpg / png / pdf / mp3，单个 ≤ 50MB）')">点击选择，或把文件拖进来</div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>挂到哪条检查内容</label>
+        <select>
+          <option>职责是否传达到岗位（签收 / 培训 / 考核）</option>
+          <option>岗位说明书是否覆盖 12 个岗位</option>
+          <option>部门实际人数与架构图核对</option>
+          <option>不限（整条条款）</option>
+        </select>
+      </div>
+      <div class="field"><label>取证位置 / 在场人</label>
+        <input type="text" value="品管部 · 周敏 · 现场">
+      </div>
+    </div>
+    <div class="lockbar" style="margin-top:2px">
+      <b>保存即生效</b>：这条证据挂在本项上，下一轮分析把它与文件证据<b>同等</b>看待；结论里会写「据审核员现场核实」，不是旁注。
+    </div>
+    <div class="dep" style="margin-top:9px">
+      <div class="dep-hd"><span>本项已录入</span><span>2 条 · 可改可删</span></div>
+      <div class="dep-row">
+        <span class="who hu">文字</span>
+        <div class="t"><b>电话确认 · 11-02 10:31</b> — 新入职 3 人尚未纳入职责分配表，企业承诺月底更新</div>
+        <button class="btn-t go" onclick="toast('编辑这条')">改</button>
+        <button class="btn-t go d" onclick="toast('已删除')">删</button>
+      </div>
+      <div class="dep-row">
+        <span class="who hu">文件</span>
+        <div class="t"><b>岗位说明书（2026-10）v2 · 11-02 10:38</b> — 含 12 个岗位，未含职责权限分配表</div>
+        <button class="btn-t go d" onclick="toast('已删除')">删</button>
+      </div>
+    </div>
+  </div>
+  <div class="dlg-ft">
+    <button class="btn btn-o" onclick="closeDlg()">取消</button>
+    <button class="btn btn-w" onclick="closeDlg();toast('已挂到本项（5.5）：下轮分析会带上这条证据')">保存并挂到本项</button>
   </div>
 </div>
 
@@ -2229,12 +2370,12 @@ var HELP = {
     html: '<div class="zone z-gray"><div class="zone-hd"><span>这一页看什么</span></div><div class="zone-body"><dl>'
       + '<dt>进度</dt><dd>已出结果 / 全部检查项；分析中还会给「预计完成」。</dd>'
       + '<dt>证据 / 疑点</dt><dd>已出结果部分的汇总，只用来判断“资料够不够看”，不是结论。</dd>'
-      + '<dt>证据缺口</dt><dd>还要企业补几份资料；点进详情可增删。</dd>'
+      + '<dt>应查证据</dt><dd>这条正常该有哪些证据；齐不齐由你打勾，没打勾的才发企业补。</dd>'
       + '<dt>状态</dt><dd>分析中 / 已完成 / 已暂停 / 待企业补；点状态可看执行进度。</dd>'
       + '</dl></div></div>'
       + '<div class="zone z-gray"><div class="zone-hd"><span>操作</span></div><div class="zone-body"><ol class="steps">'
       + '<li>点整行进详情；也可以点「详情」。</li>'
-      + '<li>「更多」里可重新分析、暂停、发送资料补充清单、生成入场计划。</li>'
+      + '<li>「更多」里可重新分析、暂停、把未齐全的应查证据发企业、生成入场计划。</li>'
       + '<li>列表只做汇总与入口；判断都在详情里做。</li>'
       + '</ol></div></div>'
   },
@@ -2242,20 +2383,22 @@ var HELP = {
     title: '认证准备 · 详情说明',
     sub: '给审核员做功课：条款要什么、企业给了什么、哪里可疑',
     html: '<div class="zone z-gray"><div class="zone-hd"><span>只做两件事</span></div><div class="zone-body"><ol class="steps">'
-      + '<li><b>补充证据</b>：上传文件 / 拍照 / 录音 / 写访谈记录；也可以请企业补资料。</li>'
+      + '<li><b>补充证据（按项）</b>：点表里「证据」列的 <b>+</b>，或在条款里点「+ 补充本项证据」。上传文件 / 拍照 / 录音 / 写一段话都行。</li>'
       + '<li><b>分析</b>：勾选检查项后「开始分析」，一轮自动跑完；没勾就跑全部未锁定项。</li>'
       + '</ol></div></div>'
       + '<div class="zone z-gray"><div class="zone-hd"><span>表里各列</span></div><div class="zone-body"><dl>'
       + '<dt>检查内容</dt><dd>这条条款要核对的事（查文件 / 查记录 / 现场 / 访谈）。系统预填，可增删；点开行内抽屉编辑。</dd>'
-      + '<dt>证据 / 疑点</dt><dd>资料里读到的原文与出处；疑点固定写「看到了什么 · 为什么可疑 · 怎么核实」。</dd>'
-      + '<dt>证据缺口</dt><dd>要企业补的资料，<b>由你维护</b>：新增、删减、改状态。</dd>'
+      + '<dt>证据</dt><dd>这一项现有的证据份数；点 <b>+</b> 就补到这一项上。你录的证据与文件同权，会一起进本项分析。</dd>'
+      + '<dt>应查证据</dt><dd>这条条款正常<b>该有哪些证据</b>（带条款依据）。系统只列清单，<b>齐不齐由你打勾</b>；没打勾的才发企业补。</dd>'
+      + '<dt>本项结论</dt><dd><b>系统写的那段就是结论</b>：查见哪份资料、找到什么、据此怎么判。你在同一个框里直接改，改完即生效。</dd>'
       + '<dt>本项结论</dt><dd>资料情况（齐全 / 不齐 / 缺资料 / 无法判断 / 不适用）+ 入场建议（文件即可 / 远程 / 现场 / 抽样）。</dd>'
       + '<dt>锁定</dt><dd><b>一个条款一条结论</b>。锁后该条款不参与重算；证据、疑点、检查内容仍可补。要重算先解锁。</dd>'
       + '<dt>本轮处置 · 关闭</dt><dd><b>关闭 = 本轮不查 + 默认符合</b>：准备阶段已经核实过的条款，不必再到现场重复取证。关闭比锁定更强——既不参与重算，也不进入认证检查。可随时「恢复」。<b>导出仍是完整报告</b>：关闭项单独标注「准备阶段关闭（默认符合）」，不写 NC。</dd>'
       + '</dl></div></div>'
       + '<div class="zone z-gray"><div class="zone-hd"><span>建议顺序</span></div><div class="zone-body"><ol class="steps">'
       + '<li>先看「条款要点」，再看「检查内容」有没有要补的。</li>'
-      + '<li>资料不够就补证据 / 发证据缺口；够了就分析。</li>'
+      + '<li>资料不够就按项补证据、把没打勾的应查证据发企业；够了就分析。</li>'
+      + '<li>分析出来的那段先读一遍，不对就改——<b>它就是结论，不用另写</b>。</li>'
       + '<li>结果看完：确认的条款锁掉；<b>准备阶段就已核实符合、且现场无需再看的，直接关闭</b>；余下的留给入场计划或现场核实。</li>'
       + '</ol></div></div>'
   },
@@ -2278,10 +2421,12 @@ var HELP = {
     title: '认证检查 · 详情说明',
     sub: '现场取证 → 一键分析 → 定结论、签 NC',
     html: '<div class="zone z-gray"><div class="zone-hd"><span>只做两件事</span></div><div class="zone-body"><ol class="steps">'
-      + '<li><b>补充证据</b>：拍照 / 文件 / 录音 / 访谈记录，挂到对应条款。</li>'
+      + '<li><b>补充证据（按项）</b>：点表里「证据」列的 <b>+</b>，或在条款里点「+ 补充本项证据」——现场拍的、问到的、企业刚发来的，先记在这一项上。</li>'
       + '<li><b>分析</b>：勾选后一轮跑完；0 份证据也能分析，结论会落到「待判断」。</li>'
       + '</ol></div></div>'
       + '<div class="zone z-gray"><div class="zone-hd"><span>看完结果再拍板</span></div><div class="zone-body"><dl>'
+      + '<dt>检查证据 = 检查结论</dt><dd>系统把现场取证、企业资料、你录的证据<b>合并写成一段审核记录</b>，这段就是结论正文，导出报告直接用它。你在同一个框里改，改完即最终结论。</dd>'
+      + '<dt>依据明细</dt><dd>结论下面列「每份证据从中找到了什么」，可回到原文 / 大图 / 转录。</dd>'
       + '<dt>结论</dt><dd>符合 / 观察项 / 不符合（严重、一般）/ 待判断 / 不适用；系统给建议，人可改。</dd>'
       + '<dt>NC 疑点</dt><dd>事实 + 违反条款 + 建议档次；采纳后才带入签发。</dd>'
       + '<dt>NC</dt><dd><b>只能人签</b>；重跑不删已签 NC，只提示「建议撤回」。</dd>'
@@ -2289,7 +2434,8 @@ var HELP = {
       + '<dt>准备阶段关闭</dt><dd>表里灰色那几行是<b>准备阶段就关闭</b>的条款：准备时证据已够、确认符合，现场不再重复取证。它们<b>只读</b>——不能勾选、不能分析、不能签 NC；结论按「默认符合」写入报告。</dd>'
       + '</dl></div></div>'
       + '<div class="zone z-gray"><div class="zone-hd"><span>建议顺序</span></div><div class="zone-body"><ol class="steps">'
-      + '<li>先取证，再分析；缺证据就补，不要硬判。</li>'
+      + '<li>先按项取证，再分析；缺证据就补，不要硬判。</li>'
+      + '<li>分析出来的那段先读，不对就改——<b>它是结论，不是参考</b>。</li>'
       + '<li>逐条看疑点，决定采纳 / 忽略；采纳的带入 NC 签发。</li>'
       + '<li>定结论 → 签 NC → 看项目结论 → 导出报告。</li>'
       + '<li><b>导出是完整报告</b>：准备阶段关闭的条款也在里面，导出前会提示你「其中 N 项未现场验证」。</li>'
@@ -2297,10 +2443,10 @@ var HELP = {
   },
   planitems: {
     title: '入场计划 · 本页说明',
-    sub: '可选产出：把疑点与证据缺口整理成进场清单',
+    sub: '可选产出：把疑点与未齐的应查证据整理成进场清单',
     html: '<div class="zone z-gray"><div class="zone-hd"><span>这一页做什么</span></div><div class="zone-body"><dl>'
       + '<dt>不是必经步骤</dt><dd>不做这一页也能直接开检查；它只是把「去哪、查什么、抽多少、应发现什么」写清楚。</dd>'
-      + '<dt>来源</dt><dd>本项疑点 + 证据缺口 + 条款取证点；部门与联系人默认取认证计划。</dd>'
+      + '<dt>来源</dt><dd>本项疑点 + 没打勾的应查证据 + 条款取证点；部门与联系人默认取认证计划。</dd>'
       + '<dt>确认后</dt><dd>确认的现场动作成为检查页的检查项来源；谁去查带到检查阶段只读。</dd>'
       + '</dl></div></div>'
       + '<div class="zone z-gray"><div class="zone-hd"><span>操作</span></div><div class="zone-body"><ol class="steps">'
@@ -2636,8 +2782,63 @@ function openDd(btn) {
 function closeDd() {
   document.querySelectorAll('.dd-menu').forEach(function (m) { m.classList.remove('on'); });
 }
+/* ── 补充证据：按检查项录入（挂在当前行 / 当前抽屉的条款上） ── */
+function openEv(title, kind) {
+  var sub = document.getElementById('ev-sub');
+  var label = kind === 'onsite' ? '检查阶段' : (kind === 'prep' ? '准备阶段' : '本项');
+  sub.innerHTML = '本项：<b>' + (title || '当前条款') + '</b> · ' + label
+    + ' · 录入的证据会与文件证据一起作为本项分析的输入';
+  // 从抽屉 / 重新分析弹窗进来时不关闭来源，只把补证弹窗叠上来
+  closeDd();
+  document.querySelectorAll('.dlg.on').forEach(function (d) { d.classList.remove('on'); });
+  document.getElementById('mask').classList.add('on');
+  document.getElementById('dlg-ev').classList.add('on');
+}
+function openEvRow(btn) {
+  var tr = btn.closest('tr');
+  var ci = tr ? tr.querySelector('.ci') : null;
+  var title = ci ? ci.textContent.replace(/\s+/g, ' ').trim() : '';
+  var kind = tr && tr.closest('#onsite-table') ? 'onsite' : 'prep';
+  openEv(title, kind);
+}
+function pickEvType(btn) {
+  btn.parentElement.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('on'); });
+  btn.classList.add('on');
+}
+
+/* ── 应查证据：系统只列清单，齐不齐由审核员勾 ── */
+function updReq(cb) {
+  var row = cb.closest('.req');
+  if (row) row.classList.toggle('on', cb.checked);
+  countReq();
+}
+function countReq() {
+  document.querySelectorAll('.zone.z-sup').forEach(function (z) {
+    var all = z.querySelectorAll('.req').length;
+    var on = z.querySelectorAll('.req.on').length;
+    var note = z.querySelector('#req-note');
+    if (note) note.textContent = '已齐全 ' + on + ' / ' + all;
+    var badge = z.querySelector('.zone-hd .badge');
+    if (badge) badge.textContent = all + ' 项 · 齐全 ' + on;
+  });
+}
+function addReq() {
+  var zone = document.querySelector('.zone.z-sup .zone-body');
+  if (!zone) return;
+  var div = document.createElement('div');
+  div.className = 'req';
+  div.innerHTML = '<span class="box"><input type="checkbox" class="chk" onchange="updReq(this)"></span>'
+    + '<div class="t"><b>新的一条应查证据</b><span class="why">点「改」补上依据条款；不勾就视为不齐全</span></div>'
+    + '<div class="ops"><button class="btn-t i" onclick="this.closest(\'.req\').remove()">删</button></div>';
+  var foot = zone.querySelector('.one-lock');
+  zone.insertBefore(div, foot);
+  countReq();
+  toast('已添加一条应查证据，补齐名称与依据');
+}
+
 function openDlg(id) {
   closeSb(); closeDd();
+  document.querySelectorAll('.dlg.on').forEach(function (d) { d.classList.remove('on'); });
   document.getElementById('mask').classList.add('on');
   document.getElementById(id).classList.add('on');
 }

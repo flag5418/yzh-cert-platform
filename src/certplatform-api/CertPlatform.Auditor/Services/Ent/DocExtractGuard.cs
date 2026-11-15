@@ -60,6 +60,10 @@ namespace CertPlatform.Auditor.Services.Ent
             //   这里只保留可识别的真实部门，避免 DeptNames 被污染后按部门过滤失效。
             NormalizeDeptFields(node, mode);
 
+            // ★ Chapters 只允许标准父章节：模型常把 7.1.3 / 8.5.1 这类叶子写进来。
+            //   这里只做层级归一（7.1.3 → 7.1），不改写具体条款号，也不碰 PrimaryClauses。
+            NormalizeChapterFields(node);
+
             return JsonSerializer.SerializeToElement(node);
         }
 
@@ -117,20 +121,36 @@ namespace CertPlatform.Auditor.Services.Ent
         private static readonly Dictionary<string, string> DeptAliases = new(StringComparer.Ordinal)
         {
             ["采购"] = "采购部",
+            ["采购部"] = "采购部",
             ["仓库"] = "仓库",
             ["仓储"] = "仓库",
             ["制造"] = "生产部",
+            ["制造部"] = "生产部",
             ["生产"] = "生产部",
+            ["生产部"] = "生产部",
             ["品质"] = "品质部",
+            ["品质部"] = "品质部",
             ["品保"] = "品质部",
+            ["品保部"] = "品质部",
             ["品管"] = "品质部",
+            ["品管部"] = "品质部",
             ["销售"] = "销售部",
+            ["销售部"] = "销售部",
             ["综合"] = "综合部",
+            ["综合部"] = "综合部",
             ["行政"] = "综合部",
+            ["行政部"] = "综合部",
             ["人事"] = "综合部",
+            ["人力资源"] = "综合部",
+            ["人力资源部"] = "综合部",
             ["行政人事"] = "综合部",
+            ["行政人事部"] = "综合部",
+            ["体系管理"] = "综合部",
+            ["体系管理部"] = "综合部",
             ["技术"] = "技术部",
             ["设备"] = "设备管理部",
+            ["设备部"] = "设备管理部",
+            ["设备管理部"] = "设备管理部",
             ["最高管理者"] = "管理层",
             ["总经理"] = "管理层",
             ["管理层"] = "管理层",
@@ -223,6 +243,38 @@ namespace CertPlatform.Auditor.Services.Ent
                     return v;
             }
             return null;
+        }
+
+        /// <summary>
+        /// <c>Chapters</c> 只保留标准父章节。模型的常见漂移是把 <c>7.1.3</c>、<c>8.5.1</c>
+        /// 这类叶子条款直接写进 <c>Chapters</c>；这里按层级截到前两段（7.1 / 8.5），
+        /// 不改 <c>PrimaryClauses</c>/<c>SupportClauses</c>，避免把标准条款本身改坏。
+        /// </summary>
+        private static void NormalizeChapterFields(JsonNode node)
+        {
+            if (node is not JsonObject obj) return;
+
+            foreach (var key in new[] { "Chapters", "chapters" })
+            {
+                if (obj[key] is not JsonArray arr) continue;
+
+                var kept = new JsonArray();
+                foreach (var item in arr)
+                {
+                    var raw = (item?.ToString() ?? string.Empty).Trim();
+                    if (raw.Length == 0) continue;
+                    var chapter = NormalizeChapter(raw);
+                    if (!kept.Any(x => string.Equals(x?.ToString(), chapter, StringComparison.Ordinal)))
+                        kept.Add(chapter);
+                }
+                obj[key] = kept;
+            }
+        }
+
+        private static string NormalizeChapter(string raw)
+        {
+            var parts = raw.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 3 ? string.Join('.', parts.Take(2)) : raw;
         }
 
         private static void RemoveKey(JsonNode node, string key)

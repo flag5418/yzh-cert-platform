@@ -2514,6 +2514,19 @@ namespace CertPlatform.Auditor.Services.Ent
             var err = await OwnershipErrorAsync(enterpriseCode);
             if (err != null) return (0, 0, err);
 
+            // ★ 同企业同一时间只允许一个未结束队列（转换 / 提取都算）。
+            //   否则用户连点「开始提取」会建出多个内容相同的队列，任务重复消耗模型费用，
+            //   且每个队列都从 0 开始竞争同一批文件。必须等当前队列进入终态再提交。
+            var activeQueue = await FindActiveEnterpriseQueueAsync(ScopeKeyOf(enterpriseCode));
+            if (activeQueue != null)
+            {
+                var progress = activeQueue.TotalCount > 0
+                    ? $"（{activeQueue.CompletedCount}/{activeQueue.TotalCount}）"
+                    : string.Empty;
+                return (0, 0,
+                    $"该企业已有队列 {activeQueue.QueueCode}「{activeQueue.QueueName}」正在处理{progress}，请等待队列结束再提交");
+            }
+
             var all = await _db.Client.Queryable<EnterpriseDoc>()
                 .Where(x => x.EnterpriseCode == enterpriseCode && !x.IsDeleted && x.IsValid == 1)
                 .ToListAsync() ?? new List<EnterpriseDoc>();
@@ -2570,6 +2583,21 @@ namespace CertPlatform.Auditor.Services.Ent
             if (files.Count == 0) return (0, 0, "该企业还没有可提取的文档");
 
             return await EnqueueExtractAsync(enterpriseCode, files, sourceTag, force);
+        }
+
+        /// <summary>该企业是否有未结束的队列（pending/running/processing 均算活跃）。</summary>
+        private async Task<YzhQueue?> FindActiveEnterpriseQueueAsync(string scopeKey)
+        {
+            if (string.IsNullOrWhiteSpace(scopeKey)) return null;
+            var rows = await _db.Client.Queryable<YzhQueue>()
+                .Where(q => q.ScopeKey == scopeKey
+                            && q.Status != "completed"
+                            && q.Status != "failed"
+                            && q.Status != "cancelled")
+                .OrderByDescending(q => q.CreateTime)
+                .Take(5)
+                .ToListAsync() ?? new List<YzhQueue>();
+            return rows.FirstOrDefault();
         }
 
         /// <summary>查该文件当前活跃（非终态）的队列 Code（资源锁优先，SourceId 前缀兜底）</summary>

@@ -1,0 +1,141 @@
+{
+  "StandardCode": "dfca5483-f83c-4999-b773-3624de5f7cf7",
+  "StandardName": "ISO 13485 医疗器械质量管理体系",
+  "VersionYear": 2016,
+  "ChapterProfiles": [
+    {
+      "ChapterCode": "4",
+      "ChapterName": "质量管理体系",
+      "PDCAPhase": ["P"],
+      "DocumentRequirements": [
+        {"DocRole": "manual", "Purpose": "质量手册，覆盖体系范围、删减、过程交互"},
+        {"DocRole": "procedure", "Purpose": "文件控制、记录控制"},
+        {"DocRole": "record", "Purpose": "文件清单、记录清单、发放/回收/销毁记录"}
+      ],
+      "DefaultExtractionDepth": {"manual": "citation_only", "procedure": "structured", "record": "fact_profile"},
+      "ClauseRefs": ["4.1", "4.2.1", "4.2.2", "4.2.3", "4.2.4", "4.2.5"]
+    },
+    {
+      "ChapterCode": "5",
+      "ChapterName": "管理职责",
+      "PDCAPhase": ["P"],
+      "DocumentRequirements": [
+        {"DocRole": "manual", "Purpose": "管理承诺、以顾客为关注焦点、质量方针"},
+        {"DocRole": "procedure", "Purpose": "职责权限、管理评审"},
+        {"DocRole": "record", "Purpose": "方针目标、管理评审计划/报告/会议记录"}
+      ],
+      "DefaultExtractionDepth": {"manual": "citation_only", "procedure": "structured", "record": "fact_profile"},
+      "ClauseRefs": ["5.1", "5.2", "5.3", "5.4", "5.5", "5.6"]
+    },
+    {
+      "ChapterCode": "6",
+      "ChapterName": "资源管理",
+      "PDCAPhase": ["P", "D"],
+      "DocumentRequirements": [
+        {"DocRole": "procedure", "Purpose": "培训、基础设施、工作环境"},
+        {"DocRole": "work_instruction", "Purpose": "设备操作/保养、环境管理"},
+        {"DocRole": "record", "Purpose": "培训、设备台账/保养、健康证明"}
+      ],
+      "DefaultExtractionDepth": {"procedure": "structured", "work_instruction": "criteria", "record": "fact_profile"},
+      "ClauseRefs": ["6.1", "6.2", "6.3", "6.4"]
+    },
+    {
+      "ChapterCode": "7",
+      "ChapterName": "产品实现",
+      "PDCAPhase": ["P", "D"],
+      "DocumentRequirements": [
+        {"DocRole": "procedure", "Purpose": "设计、采购、生产、标识、防护、放行、监视测量"},
+        {"DocRole": "work_instruction", "Purpose": "装配、包装、检验规程、设备操作"},
+        {"DocRole": "record", "Purpose": "设计、采购、生产、检验、放行、校准记录"}
+      ],
+      "DefaultExtractionDepth": {"procedure": "structured", "work_instruction": "criteria", "record": "fact_profile"},
+      "ClauseRefs": ["7.1", "7.2", "7.3", "7.4", "7.5", "7.6"]
+    },
+    {
+      "ChapterCode": "8",
+      "ChapterName": "测量、分析和改进",
+      "PDCAPhase": ["C", "A"],
+      "DocumentRequirements": [
+        {"DocRole": "procedure", "Purpose": "内审、产品监视、不合格、数据、纠正预防"},
+        {"DocRole": "record", "Purpose": "内审包、检验记录、不合格处置、纠正预防"},
+        {"DocRole": "audit_pack", "Purpose": "内审计划/签到/检查表/不合格报告/内审报告组合"}
+      ],
+      "DefaultExtractionDepth": {"procedure": "structured", "record": "fact_profile", "audit_pack": "fact_profile"},
+      "ClauseRefs": ["8.1", "8.2", "8.3", "8.4", "8.5"]
+    }
+  ],
+  "ClauseProfiles": [
+    {
+      "ClauseCode": "7.5.1",
+      "ChapterCode": "7",
+      "Inherits": "ChapterProfile:7",
+      "Overrides": {
+        "EvidenceItems": [
+          {"DocRole": "procedure", "EvidenceRole": "establishment", "NamedExample": "生产和服务提供控制程序"},
+          {"DocRole": "work_instruction", "EvidenceRole": "criteria", "NamedExample": "装配作业指导书"},
+          {"DocRole": "record", "EvidenceRole": "implementation", "NamedExample": "生产记录/随工单"}
+        ],
+        "ExtraRequirements": ["基础设施鉴定", "标识与包装", "制造数量", "批准流通数量", "7.5.9 追溯"],
+        "Frequency": "每批",
+        "ReportUse": ["sample", "coverage", "counter"]
+      }
+    },
+    {
+      "ClauseCode": "8.2.4",
+      "ChapterCode": "8",
+      "Inherits": "ChapterProfile:8",
+      "Overrides": {
+        "EvidenceItems": [
+          {"DocRole": "procedure", "EvidenceRole": "establishment", "NamedExample": "内部审核程序"},
+          {"DocRole": "audit_pack", "EvidenceRole": "implementation", "NamedExample": "内审计划/签到/检查表/不合格报告/内审报告"}
+        ],
+        "ExtraRequirements": ["审核方案", "审核员独立性", "审核范围", "审核准则", "不符合项闭环"],
+        "Frequency": "每年至少一次",
+        "ReportUse": ["coverage", "counter", "combination"]
+      }
+    },
+    {
+      "ClauseCode": "8.2.6",
+      "ChapterCode": "8",
+      "Inherits": "ChapterProfile:8",
+      "Overrides": {
+        "EvidenceItems": [
+          {"DocRole": "procedure", "EvidenceRole": "establishment", "NamedExample": "过程和产品监视测量程序"},
+          {"DocRole": "work_instruction", "EvidenceRole": "criteria", "NamedExample": "成品检验作业指导书"},
+          {"DocRole": "record", "EvidenceRole": "implementation", "NamedExample": "过程检验记录/成品检验记录/产品放行审核记录"}
+        ],
+        "MustHaveFields": ["产品名称", "规格型号", "批号", "检验项目", "检验结果", "接收准则", "检验员", "放行人", "检测设备"],
+        "Frequency": "每批",
+        "ReportUse": ["sample", "coverage", "counter"]
+      }
+    },
+    {
+      "ClauseCode": "8.3.2",
+      "ChapterCode": "8",
+      "Inherits": "ChapterProfile:8",
+      "Overrides": {
+        "EvidenceItems": [
+          {"DocRole": "procedure", "EvidenceRole": "establishment", "NamedExample": "不合格品控制程序"},
+          {"DocRole": "record", "EvidenceRole": "implementation", "NamedExample": "不合格品通知及评审处置表/让步接收申请表/报废申请单"}
+        ],
+        "ExtraRequirements": ["交付前发现", "标识/隔离", "评审", "处置方式", "让步批准", "法规符合性"],
+        "Frequency": "每事件",
+        "ReportUse": ["sample", "counter"]
+      }
+    },
+    {
+      "ClauseCode": "7.6",
+      "ChapterCode": "7",
+      "Inherits": "ChapterProfile:7",
+      "Overrides": {
+        "EvidenceItems": [
+          {"DocRole": "procedure", "EvidenceRole": "establishment", "NamedExample": "监视和测量装置控制程序"},
+          {"DocRole": "record", "EvidenceRole": "implementation", "NamedExample": "设备台账/周期检定计划/校准记录"}
+        ],
+        "ExtraRequirements": ["设备编号", "校准状态", "校准机构/依据", "偏离校准状态处理", "软件确认"],
+        "Frequency": "每设备/每周期",
+        "ReportUse": ["sample", "coverage", "counter"]
+      }
+    }
+  ]
+}

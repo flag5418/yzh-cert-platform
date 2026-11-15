@@ -1,0 +1,1534 @@
+{
+  "Clauses": [
+    {
+      "Clause": "4.1",
+      "Page": 11,
+      "Refs": [
+        "风险管理控制程序",
+        "手动轮椅车风险管理报告",
+        "文件控制程序",
+        "计算机软件应用确认控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-001",
+        "XASL-QP-009",
+        "XASL-QP-029"
+      ]
+    },
+    {
+      "Clause": "4.2.1",
+      "Page": 13,
+      "Refs": [
+        "质量手册",
+        "文件控制程序",
+        "返工管理制度",
+        "手动轮椅车成品检验作业指导书"
+      ],
+      "Codes": [
+        "SJBJ-QP-001"
+      ],
+      "MatchedCodes": [
+        "XASL-QD-008",
+        "XASL-QP-001"
+      ]
+    },
+    {
+      "Clause": "4.2.2",
+      "Page": 13,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "4.2.3",
+      "Page": 14,
+      "Refs": [
+        "风险管理控制程序",
+        "生产和服务提供控制程序",
+        "监视和测量装置控制程序",
+        "过程和产品监视测量程序",
+        "数据分析控制程序",
+        "纠正预防措施控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-009",
+        "XASL-QP-020",
+        "XASL-QP-021",
+        "XASL-QP-024",
+        "XASL-QP-025",
+        "XASL-QP-026"
+      ]
+    },
+    {
+      "Clause": "5.1",
+      "Page": 14,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "5.2",
+      "Page": 15,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "5.3",
+      "Page": 15,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "5.4.1",
+      "Page": 15,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "5.4.2",
+      "Page": 15,
+      "Refs": [
+        "2026质量目标统计表"
+      ],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "5.5.1",
+      "Page": 16,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "5.5.2",
+      "Page": 16,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "5.5.3",
+      "Page": 16,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "5.6",
+      "Page": 16,
+      "Refs": [
+        "管理评审控制程序",
+        "管理评审计划",
+        "管理评审报告",
+        "管理评审报告"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-004"
+      ]
+    },
+    {
+      "Clause": "6.1",
+      "Page": 17,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "8.1",
+      "Page": 18,
+      "Refs": [
+        "生产和服务提供控制程序",
+        "过程和产品监视测量程序",
+        "内部审核程序",
+        "管理评审控制程序",
+        "数据分析控制程序",
+        "纠正预防措施控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-004",
+        "XASL-QP-007",
+        "XASL-QP-021",
+        "XASL-QP-024",
+        "XASL-QP-025",
+        "XASL-QP-026"
+      ]
+    },
+    {
+      "Clause": "8.2.1",
+      "Page": 18,
+      "Refs": [
+        "顾客满意度测量控制程序",
+        "顾客抱怨处理程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-023",
+        "XASL-QP-028"
+      ]
+    },
+    {
+      "Clause": "8.2.2",
+      "Page": 18,
+      "Refs": [
+        "顾客抱怨处理程序",
+        "顾客满意度测量控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-023",
+        "XASL-QP-028"
+      ]
+    },
+    {
+      "Clause": "8.2.3",
+      "Page": 19,
+      "Refs": [
+        "医疗器械不良事件报告和再评价程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-030"
+      ]
+    },
+    {
+      "Clause": "8.2.4",
+      "Page": 19,
+      "Refs": [
+        "内部审核程序",
+        "内部审核计划",
+        "内部审核检查表",
+        "内审不合格报告",
+        "内部质量审核报告"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-007"
+      ]
+    },
+    {
+      "Clause": "8.4",
+      "Page": 20,
+      "Refs": [
+        "数据分析控制程序",
+        "目标分解及考核报表"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-026"
+      ]
+    },
+    {
+      "Clause": "8.5.1",
+      "Page": 21,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "8.5.2",
+      "Page": 21,
+      "Refs": [
+        "纠正预防措施控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-025"
+      ]
+    },
+    {
+      "Clause": "8.5.3",
+      "Page": 22,
+      "Refs": [
+        "纠正预防措施控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-025"
+      ]
+    },
+    {
+      "Clause": "6.2",
+      "Page": 24,
+      "Refs": [
+        "培训控制程序",
+        "从业人员健康证明"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-005"
+      ]
+    },
+    {
+      "Clause": "4.2.4",
+      "Page": 24,
+      "Refs": [
+        "文件控制程序",
+        "文件发放/回收记录表",
+        "质量手册",
+        "不合格品控制程序",
+        "外来文件清单",
+        "中华人民共和国民法典",
+        "医疗器械注册管理办法",
+        "医疗器械经营质量管理规范-GMP"
+      ],
+      "Codes": [
+        "XASL-QP-013"
+      ],
+      "MatchedCodes": [
+        "XASL-QP-001",
+        "XASL-QP-013"
+      ]
+    },
+    {
+      "Clause": "4.2.5",
+      "Page": 25,
+      "Refs": [
+        "记录控制程序",
+        "采购订单",
+        "发货通知单",
+        "合同、订单评审表"
+      ],
+      "Codes": [
+        "XASL-OR-007",
+        "XASL-OR-016"
+      ],
+      "MatchedCodes": [
+        "XASL-QP-002"
+      ]
+    },
+    {
+      "Clause": "6.3",
+      "Page": 27,
+      "Refs": [
+        "设备台账",
+        "电动扳手操作规程",
+        "手电钻操作和保养规程",
+        "设备维护保养记录",
+        "自动捆包机操作和保养规程"
+      ],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "6.4.1",
+      "Page": 27,
+      "Refs": [
+        "工作环境管理制度"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QD-001"
+      ]
+    },
+    {
+      "Clause": "6.4.2",
+      "Page": 28,
+      "Refs": [
+        "从业人员健康证明"
+      ],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.1",
+      "Page": 28,
+      "Refs": [
+        "生产和服务提供控制程序",
+        "风险管理控制程序",
+        "手动轮椅车风险管理报告"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-009",
+        "XASL-QP-021"
+      ]
+    },
+    {
+      "Clause": "7.3",
+      "Page": 29,
+      "Refs": [
+        "设计开发控制程序",
+        "设计和开发策划书",
+        "设计开发输入清单",
+        "GB/Z13800:2021手动轮椅车",
+        "GB/Z18029.3:2008第3轮椅车部分：制动性能的测定",
+        "设计开发验证记录",
+        "成品组装工序工艺验证报告",
+        "产品使用期限试验报告",
+        "设计和开发确认记录",
+        "免于进行临床试验医疗器械目录汇reviewedandapproved.总",
+        "设计和开发转换记录",
+        "岗位人员考核评价记录",
+        "合格供方名录",
+        "生产记录表",
+        "成品检验记录",
+        "技术文件",
+        "手动轮椅车生产工艺流程图",
+        "钢卷尺操作规程",
+        "自动捆andservice;包机操作和保养规程",
+        "手动轮椅车成品检验规程",
+        "设计和开发控制程序",
+        "手动轮椅车产品使用说明书",
+        "手动轮椅车装配作业指导b）给出采购、生产和服务提供适当的信息；书"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-011"
+      ]
+    },
+    {
+      "Clause": "7.4.3",
+      "Page": 34,
+      "Refs": [
+        "手动轮椅车原材料进货检验规程"
+      ],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.5",
+      "Page": 35,
+      "Refs": [
+        "生产和服务提供控制程序",
+        "手动轮椅车生产记录",
+        "手动轮椅车装配作业指导书"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-021"
+      ]
+    },
+    {
+      "Clause": "7.5.2",
+      "Page": 36,
+      "Refs": [
+        "产品包装作业指导书",
+        "手动轮椅车使用说明书"
+      ],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.5.3",
+      "Page": 36,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.5.4",
+      "Page": 37,
+      "Refs": [
+        "与顾客有关的过程控制程序",
+        "质量信息报警反馈控制程序",
+        "顾客抱怨处理-要求续：thatproductrequirementsaremet.-证据续：程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-015",
+        "XASL-QP-016"
+      ]
+    },
+    {
+      "Clause": "7.5.5",
+      "Page": 37,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.5.6",
+      "Page": 37,
+      "Refs": [
+        "计算机软件应用确认控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-029"
+      ]
+    },
+    {
+      "Clause": "7.5.7",
+      "Page": 39,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.5.8",
+      "Page": 39,
+      "Refs": [
+        "产品标识和可追溯性控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-018"
+      ]
+    },
+    {
+      "Clause": "7.5.9.1",
+      "Page": 40,
+      "Refs": [
+        "产品标识和可追溯性控制程序",
+        "手动轮椅车手动轮椅车生产记录",
+        "医疗器械生产质量管理规范",
+        "产品标识和可追溯性控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-018"
+      ]
+    },
+    {
+      "Clause": "7.5.9.2",
+      "Page": 40,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.5.10",
+      "Page": 40,
+      "Refs": [
+        "顾客财产控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.5.11",
+      "Page": 40,
+      "Refs": [
+        "产品防护管理程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.6",
+      "Page": 41,
+      "Refs": [
+        "监视和测量装置控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-020"
+      ]
+    },
+    {
+      "Clause": "8.2.5",
+      "Page": 43,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "8.2.6",
+      "Page": 43,
+      "Refs": [
+        "过程和产品监视测量程序",
+        "手动轮椅车原材料进货检验规程",
+        "手动轮椅车-要求续：和测量-证据续：过程检验规程",
+        "手动轮椅车成品检验作业指导书",
+        "手动轮椅车过程检验规程",
+        "过程检验记录",
+        "成品检验记录",
+        "手动轮椅车",
+        "手动轮椅车"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-024"
+      ]
+    },
+    {
+      "Clause": "8.3.1",
+      "Page": 44,
+      "Refs": [
+        "不合格品控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-013"
+      ]
+    },
+    {
+      "Clause": "8.3.2",
+      "Page": 45,
+      "Refs": [
+        "不合格品控制程序",
+        "进货不合格检验记录"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-013"
+      ]
+    },
+    {
+      "Clause": "8.3.3",
+      "Page": 45,
+      "Refs": [
+        "不合格品控制程序",
+        "忠告性通知和产品召回控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-013",
+        "XASL-QP-027"
+      ]
+    },
+    {
+      "Clause": "8.3.4",
+      "Page": 45,
+      "Refs": [
+        "不合格品控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-013"
+      ]
+    },
+    {
+      "Clause": "7.2.1",
+      "Page": 47,
+      "Refs": [
+        "与顾客有关的过程控制程序",
+        "中华人民共和国民法典",
+        "合同评审表"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-015"
+      ]
+    },
+    {
+      "Clause": "7.2.2",
+      "Page": 47,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    },
+    {
+      "Clause": "7.2.3",
+      "Page": 48,
+      "Refs": [
+        "医疗器械不良事件报告和再评价程序",
+        "上市后的监督程序",
+        "忠告-要求续：a）产品信息；-证据续：性通知和产品召回控制程序"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-030",
+        "XASL-QP-033"
+      ]
+    },
+    {
+      "Clause": "7.4.1",
+      "Page": 48,
+      "Refs": [
+        "采购控制程序",
+        "供方评估和复评程序",
+        "合格供方评定记录"
+      ],
+      "Codes": [],
+      "MatchedCodes": [
+        "XASL-QP-012",
+        "XASL-QP-022"
+      ]
+    },
+    {
+      "Clause": "7.4.2",
+      "Page": 49,
+      "Refs": [],
+      "Codes": [],
+      "MatchedCodes": []
+    }
+  ],
+  "Docs": [
+    {
+      "File": "2程序文件/附录三 程序文件清单.doc",
+      "Code": "",
+      "Name": "附录三 程序文件清单",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/附录三 程序文件清单.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 918,
+      "Norm": "附录三程序文件清单",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-033 上市后的监督程序.doc",
+      "Code": "XASL-QP-033",
+      "Name": "上市后的监督程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-033 上市后的监督程序.txt",
+      "Purpose": "为公司制造的所有产品获取并评审产品上市后信息",
+      "Scope": "适合于所有公司制造和销售的产品。",
+      "RelatedDocs": "XASL-QP-028 《顾客抱怨处理程序》 XASL-QP-030《不良事件报告和再评价控制程序》 XASL-QP-027《忠告性通知和产品召回控制程序》",
+      "RelatedForms": "",
+      "Chars": 1190,
+      "Norm": "上市后的监督程序",
+      "Clauses": [
+        "7.2.3"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-006 基础设施及设备控制程序.doc",
+      "Code": "XASL-QP-006",
+      "Name": "基础设施及设备控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-006 基础设施及设备控制程序.txt",
+      "Purpose": "通过对基础设施及设备的管理和控制，使其性能保持良好，确保满足产品生产的需要，同时达到安全作业的目的。",
+      "Scope": "",
+      "RelatedDocs": "XASL-QP-001 《文件控制程序》 XASL-QP-020 《监视和测量装置控制程序》",
+      "RelatedForms": "XASL-PR-001《设备台账》 XASL-PR-002《设备维护保养计划》 XASL-PR-003《设备维护保养记录》 XASL-PR-004《设备安装验收报告》 XASL-PR-006《设备维修记录》 XASL-PR-007《设备报废申请表》 XASL-PR-005《设备增置申请表》 XASL-PR-008《设备档案》 XASL-PR-009《仪器、设备使用记录表》",
+      "Chars": 2491,
+      "Norm": "基础设施及设备控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-012 采购控制程序.doc",
+      "Code": "XASL-QP-012",
+      "Name": "采购控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-012 采购控制程序.txt",
+      "Purpose": "规范原材料、辅助材料、包装材料、委外加工等的采购行为，保证供应安全，提高采购的效率和计划性，节约采购成本。",
+      "Scope": "适用于公司原材料（包括委外加工)、辅助材料、包装材料等采购管理。",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-OR-005《采购申请单》 XASL-OR-006《采购记录》 XASL-OR-008《供方评定表》 XASL-OR-007《采购订单》",
+      "Chars": 2402,
+      "Norm": "采购控制程序",
+      "Clauses": [
+        "7.4.1"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-001 文件控制程序.doc",
+      "Code": "XASL-QP-001",
+      "Name": "文件控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-001 文件控制程序.txt",
+      "Purpose": "本程序有效控制本公司与质量体系有关的所有文件和资料，确保各相关场所均使用现行文件的有效版本。 适用范围 本程序适用于河北雄安尚龙医疗科技有限公司质量管理体系所有的文件。",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-QR-001《受控文件清单》 XASL-QR-002《文件修订/废止申请表》 XASL-QR-003《文件发放/回收记录》 XASL-QR-004《文件补（换）申请单》 XASL-QR-005《文件销毁登记表》 JCOR-001《培训签到及有效性评价表》 XASL-QR-008《外来文件登记表》 XASL-QR-009《文件借阅记录》",
+      "Chars": 3270,
+      "Norm": "文件控制程序",
+      "Clauses": [
+        "4.1",
+        "4.2.1",
+        "4.2.4"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-005 培训控制程序.doc",
+      "Code": "XASL-QP-005",
+      "Name": "培训控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-005 培训控制程序.txt",
+      "Purpose": "对质量管理体系中各过程人员进行管理，确保从事影响产品质量工作的人员能够符合质量管理体系有效运行对人力资源的需求。",
+      "Scope": "适用于对公司各职能部门、岗位人员的管理。",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-QD-002 《岗位任职要求规定》 XASL-QD-003《员工考核、评价和再评价管理制度》 XASL-OR-002《新员工综合信息登记表》 XASL-OR-003《培训申请表》 XASL-OR-001 《培训签到及有效性评价表》 XASL-OR-004《员工培训档案》",
+      "Chars": 1988,
+      "Norm": "培训控制程序",
+      "Clauses": [
+        "6.2"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-032 变更控制程序.doc",
+      "Code": "XASL-QP-032",
+      "Name": "变更控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-032 变更控制程序.txt",
+      "Purpose": "对(可能）影响产品安全、有效的变更进行控制，以保证产品质量的稳定性。",
+      "Scope": "适用于影响产品性能方面的变更，如产品原材料、生产工艺、产品结构、生产设备及公用系统等变更。",
+      "RelatedDocs": "XASL-QP-001 《文件控制程序》 XASL-QP-002 《记录控制程序》 XASL-QP-022 《供方评估和复评程序》 XASL-QP-012 《采购控制程序》 XASL-QP-017 《验证和确认控制程序》",
+      "RelatedForms": "XASL-TR-003 《工程变更通知单》",
+      "Chars": 1590,
+      "Norm": "变更控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-002 记录控制程序.doc",
+      "Code": "XASL-QP-002",
+      "Name": "记录控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-002 记录控制程序.txt",
+      "Purpose": "对质量管理体系所要求的记录的标识、贮存、检索、保护、保存期限及处置予以控制，并予以保持，以提供符合要求和质量管理体系有效运行的证据。证实产品已达到质量要求或为质量体系运行的有效性提供客观证据。",
+      "Scope": "本程序适用于与质量管理体系相关的所有记录。",
+      "RelatedDocs": "XASL-QP-001 《文件控制程序》",
+      "RelatedForms": "XASL-QR-010《质量记录清单》 XASL-QR-005《文件销毁登记表》",
+      "Chars": 1674,
+      "Norm": "记录控制程序",
+      "Clauses": [
+        "4.2.5"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-017 验证和确认控制程序.doc",
+      "Code": "XASL-QP-017",
+      "Name": "验证和确认控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-017 验证和确认控制程序.txt",
+      "Purpose": "规范、指导厂房、设施、设备、生产工艺以及其它各项验证流程，明确验证的目的、范围和工作方法。",
+      "Scope": "适用于各项验证的实施与管理。",
+      "RelatedDocs": "XASL-QP-020《监视和测量装置控制程序》",
+      "RelatedForms": "XASL-TR-001 《年度验证计划》 XASL-TR-002 《验证台账》 /     《验证方案》 /     《验证报告》",
+      "Chars": 3756,
+      "Norm": "验证和确认控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-014 产品防护控制程序.doc",
+      "Code": "XASL-QP-014",
+      "Name": "产品防护控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-014 产品防护控制程序.txt",
+      "Purpose": "使用适当的方法，并提供适当的贮存场所及条件，确保产品在标识、搬运、包装、贮存过程中不受影响；对交付前的产品进行适当的包装，并对包装后的产品进行适当的防护及交付过程进行控制，确保交付给顾客的产品质量满足规定的要求。",
+      "Scope": "本程序适用于本公司的原材料、辅助材料、半成品和成品的搬运、贮存和防护，以及产品的包装和最终产品的交付控制。",
+      "RelatedDocs": "XASL-QP-018 《产品标识和可追溯性控制程序》 XASL-QP-013 《不合格品控制程序》 XASL-QD-004 《仓库管理制度》",
+      "RelatedForms": "XASL-QR-036《温度、湿度记录表》",
+      "Chars": 1566,
+      "Norm": "产品防护控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-025 纠正预防措施控制程序.doc",
+      "Code": "XASL-QP-025",
+      "Name": "纠正预防措施控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-025 纠正预防措施控制程序.txt",
+      "Purpose": "制订纠正及预防措施控制程序，以消除现有/潜在不合格的根本原因，防止不合格发生/再发生，最终确保质量体系的持续有效性和稳定性。",
+      "Scope": "适用于公司质量管理体系所有覆盖过程的纠正和预防措施。",
+      "RelatedDocs": "XASL-QP-001《文件管理控制程序》 XASL-QP-013《不合格品控制程序》 XASL-QP-007《内部审核程序》",
+      "RelatedForms": "XASL-QR-029《纠正/预防措施表》 XASL-QR-030《纠正/预防措施清单》",
+      "Chars": 1706,
+      "Norm": "纠正预防措施控制程序",
+      "Clauses": [
+        "4.2.3",
+        "8.1",
+        "8.5.2",
+        "8.5.3"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-026 数据分析控制程序.doc",
+      "Code": "XASL-QP-026",
+      "Name": "数据分析控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-026 数据分析控制程序.txt",
+      "Purpose": "收集与产品、过程及质量管理体系有关的数据，进行分析，以识别评价对质量管理体系有效性进行改进。",
+      "Scope": "适用于对来自监视和测量活动及其他相关来源的数据分析。",
+      "RelatedDocs": "XASL-QP-025 《纠正预防措施控制程序》",
+      "RelatedForms": "",
+      "Chars": 1742,
+      "Norm": "数据分析控制程序",
+      "Clauses": [
+        "4.2.3",
+        "8.1",
+        "8.4"
+      ]
+    },
+    {
+      "File": "2程序文件/程序文件封面.doc",
+      "Code": "",
+      "Name": "程序文件封面",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/程序文件封面.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 213,
+      "Norm": "程序文件封面",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-016 质量信息报警反馈控制程序.doc",
+      "Code": "XASL-QP-016",
+      "Name": "质量信息报警反馈控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-016 质量信息报警反馈控制程序.txt",
+      "Purpose": "为迅速处理反馈的各种质量信息，提供质量问题的早期报警，并识别可以实施的改进。",
+      "Scope": "适用于内部和外部反馈的各种质量问题管理。",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-QR-023 《质量信息反馈单》",
+      "Chars": 927,
+      "Norm": "质量信息报警反馈控制程序",
+      "Clauses": [
+        "7.5.4"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-021 生产和服务提供控制程序.doc",
+      "Code": "XASL-QP-021",
+      "Name": "生产和服务提供控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-021 生产和服务提供控制程序.txt",
+      "Purpose": "对生产过程进行有效控制，使其处于稳定的受控状态，确保产品质量达到规定要求。",
+      "Scope": "适用于本公司对产品的实现、贮存、放行、交付等过程的控制与管理。",
+      "RelatedDocs": "XASL-QP-002 《记录控制程序》 XASL-QP-006《基础设施及设备控制程序》 XASL-QP-018《产品标识和可追溯性程序》 XASL-QP-014《产品防护控制程序》 XASL-QP-020《监视和测量装置控制程序》 XASL-QP-013《不合格品控制程序》",
+      "RelatedForms": "XASL-PR-025《生产指令单》 XASL-PR-026《领料申请单》 XASL-PR-028《随工单》",
+      "Chars": 1933,
+      "Norm": "生产和服务提供控制程序",
+      "Clauses": [
+        "4.2.3",
+        "8.1",
+        "7.1",
+        "7.5"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-018 产品标识和可追溯性控制程序.doc",
+      "Code": "XASL-QP-018",
+      "Name": "产品标识和可追溯性控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-018 产品标识和可追溯性控制程序.txt",
+      "Purpose": "对原材料、过程产品、成品的状态进行标识，确保只有合格的产品才能转存及交付，并防止不合格品的混淆使用,确保产品生产过程的可追溯性。",
+      "Scope": "适用于原材料、外购（协）件、包装材料、过程产品和成品的标识和追溯。",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 1952,
+      "Norm": "产品标识和可追溯性控制程序",
+      "Clauses": [
+        "7.5.8",
+        "7.5.9.1"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-015 与顾客有关的过程控制程序.doc",
+      "Code": "XASL-QP-015",
+      "Name": "与顾客有关的过程控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-015 与顾客有关的过程控制程序.txt",
+      "Purpose": "对确保顾客的需求和期望得到充分理解的过程做出规定，并加以实施和保持。",
+      "Scope": "适用于对顾客要求的识别、对产品要求的评审及与顾客的沟通。",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-OR-012《合同/订单评审表》 XASL-OR-013《合同/订单更改申请表》 XASL-OR-014《产品销售台账》 XASL-OR-015《顾客档案》 XASL-OR-016《发货通知单》 XASL-OR-017《订货协议》 XASL-TR-013《工程订单》 修订记录",
+      "Chars": 2291,
+      "Norm": "与顾客有关的过程控制程序",
+      "Clauses": [
+        "7.5.4",
+        "7.2.1"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-003 职责权限和沟通控制程序.doc",
+      "Code": "XASL-QP-003",
+      "Name": "职责权限和沟通控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-003 职责权限和沟通控制程序.txt",
+      "Purpose": "各部门和岗位的职责、权限得到规定，并通过沟通使公司的质量管理活动开展得更加有效。",
+      "Scope": "适用于全公司所有岗位和人员。",
+      "RelatedDocs": "XASL-QD-002《岗位任职要求规定》",
+      "RelatedForms": "",
+      "Chars": 5967,
+      "Norm": "职责权限和沟通控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-019 顾客财产的控制程序.doc",
+      "Code": "XASL-QP-019",
+      "Name": "顾客财产的控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-019 顾客财产的控制程序.txt",
+      "Purpose": "规定对顾客财产的接收、验证、使用、储存、维护、归还的要求和信息传递。",
+      "Scope": "适用于顾客提供的原材料、产品、零部件、设备或软件（如顾客提供的技术、各种信息，知识产权和保密健康信息)。",
+      "RelatedDocs": "XASL-QP-013 《不合格品控制程序》",
+      "RelatedForms": "XASL-OR-009《顾客财产接收单》",
+      "Chars": 782,
+      "Norm": "顾客财产的控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-004 管理评审控制程序.doc",
+      "Code": "XASL-QP-004",
+      "Name": "管理评审控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-004 管理评审控制程序.txt",
+      "Purpose": "按要求进行管理评审，以确保质量管理体系持续的适宜性、充分性和有效性。",
+      "Scope": "适用于公司质量体系运行管理评审。",
+      "RelatedDocs": "XASL-QP-025《纠正预防措施控制程序》 XASL-QP-001《文件控制程序》 XASL-QP-002《记录控制程序》",
+      "RelatedForms": "XASL-QR-011《管理评审计划》 XASL-QR-012《管理评审会议记录》 XASL-QR-013《管理评审报告》",
+      "Chars": 2943,
+      "Norm": "管理评审控制程序",
+      "Clauses": [
+        "5.6",
+        "8.1"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-022 供方评估和复评程序.doc",
+      "Code": "XASL-QP-022",
+      "Name": "供方评估和复评程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-022 供方评估和复评程序.txt",
+      "Purpose": "对供方进行选择和评定，确保供方能长期、稳定地供应质优、价格合理的物资。确保采购的物资满足本公司规定的质量要求。",
+      "Scope": "适用于为本公司产品提供物料或委托加工的供方选择、评定和复评。",
+      "RelatedDocs": "XASL-QP-012《采购控制程序》",
+      "RelatedForms": "XASL-OR-008《供方评定表》 XASL-OR-010《供方业绩评定表》 XASL-OR-011《合格供应商名录》",
+      "Chars": 2064,
+      "Norm": "供方评估和复评程序",
+      "Clauses": [
+        "7.4.1"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-008 产品质量控制程序.doc",
+      "Code": "XASL-QP-008",
+      "Name": "产品质量控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-008 产品质量控制程序.txt",
+      "Purpose": "确保来料、组件、成品符合标准要求。",
+      "Scope": "适用于公司内的来料检验、过程检验、成品检验。",
+      "RelatedDocs": "XASL-QP-013《不合格品控制程序》 XASL-QD-004 《仓库管理制度》",
+      "RelatedForms": "XASL-QR-024《原材料请验单》 XASL-QR-025《来料检验报告》 XASL-QR-026《成品请验单》 XASL-QR-038  《产品终检报告》 XASL-QR-028《产品放行审核记录》",
+      "Chars": 1386,
+      "Norm": "产品质量控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-009 风险管理控制程序.doc",
+      "Code": "XASL-QP-009",
+      "Name": "风险管理控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-009 风险管理控制程序.txt",
+      "Purpose": "为了满足 YY/T 0287/ISO 13485的要求，依据YY/T 0316/ISO 14971标准，通过对产品整个寿命周期的风险管理，确保产品按预期用途使用时，让病人和使用者的风险降低到可接受水平。",
+      "Scope": "适用于对本公司医疗器械产品进行风险管理,并形成风险管理报告。",
+      "RelatedDocs": "YY/T 0316《风险管理对医疗器械的应用》",
+      "RelatedForms": "/ 《风险管理计划》 / 《风险管理报告》",
+      "Chars": 2772,
+      "Norm": "风险管理控制程序",
+      "Clauses": [
+        "4.1",
+        "4.2.3",
+        "7.1"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-028 顾客抱怨处理程序.doc",
+      "Code": "XASL-QP-028",
+      "Name": "顾客抱怨处理程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-028 顾客抱怨处理程序.txt",
+      "Purpose": "对顾客抱怨的处理程序进行规定，以提高顾客反馈的处理效率，提高顾客信任度，并对反馈进行原因分析，持续改进产品质量。",
+      "Scope": "适用于所有产品交付后引起的顾客反馈或顾客抱怨的处理。",
+      "RelatedDocs": "XASL-QP-025《纠正预防措施控制程序》 XASL-QP-030《医疗器械不良事件报告和再评价程序》 XASL-QP-015《与顾客有关的过程控制程序》 XASL-QP-027《忠告性通知和产品召回控制程序》",
+      "RelatedForms": "XASL-OR-021《顾客投诉处理单》 XASL-OR-022《顾客投诉处理登记表》 XASL-OR-020《顾客反馈信息记录表》 修改历史",
+      "Chars": 1351,
+      "Norm": "顾客抱怨处理程序",
+      "Clauses": [
+        "8.2.1",
+        "8.2.2"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-029 计算机软件应用确认控制程序.doc",
+      "Code": "XASL-QP-029",
+      "Name": "计算机软件应用确认控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-029 计算机软件应用确认控制程序.txt",
+      "Purpose": "对计算机软件应用进行确认，确认计算机软件是否满足生产和服务提供、监视和测量要求。",
+      "Scope": "适用于本公司生产和服务提供以及监视和测量要求软件应用的首次确认和再确认。",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 1326,
+      "Norm": "计算机软件应用确认控制程序",
+      "Clauses": [
+        "4.1",
+        "7.5.6"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-030 医疗器械不良事件报告和再评价程序.docx",
+      "Code": "XASL-QP-030",
+      "Name": "医疗器械不良事件报告和再评价程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-030 医疗器械不良事件报告和再评价程序.txt",
+      "Purpose": "根据国家相关法规要求，对医疗器械不良事件进行监测和再评价工作，确保获准上市的医疗器械在正常使用情况下，发生的导致或可能导致人体伤害的各种有害事件能够得到及时有效控制。 范围： 本程序适用于本公司产品不良事件的监测及再评价控制过程。",
+      "Scope": "",
+      "RelatedDocs": "《医疗器械不良事件监测和再评价管理办法》国家市场监督管理总局令第1号 国家药监局关于发布医疗器械注册人开展不良事件监测工作指南的通告（2020年第25号） XASL-QP-027《忠告性通知和产品召回控制程序》 XASL-QP-028《顾客抱怨处理程序》",
+      "RelatedForms": "",
+      "Chars": 2884,
+      "Norm": "医疗器械不良事件报告和再评价程序",
+      "Clauses": [
+        "8.2.3",
+        "7.2.3"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-010 产品放行控制程序.doc",
+      "Code": "XASL-QP-010",
+      "Name": "产品放行控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-010 产品放行控制程序.txt",
+      "Purpose": "建立产品放行规程，明确产品放行前审核与质量评价的方法，确保每批己放行产品的生产、检验均符合相关法律法规、标准和产品技术要求，最大限度降低上市产品的质量风险。",
+      "Scope": "本规程适用于公司生产的所有成品放行前审核和质量评定规则。 定义 放行：对一批产品进行质量评价，作出批准使用或投放市场或其他决定的操作。 批记录：包括批生产记录、批检验记录和批放行审核记录。",
+      "RelatedDocs": "XASL-QP-001 《文件控制程序》 XASL-QP-002 《记录控制程序》 XASL-QP-013 《不合格品控制程序》 相关记录 XASL-QR-028 《产品放行审核记录》 XASL-QR-027   《成品检验记录》",
+      "RelatedForms": "",
+      "Chars": 1366,
+      "Norm": "产品放行控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-027 忠告性通知和产品召回控制程序.doc",
+      "Code": "XASL-QP-027",
+      "Name": "忠告性通知和产品召回控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-027 忠告性通知和产品召回控制程序.txt",
+      "Purpose": "及时收集医疗器械安全的相关信息，对可能存在缺陷的医疗器械进行调查、评估，及时召回存在缺陷的医疗器械。",
+      "Scope": "本程序适用于对已上市销售的产品交付后发现的缺陷采取忠告性通知或召回措施的控制和管理。",
+      "RelatedDocs": "XASL-QP-013 《不合格品控制程序》 XASL-QP-030 《医疗器械不良事件报告和再评价控制程序》",
+      "RelatedForms": "XASL-QR-031《忠告性通知》 XASL-QR-032《医疗器械召回计划》 XASL-QR-033《医疗器械调查评估报告》 XASL-QR-034《医疗器械召回事件报告表》 XASL-QR-035《召回计划实施情况报告》 /     医疗器械召回总结报告",
+      "Chars": 2104,
+      "Norm": "忠告性通知和产品召回控制程序",
+      "Clauses": [
+        "8.3.3"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-031 产品主文档控制程序.doc",
+      "Code": "XASL-QP-031",
+      "Name": "产品主文档控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-031 产品主文档控制程序.txt",
+      "Purpose": "通过对产品主文档进行控制来确保使用文件均为有效版本。",
+      "Scope": "适用于公司生产医疗器械产品主文档的控制。",
+      "RelatedDocs": "XASL-QP-001《文件控制程序》 XASL-QP-001《记录控制程序》",
+      "RelatedForms": "XASL-TR-014《产品主文档清单（DMR）》",
+      "Chars": 1025,
+      "Norm": "产品主文档控制程序",
+      "Clauses": []
+    },
+    {
+      "File": "2程序文件/XASL-QP-011 设计开发控制程序.doc",
+      "Code": "XASL-QP-011",
+      "Name": "设计开发控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-011 设计开发控制程序.txt",
+      "Purpose": "规定产品设计开发的流程和要求，确保设计开发活动合规，保证产品安全、有效。",
+      "Scope": "本程序适用于本公司新产品的设计开发全过程。",
+      "RelatedDocs": "XASL-QP-001《文件控制程序》 XASL-QP-002《记录控制程序》 XASL-QP-009《风险管理控制程序》",
+      "RelatedForms": "XASL-TR-004《设计开发策划书》 XASL-TR-005《设计开发任务书》 XASL-TR-006《设计开发输入/输出清单》 XASL-TR-007《试产计划》 XASL-TR-008《试产总结报告》 XASL-TR-009《设计开发评审表》 XASL-TR-010《设计开发验证报告》 XASL-TR-011《设计开发更改申请单》 XASL-TR-012《设计历史文档清单》 XASL-TR-013《工程订单》",
+      "Chars": 3278,
+      "Norm": "设计开发控制程序",
+      "Clauses": [
+        "7.3"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-013 不合格品控制程序.doc",
+      "Code": "XASL-QP-013",
+      "Name": "不合格品控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-013 不合格品控制程序.txt",
+      "Purpose": "对不合格品进行识别和控制,以防止其非预期的使用或交付。",
+      "Scope": "适用于对原材料及外协件、半成品、成品及交付后的产品发生不合格的控制。",
+      "RelatedDocs": "XASL-QP-025 《纠正预防措施控制程序》",
+      "RelatedForms": "XASL-QR-020《不合格品通知及评审处置表》 XASL-QR-021《让步接收申请表》 XASL-QR-022《报废申请单》",
+      "Chars": 1446,
+      "Norm": "不合格品控制程序",
+      "Clauses": [
+        "4.2.4",
+        "8.3.1",
+        "8.3.2",
+        "8.3.3",
+        "8.3.4"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-007 内部审核程序.doc",
+      "Code": "XASL-QP-007",
+      "Name": "内部审核程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-007 内部审核程序.txt",
+      "Purpose": "规定内部质量管理体系审核的要求，确保质量管理体系持续地保持符合性和有效性。",
+      "Scope": "适用于公司内部质量体系审核工作。",
+      "RelatedDocs": "XASL-QP-025《纠正预防措施控制程序》",
+      "RelatedForms": "XASL-QR-014《年度内审计划》 XASL-QR-015《内部审核计划》 XASL-QR-016《内部审核会议签到表》 XASL-QR-017《内部审核检查表》 XASL-QR-018《内审不合格报告》 XASL-QR-019《内部质量审核报告》",
+      "Chars": 1951,
+      "Norm": "内部审核程序",
+      "Clauses": [
+        "8.1",
+        "8.2.4"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-020 监视和测量装置控制程序.doc",
+      "Code": "XASL-QP-020",
+      "Name": "监视和测量装置控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-020 监视和测量装置控制程序.txt",
+      "Purpose": "规范对用于产品质量特性测定及过程监视的所有监视和测量装置有效的控制、校准及维护活动，确保监测设备的测量精度与准确性满足使用要求。",
+      "Scope": "适用于对产品实现过程进行监视和测量所使用的装置。 凡是用于证实产品质量特性和过程状态的设备、装置，无论其用于质检、生产或是维修，都应被列入监视和测量装置范围。 监视和测量装置的采购和验收 使用部门根据所需测量能力和测量要求提出采购申请，填写《采购申请单》，报总经理审批。 供销部根据采购申请单的要求实施采购，使用部门组织进行验收，填写《设备安装验收报告》(较简单的仪器量具、如千分尺、游标卡尺等不需要填写，确定其外观完好、和申购要求一致即可)，验收内容如下: a）按照采购资料确认设备的名称及型号与所需的是否一致；",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-QR-006《监视和测量设备台账》 XASL-QR-007《计量设备周期鉴定计划》 XASL-PR-008 《设备档案》 XASL-PR-004《设备安装验收报告》 XASL-PR-007《设备报废申请表》 XASL-PR-005《设备增置申请表》",
+      "Chars": 2229,
+      "Norm": "监视和测量装置控制程序",
+      "Clauses": [
+        "4.2.3",
+        "7.6"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-024 过程和产品监视测量程序.docx",
+      "Code": "XASL-QP-024",
+      "Name": "过程和产品监视测量程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-024 过程和产品监视测量程序.txt",
+      "Purpose": "对质量管理体系过程进行监视和测量，以确保质量管理体系的符合性；对产品特性进行监视和测量，以验证产品要求得到满足。",
+      "Scope": "适用于对质量管理体系过程持续满足其预定目的的能力进行确认，对质量目标指标完成情况以及有关法律法规符合性进行监视和测量；对生产所用原材料、外协件、生产的半成品和成品进行监视和测量。",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-QR-024《原材料请验单》 XASL-QR-025《来料检验报告》 XASL-QR-026《成品请验单》 XASL-QR-027《成品检验记录》 XASL-QR-038《产品终检报告》 XASL-QR-028《产品放行审核记录》",
+      "Chars": 2802,
+      "Norm": "过程和产品监视测量程序",
+      "Clauses": [
+        "4.2.3",
+        "8.1",
+        "8.2.6"
+      ]
+    },
+    {
+      "File": "2程序文件/XASL-QP-023 顾客满意度测量控制程序.doc",
+      "Code": "XASL-QP-023",
+      "Name": "顾客满意度测量控制程序",
+      "Kind": "program",
+      "TextFile": "/tmp/shanglong_program_text/XASL-QP-023 顾客满意度测量控制程序.txt",
+      "Purpose": "对顾客满意度进行测量，以证实质量体系的业绩。",
+      "Scope": "适用于公司提供的所有产品的顾客满意程度的监视和测量，并进行量化的统计。",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-OR-018《顾客满意度调查表》 XASL-OR-019《顾客满意度调查统计表》 XASL-OR-020《顾客反馈信息记录表》",
+      "Chars": 1177,
+      "Norm": "顾客满意度测量控制程序",
+      "Clauses": [
+        "8.2.1",
+        "8.2.2"
+      ]
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-005 产品留样管理制度.doc",
+      "Code": "XASL-QD-005",
+      "Name": "产品留样管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-005 产品留样管理制度.txt",
+      "Purpose": "为考察产品质量的稳定性、追溯产品及原材料质量和处理质量问题提供实物依据，特制订此规定。 在规定条件和期限内对产品进行有效性验证。",
+      "Scope": "适用于公司产品的留样管理",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-QR-039《留样台账》 XASL-QR-040《留样观察记录》",
+      "Chars": 1440,
+      "Norm": "产品留样管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-016采购管理制度、流程.doc",
+      "Code": "XASL-QD-016",
+      "Name": "采购管理制度、流程",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-016采购管理制度、流程.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 2037,
+      "Norm": "采购管理制度流程",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-001 工作环境管理制度.doc",
+      "Code": "XASL-QD-001",
+      "Name": "工作环境管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-001 工作环境管理制度.txt",
+      "Purpose": "对生产产品的工作现场进行整理、整顿,保持生产设施处于清洁、整齐、有序的状态,并持续不断地改善工作环境的条件,以提高员工的工作积极性和工作效率,确保为产品质量创造条件。",
+      "Scope": "凡与本公司产品质量有关的生产场所、车间和厂房区域等均适用之。 定义 工作环境： 指对制造和产品质量有影响的过程周围的条件;这种条件可以是人的因素（如：心理的、社会的）、物的因素（如：温度、湿度、洁净度、粉尘等）,物的因素一般包括：厂房维护,灯光照明,噪声,取暖、通风、空调、电器装置的控制,以及与厂房维护有关的安全隐患。 6S：指整理、整顿、清扫、清洁、素养、安全。 整理：",
+      "RelatedDocs": "XASL-QP-002 《记录控制程序》 XASL-QP-018《产品标识和可追溯性控制程序》 XASL-QP-013《不合格品控制程序》",
+      "RelatedForms": "XASL-OR-023 《6S检查表》",
+      "Chars": 5024,
+      "Norm": "工作环境管理制度",
+      "Clauses": [
+        "6.4.1"
+      ]
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-006 批号管理制度.doc",
+      "Code": "XASL-QD-006",
+      "Name": "批号管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-006 批号管理制度.txt",
+      "Purpose": "本规定提供了整个生产过程中有关产品批号的管理办法,为了使组织生产的产品得到有效管理及追溯，确保在进料、生产及销售过程产品得到有效管控,同时便于公司物资、物料、设备、产品及固定资产统一分类的标准化管理，给定统一的编码。",
+      "Scope": "适用于公司原材料、产品的批号管理。",
+      "RelatedDocs": "XASL-QP-021《生产和服务提供控制程序》",
+      "RelatedForms": "",
+      "Chars": 881,
+      "Norm": "批号管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-004 仓库管理制度.doc",
+      "Code": "XASL-QD-004",
+      "Name": "仓库管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-004 仓库管理制度.txt",
+      "Purpose": "规定公司仓库管理办法，用以指导仓库管理的工作。",
+      "Scope": "适用公司仓库管理 仓库分类如下： 仓库名称 说明 原材料库 与产品组成相关的正式物料",
+      "RelatedDocs": "XASL-QP-014 《产品防护控制程序》",
+      "RelatedForms": "XASL-QR-036 《温度、湿度记录表》 XASL-PR-029 《产品报废申请单》 XASL-QR-024 《原材料请验单》 XASL-QR-026 《成品请验单》",
+      "Chars": 2298,
+      "Norm": "仓库管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-009 各类编码管理制度.doc",
+      "Code": "XASL-QD-009",
+      "Name": "各类编码管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-009 各类编码管理制度.txt",
+      "Purpose": "便于公司物资、物料、产品等统一分类的标准化管理，给定统一的编号。",
+      "Scope": "适用于公司物资、物料、产品等的编号管理。",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 8274,
+      "Norm": "各类编码管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-017特殊过程确认准则.doc",
+      "Code": "XASL-QD-017",
+      "Name": "特殊过程确认准则",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-017特殊过程确认准则.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 1265,
+      "Norm": "特殊过程确认准则",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-015 销售及售后服务管理制度.doc",
+      "Code": "XASL-QD-015",
+      "Name": "销售及售后服务管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-015 销售及售后服务管理制度.txt",
+      "Purpose": "通过对产品销售和客户服务过程的控制，确保公司产品以及服务能达到客户的需求和期望，从而提高公司信誉,增强市场竟争力。",
+      "Scope": "适用于本公司产品的销售和售后服务的管控。",
+      "RelatedDocs": "XASL-QP-023《顾客满意度测量程序》 XASL-QP-025《纠正预防措施控制程序》 XASL-QP-028《顾客抱怨处理程序》 XASL-QP-027《忠告性通知和产品召回控制程序》",
+      "RelatedForms": "XASL-QR-018《顾客满意度调查表》 XASL-QR-020《顾客反馈信息记录表》",
+      "Chars": 1440,
+      "Norm": "销售及售后服务管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-008 返工管理制度.doc",
+      "Code": "XASL-QD-008",
+      "Name": "返工管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-008 返工管理制度.txt",
+      "Purpose": "为使返工产品规范化,避免不合格品流入客户。",
+      "Scope": "适用于返工品的管理。",
+      "RelatedDocs": "XASL-QP-021《生产和服务提供控制程序》 XASL-QP-013《不合格品控制程序》",
+      "RelatedForms": "XASL-QR-020《不合格品通知及评审处置表》 XASL-PR-024 《返工单》",
+      "Chars": 806,
+      "Norm": "返工管理制度",
+      "Clauses": [
+        "4.2.1"
+      ]
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-013 油品、危险品管理制度.doc",
+      "Code": "XASL-QD-013",
+      "Name": "油品、危险品管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-013 油品、危险品管理制度.txt",
+      "Purpose": "规范公司内部油品、危险品的储存、使用等环节的管理，",
+      "Scope": "适用于公司油品、危险品的储存、使用安全管理。",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-PR-010 《油品、化学品使用台账》",
+      "Chars": 676,
+      "Norm": "油品危险品管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-011 检验室管理制度.doc",
+      "Code": "XASL-QD-011",
+      "Name": "检验室管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-011 检验室管理制度.txt",
+      "Purpose": "为规范检验室管理，确保检验工作的顺利进行，同时为保障人员和财产的安全，特制定本管理制度。",
+      "Scope": "本公司的检验室。",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 925,
+      "Norm": "检验室管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-010 技术文件管理制度.doc",
+      "Code": "XASL-QD-010",
+      "Name": "技术文件管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-010 技术文件管理制度.txt",
+      "Purpose": "为建立、健全公司技术文件及资料的管理工作，完整规范的保存技术文件和资料，制定本制度。",
+      "Scope": "适用于公司在设计开发过程中形成的技术资料，其载体不限于图纸、文件、照片或电子文档。涉及产品设计，制造及检验的相关技术资料及试验原始记录，包含产品规格书，作业指导书（含生产和检验），质量控制计划，项目计划表，物料清单，工艺流程图，物料规格书，合格供应商清单，产品规格书，产品设计输入，验证草案，验证报告，基本要求检查表，风险管理文件等。",
+      "RelatedDocs": "《文件控制程序》 《记录控制程序》",
+      "RelatedForms": "《文件借阅登记表》 《设计历史文档清单》 《产品主文档清单（DMR）》",
+      "Chars": 1916,
+      "Norm": "技术文件管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-014 工装、模具管理制度.doc",
+      "Code": "XASL-QD-014",
+      "Name": "工装、模具管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-014 工装、模具管理制度.txt",
+      "Purpose": "对产品实现过程中，与产品接触或与产品质量有关的工装模具，对此加以管理，使其使用不影响产品质量。",
+      "Scope": "产品实现过程所使用的工装、模具。",
+      "RelatedDocs": "",
+      "RelatedForms": "XASL-PR-032《工装、模具清单》 XASL-PR-033《工装、模具使用登记表》",
+      "Chars": 646,
+      "Norm": "工装模具管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-012 检验记录管理制度.doc",
+      "Code": "XASL-QD-012",
+      "Name": "检验记录管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-012 检验记录管理制度.txt",
+      "Purpose": "规范生产部检验记录管理，确保检验记录内容准确、完整，能满足产品/物料检验结果可追溯需求。",
+      "Scope": "公司检验室、成品、过程检验记录的管理。",
+      "RelatedDocs": "XASL-QP-002 《记录控制程序》",
+      "RelatedForms": "",
+      "Chars": 687,
+      "Norm": "检验记录管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/制度文件/XASL-QD-007 产品退货管理制度.doc",
+      "Code": "XASL-QD-007",
+      "Name": "产品退货管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/制度文件__XASL-QD-007 产品退货管理制度.txt",
+      "Purpose": "建立《产品退货管理制度》，用以规范本公司销售产品退货管理流程，指导销售产品退货管理工作。",
+      "Scope": "适用于本公司销售产品的退货管理",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 409,
+      "Norm": "产品退货管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/检验作业指导书/XASL-QD-019注塑件检验规程.doc",
+      "Code": "XASL-QD-019",
+      "Name": "注塑件检验规程",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/检验作业指导书__XASL-QD-019注塑件检验规程.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 445,
+      "Norm": "注塑件检验规程",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/检验作业指导书/XASL-QD-021清场管理制度.doc",
+      "Code": "XASL-QD-021",
+      "Name": "清场管理制度",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/检验作业指导书__XASL-QD-021清场管理制度.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 827,
+      "Norm": "清场管理制度",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/检验作业指导书/XASL-QD-020真空拔罐器成品检验规程.doc",
+      "Code": "XASL-QD-020",
+      "Name": "真空拔罐器成品检验规程",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/检验作业指导书__XASL-QD-020真空拔罐器成品检验规程.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 1406,
+      "Norm": "真空拔罐器成品检验规程",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/检验作业指导书/检验规程汇编封面.doc",
+      "Code": "",
+      "Name": "检验规程汇编封面",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/检验作业指导书__检验规程汇编封面.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 339,
+      "Norm": "检验规程汇编封面",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/检验作业指导书/《注塑工艺卡-真空拔罐器》.docx",
+      "Code": "",
+      "Name": "《注塑工艺卡-真空拔罐器》",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/检验作业指导书__《注塑工艺卡-真空拔罐器》.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 5534,
+      "Norm": "注塑工艺卡真空拔罐器",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/检验作业指导书/注塑作业指导书.docx",
+      "Code": "",
+      "Name": "注塑作业指导书",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/检验作业指导书__注塑作业指导书.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 5400,
+      "Norm": "注塑作业指导书",
+      "Clauses": []
+    },
+    {
+      "File": "3制度文件（可根据企业实际修改）/检验作业指导书/XASL-QD-018原材料检验验证规程.doc",
+      "Code": "XASL-QD-018",
+      "Name": "原材料检验验证规程",
+      "Kind": "system",
+      "TextFile": "/tmp/shanglong_system_text/检验作业指导书__XASL-QD-018原材料检验验证规程.txt",
+      "Purpose": "",
+      "Scope": "",
+      "RelatedDocs": "",
+      "RelatedForms": "",
+      "Chars": 775,
+      "Norm": "原材料检验验证规程",
+      "Clauses": []
+    }
+  ]
+}

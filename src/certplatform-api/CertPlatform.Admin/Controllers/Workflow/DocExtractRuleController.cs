@@ -169,16 +169,19 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
     /// </summary>
     /// <param name="standardCode">标准短码（如 iso9001）；空 = 取全局默认</param>
     [HttpGet("prompt")]
-    public async Task<IActionResult> GetPrompt([FromQuery] string? standardCode = null)
+    public async Task<IActionResult> GetPrompt(
+        [FromQuery] string? standardCode = null,
+        [FromQuery] string? promptCode = null)
     {
-        var template = await _promptTemplate.GetAsync("doc_clause_extract", null, standardCode);
+        var code = string.IsNullOrWhiteSpace(promptCode) ? "doc_clause_extract" : promptCode.Trim();
+        var template = await _promptTemplate.GetAsync(code, null, standardCode);
         return Ok(ApiResponse<DocExtractPromptDto>.Ok(new DocExtractPromptDto
         {
-            PromptCode = "doc_clause_extract",
+            PromptCode = code,
             StandardCode = standardCode,
             Template = template.Template,
             IsFallback = template.Status == "fallback",
-            Placeholders = PromptTemplateService.GetPlaceholders("doc_clause_extract"),
+            Placeholders = PromptTemplateService.GetPlaceholders(code),
         }));
     }
 
@@ -189,15 +192,18 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
     [HttpPost("prompt")]
     public async Task<IActionResult> SavePrompt([FromBody] DocExtractPromptSaveRequest request)
     {
+        var promptCode = string.IsNullOrWhiteSpace(request.PromptCode)
+            ? "doc_clause_extract"
+            : request.PromptCode.Trim();
         var (ok, message) = await _promptTemplate.SaveAsync(
-            "doc_clause_extract",
+            promptCode,
             request.Template,
             null,
             request.StandardCode,
-            "文档提取提示词",
-            string.IsNullOrEmpty(request.StandardCode)
-                ? "文档提取提示词的全局默认模板"
-                : $"标准【{request.StandardCode}】的专属提取提示词",
+            promptCode == "doc_clause_extract" ? "文档提取提示词" : $"文档类型提示词（{promptCode}）",
+            request.StandardCode is { Length: > 0 }
+                ? $"标准【{request.StandardCode}】的专属提取提示词"
+                : $"{promptCode} 的全局默认模板",
             UserContext.UserCode);
 
         return ok
@@ -993,6 +999,8 @@ public sealed class DocExtractPromptDto
 /// <summary>文档提取提示词保存入参</summary>
 public sealed class DocExtractPromptSaveRequest
 {
+    /// <summary>提示词代码（默认 doc_clause_extract；类型提示词传 doc_extract_xxx）</summary>
+    public string? PromptCode { get; set; }
     public string Template { get; set; } = string.Empty;
     public string? StandardCode { get; set; }
 }

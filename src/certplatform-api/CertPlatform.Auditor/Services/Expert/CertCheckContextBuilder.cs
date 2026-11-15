@@ -620,7 +620,8 @@ public sealed class CertCheckContextBuilder
                 ? GetString(meta, "FileName", "fileName") ?? ""
                 : "";
 
-            if (!TryGetArray(root, out var clausesEl, "Clauses", "clauses")) return result;
+            if (!TryGetArray(root, out var clausesEl, "Clauses", "clauses"))
+                return ParseModeOutputSlices(root, wantedNumbers);
 
             foreach (var el in clausesEl.EnumerateArray())
             {
@@ -672,12 +673,135 @@ public sealed class CertCheckContextBuilder
                     Confidence = conf
                 }));
             }
+
+            // ★ 类型化提示词（2026-11-13 起）只写 ModeOutput，Clauses 可能为空。
+            // 旧链路仍优先用 Clauses；为空时按 PrimaryClauses/SupportClauses + 类型摘要合成切片。
+            if (result.Count == 0)
+                result.AddRange(ParseModeOutputSlices(root, wantedNumbers));
         }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "[CertCheckContext] ContentJson 解析失败（跳过该文档）");
         }
         return result;
+    }
+
+    /// <summary>
+    /// 从 <c>ContentJson.ModeOutput</c> 合成条款切片。
+    /// <para>只做“报告可用摘要”级别的投影，⛔ 不把整份文档塞回检查上下文。</para>
+    /// </summary>
+    private List<(string ClauseNumber, ParsedSlice Slice)> ParseModeOutputSlices(
+        JsonElement root, HashSet<string> wantedNumbers)
+    {
+        var result = new List<(string, ParsedSlice)>();
+        if (GetObject(root, "ModeOutput", "modeOutput") is not { } output) return result;
+
+        var fileName = "";
+        if (GetObject(root, "DocMeta", "docMeta") is { } meta)
+            fileName = GetString(meta, "FileName", "fileName") ?? "";
+
+        var clauseNumbers = ReadClauseNumbers(output, "PrimaryClauses", "primaryClauses")
+            .Concat(ReadClauseNumbers(output, "SupportClauses", "supportClauses"))
+            .Distinct(StringComparer.Ordinal)
+            .Where(wantedNumbers.Contains)
+            .ToList();
+        if (clauseNumbers.Count == 0) return result;
+
+        var excerpt = BuildModeExcerpt(output, GetString(root, "ExtractionMode", "extractionMode") ?? "");
+        if (string.IsNullOrWhiteSpace(excerpt)) return result;
+
+        foreach (var number in clauseNumbers)
+        {
+            result.Add((number, new ParsedSlice
+            {
+                FileName = fileName,
+                Anchor = GetString(output, "ReportUse", "reportUse"),
+                Excerpts = new List<string> { excerpt },
+                ExcerptStatuses = new List<string> { "matched" }
+            }));
+        }
+        return result;
+    }
+
+    private static List<string> ReadClauseNumbers(JsonElement output, params string[] names)
+    {
+        var result = new List<string>();
+        foreach (var name in names)
+        {
+            if (!output.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.Array) continue;
+            foreach (var item in el.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.String) continue;
+                foreach (var part in (item.GetString() ?? "")
+                    .Split(new[] { ',', '，', '、', ';', '；' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var trimmed = part.Trim();
+                    if (trimmed.Length > 0) result.Add(trimmed);
+                }
+            }
+        }
+        return result;
+    }
+
+    private static string BuildModeExcerpt(JsonElement output, string mode)
+    {
+        var parts = new List<string>();
+
+        void Add(string label, JsonElement value, int maxItems = 3)
+        {
+            if (value.ValueKind == JsonValueKind.Null || value.ValueKind == JsonValueKind.Undefined) return;
+            var text = ElementText(value, maxItems);
+            if (!string.IsNullOrWhiteSpace(text)) parts.Add($"{label}：{text.Trim()}");
+        }
+
+        foreach (var name in new[] { "ReportSummary", "reportSummary", "ReportUse", "reportUse" })
+        {
+            if (output.TryGetProperty(name, out var v)) Add("报告用途摘要", v);
+        }
+        foreach (var name in new[] { "DocumentTitle", "documentTitle", "PolicyTitle", "policyTitle", "CatalogSummary", "catalogSummary" })
+        {
+            if (output.TryGetProperty(name, out var v)) Add("文档信息", v);
+        }
+        foreach (var name in new[] { "KeyControls", "keyControls", "KeyRules", "keyRules", "KeySteps", "keySteps" })
+        {
+            if (output.TryGetProperty(name, out var v)) Add("关键要求/步骤", v, 5);
+        }
+        foreach (var name in new[] { "Findings", "findings", "Records", "records", "Entries", "entries", "IndexEntries", "indexEntries" })
+        {
+            if (output.TryGetProperty(name, out var v)) Add("原文/抽样", v, 3);
+        }
+        if (mode == "document_control")
+        {
+            if (output.TryGetProperty("Entries", out var entries)) Add("目录摘要", entries, 2);
+        }
+
+        var text = string.Join("\n", parts);
+        return text.Length <= 3000 ? text : text[..3000] + "…";
+    }
+
+    private static string ElementText(JsonElement value, int maxItems)
+    {
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.String:
+                return value.GetString() ?? "";
+            case JsonValueKind.Number:
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                return value.ToString();
+            case JsonValueKind.Array:
+                var items = value.EnumerateArray()
+                    .Take(maxItems)
+                    .Select(x => ElementText(x, 1))
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .ToList();
+                return string.Join("；", items);
+            case JsonValueKind.Object:
+                var raw = value.ToString();
+                return raw.Length <= 800 ? raw : raw[..800] + "…";
+            default:
+                return "";
+        }
     }
 
     // ================================================================

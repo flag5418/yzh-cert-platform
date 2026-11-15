@@ -47,7 +47,7 @@ namespace CertPlatform.Auditor.Services.Ent
             var fromDocType = FromDocType(fromJson.DocType);
             if (!string.IsNullOrEmpty(fromDocType)) return fromDocType;
 
-            return fromName ?? Legacy;
+            return fromName ?? None;
         }
 
         public static string PromptCodeForMode(string mode) => mode switch
@@ -136,6 +136,7 @@ namespace CertPlatform.Auditor.Services.Ent
                 case "policy":
                     return PolicyProfile;
                 case "procedure":
+                    return ProcessProfile;
                 case "work_instruction":
                     return WorkInstructionCitation;
                 case "record":
@@ -154,7 +155,8 @@ namespace CertPlatform.Auditor.Services.Ent
             if (t.Contains("文件索引") || t.Contains("封面") || t.Contains("目录")
                 || t.Contains("汇编") || t.Contains("清单")) return IndexOnly;
             if (t.Contains("审核") || t.Contains("评审")) return AuditProfile;
-            if (t.Contains("手册") || t.Contains("方针") || t.Contains("目标")) return ClauseFull;
+            if (t.Contains("手册")) return ClauseFull;
+            if (t.Contains("方针") || t.Contains("目标")) return PolicyProfile;
             if (t.Contains("作业指导") || t.Contains("操作规程") || t.Contains("指导书")) return WorkInstructionCitation;
             if (t.Contains("制度") || t.Contains("规范") || t.Contains("管理办法")) return PolicyProfile;
             if (t.Contains("程序")) return ProcessProfile;
@@ -197,11 +199,15 @@ namespace CertPlatform.Auditor.Services.Ent
                 || fn.Contains("清单")) return IndexOnly;
             if (fn.Contains("程序")) return ProcessProfile;
             if (fn.Contains("内审") || fn.Contains("管理评审")) return AuditProfile;
-            if (fn.Contains("手册") || fn.Contains("方针") || fn.Contains("目标")) return ClauseFull;
-            if (fn.Contains("作业指导") || fn.Contains("操作规程") || fn.Contains("指导书")) return ProcessProfile;
+            if (fn.Contains("手册")) return ClauseFull;
+            if (fn.Contains("方针") || fn.Contains("目标")) return PolicyProfile;
+            if (fn.Contains("作业指导") || fn.Contains("操作规程") || fn.Contains("指导书"))
+                return WorkInstructionCitation;
+            if (fn.Contains("职责") || fn.Contains("权限")) return PolicyProfile;
             if (fn.Contains("记录") || fn.Contains("表单") || fn.Contains("台账")
                 || fn.Contains("表格")) return RecordProfile;
-            return null;
+            // 未知类型不再回退到逐条款链；逐条款只保留给手册。
+            return None;
         }
 
         private static (string? Mode, string? DocType) ReadProfile(string? json)

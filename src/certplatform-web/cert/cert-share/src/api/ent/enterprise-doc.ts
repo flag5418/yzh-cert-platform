@@ -317,8 +317,18 @@ export interface EntDocExtractContent {
     Model?: string
     ExtractedAt?: string
     Chunks?: number
+    /** 模式提取：`process_profile` / `record_profile` 等 */
+    ExtractionMode?: string
+    PromptCode?: string
+    PromptVersion?: string
+    PromptScope?: string
   }
+  /** 手册/旧链产物；模式提取时为空数组 */
   Clauses?: EntDocClauseHit[]
+  /** 模式提取模式名；旧链产物可能为空 */
+  ExtractionMode?: string
+  /** ★ 模式提取的完整业务结果（过程/记录/制度等）；页面必须能原样查看 */
+  ModeOutput?: Record<string, unknown>
 }
 
 /** 按条款反查结果（检查表阶段的取数入口） */
