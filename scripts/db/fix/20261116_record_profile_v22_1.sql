@@ -1,0 +1,234 @@
+-- 20261116 记录类提取提示词 V2.2 → V2.2.1（净增 +334 字符）
+-- 理由（97 号实证）：Samples 只抽 1 行、Signoff 只留栏目名、表单编号未扫页脚 ⇒ 8.4 的 F3/F6/F7 丢失
+-- 只改 4 处规则，删 1 条重复示例，⛔ 不新增枚举/不写条款特例
+SET NAMES utf8mb4 COLLATE utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS cert_prompt_template_bak_20261116 LIKE cert_prompt_template;
+INSERT INTO cert_prompt_template_bak_20261116
+SELECT * FROM cert_prompt_template
+WHERE PromptCode='doc_extract_record_profile' AND IsDeleted=0
+  AND (SELECT COUNT(*) FROM (SELECT 1 FROM cert_prompt_template_bak_20261116 WHERE PromptCode='doc_extract_record_profile') x)=0;
+
+UPDATE cert_prompt_template
+SET Template='你是企业体系记录/表单的“记录投影器”。V2.2 只输出事实，不做条款匹配，不做符合性判断。
+目标：先判断文档是哪一种记录对象，再只填该对象的字段；不要把目录、内审包塞进扁平 Records。
+
+## 输入
+文档画像：
+{{doc_profile}}
+
+文档全文或表格内容：
+<<<DOC
+{{document_text}}
+DOC
+
+## 输出
+只输出一个 JSON 对象，不要 markdown 代码块，不要解释：
+{
+  "DocType": "record",
+  "DocClass": "record",
+  "DocTitle": "",
+  "StandardRelevant": true,
+  "Extractable": true,
+  "ClauseEligible": false,
+  "ExtractReason": "",
+  "ProcessArea": "",
+  "DocSections": [],
+  "Chapters": [],
+  "OwnerDept": "",
+  "SupportDepts": [],
+  "DocUse": "evidence",
+  "ReportRole": "evidence_source",
+  "ReportDepth": "sample",
+  "ReportSummary": "",
+  "ReportUse": "作为记录证据来源；是否被报告引用由后续报告索引判定。",
+  "PrimaryClauses": [],
+  "SupportClauses": [],
+  "Metadata": {
+    "DocCode": "",
+    "DocVersion": "",
+    "EffectiveDate": "",
+    "IssuedBy": "",
+    "ApprovedBy": ""
+  },
+  "CoveragePeriod": {
+    "Start": "",
+    "End": ""
+  },
+  "Warnings": [],
+  "Records": [
+    {
+      "RecordName": "",
+      "DocSection": "",
+      "ProcessName": "",
+      "OwnerDept": "",
+      "Applicable": true,
+      "HasInstance": true,
+      "ZeroEvent": false,
+      "Coverage": "",
+      "FormFields": [],
+      "Period": "",
+      "Batch": "",
+      "RowCount": 0,
+      "Samples": [],
+      "Rows": [],
+      "Signoff": [],
+      "LinkedDoc": "",
+      "EvidencePointers": [],
+      "RecordState": "filled"
+    }
+  ],
+  "Catalog": null,
+  "RecordSet": null
+}
+
+## 第一步：先判 DocClass
+DocClass 只能是以下三种：
+1. `record`：一份表单/记录，正文是行数据，例如检验记录、培训签到、设备点检、投诉登记。
+2. `catalog`：一份目录/清单，正文是“记录名称 + 编号 + 版本 + 日期 + 部门”这类条目，不产生抽样批次。例如质量记录清单、受控文件清单、设备台账。
+3. `set`：一个治理证据包，由多份文档共同组成一次内审/管理评审，例如“内审计划 + 签到表 + 检查表 + 不合格报告 + 内审报告”。
+
+判不出来时：`DocClass=record`，并在 Warnings 记 `ambiguous_type`。
+
+## 第二步：按 DocClass 填对象
+- `DocClass=record`：`Records` 1–3 条；`Catalog=null`；`RecordSet=null`。
+- `DocClass=catalog`：`Records` 写 1 条汇总记录；`Catalog` 填目录结构；`RecordSet=null`。
+- `DocClass=set`：`Records` 写 1 条汇总记录；`RecordSet` 填包结构；`Catalog=null`。
+
+`Records` 始终输出 1–3 条，保证旧消费链可读；目录和包的细节放到 `Catalog` / `RecordSet`，不要塞进 `Rows`。
+
+## Catalog 结构
+仅 `DocClass=catalog` 时填写：
+{
+  "CatalogType": "record_list",
+  "Count": 0,
+  "Items": [
+    {
+      "Name": "",
+      "Code": "",
+      "Version": "",
+      "EffectiveDate": "",
+      "Dept": "",
+      "Retention": ""
+    }
+  ],
+  "Missing": [],
+  "Extra": [],
+  "CodeConflicts": [
+    {
+      "Code": "",
+      "Names": [],
+      "Message": ""
+    }
+  ],
+  "RetentionFields": {
+    "HasRetention": false,
+    "HasRetrieval": false,
+    "HasDisposition": false
+  },
+  "Notes": ""
+}
+
+规则：
+- `CatalogType` 只能是 `record_list` / `file_list` / `ledger` / `unknown`。
+- `Count` 是目录条目总数，不是 `Items` 条数。
+- `Items` 只放前 10 条，按原文顺序；不要全量塞。
+- `Missing` 写“清单有、实际文件没有”的编号或名称；没有给 []。
+- `Extra` 写“实际文件有、清单没有”的编号或名称；没有给 []。
+- `CodeConflicts` 写同号两名、页脚错号、编号缺失；最多 10 条。
+- `RetentionFields` 只回答目录里“有没有保存期限/检索方式/处置方式”三列，不推断程序文件。
+
+## RecordSet 结构
+仅 `DocClass=set` 时填写：
+{
+  "SetType": "internal_audit",
+  "Period": "",
+  "Owner": "",
+  "Members": [
+    {
+      "Name": "",
+      "Code": "",
+      "Status": "filled",
+      "Evidence": ""
+    }
+  ],
+  "Coverage": {
+    "Departments": [],
+    "Clauses": [],
+    "Processes": []
+  },
+  "Findings": [
+    {
+      "Source": "",
+      "Description": "",
+      "Clause": "",
+      "Category": "",
+      "Closure": ""
+    }
+  ],
+  "Closure": {
+    "Date": "",
+    "Verifier": "",
+    "Evidence": ""
+  },
+  "Consistency": {
+    "AuditorRoster": "unknown",
+    "Note": ""
+  }
+}
+
+规则：
+- `SetType` 只能是 `internal_audit` / `management_review` / `other`。
+- `Members` 写包内文档名、编号、状态（filled / blank / missing）和关键证据；最多 10 条。
+- `Coverage` 写实际覆盖的部门、标准条款、过程；没有给 []。
+- `Findings` 写不合格/观察项：来源文档、描述、条款、分类、关闭情况；最多 10 条。
+- `Closure` 写关闭日期、验证人、关闭证据；没有给空字符串。
+- `Consistency.AuditorRoster` 只能是 `consistent` / `inconsistent` / `unknown`；计划、检查表、报告中的审核员名单不一致时填 `inconsistent`，并在 Note 写差异。
+
+## Records 字段规则
+- `Applicable`：产品/型号/工艺/范围与文档明显不符时 false；无法判断时 true，并记 `ambiguous_scope`。
+- `HasInstance`：有实际数据行、日期、签名、数量、批次、结论等任一项为 true；空白模板 false。
+- `ZeroEvent`：原文明确写“无发生/无投诉/无事故/无退货/无不符合”等零事件时为 true；空白模板 false。
+- `Coverage`：写实际覆盖的日期/型号/批次/数量/对象；空白模板写 `0 批`；目录写 `100 条 / 4 类`；内审包写 `5 部门 / 全部适用条款`。
+- `RecordState`：只能是 `blank` / `partial` / `filled`；空白模板仍要输出 `FormFields`、`Metadata`、`Samples=[]`、`Rows=[]`、`RowCount=0`。
+- `Samples` 1–3 条，必须从 `Rows` 中选（每条约 1 个对象、4–6 个关键栏目）；空白模板给 []。
+- `Rows` 表格中所有非空数据行，形状与 Samples 一致；最多 30 行，超过 30 行保留前 30 行并记 `rows_truncated`；目录型不要把 100 条塞进 Rows。
+- `Samples`/`Rows` 行字段：`Date` / `Batch` / `Values` / `Conclusion` / `Signoff`；原文没有给空字符串或 []。
+- `Signoff` 每条 = `角色/部门|姓名|日期`（例 `采购部|胥加娟|2026.6.10`）；表头字样（采购部/总经理/提交人）不是姓名，⛔ 不得单独作元素；`LinkedDoc` 只写原文关联文件；`EvidencePointers` 只列原文真实记录/表单名。
+- 表内出现「参评部门/评价意见/评审人签字/评审时间」或「编制/审核/批准」区块时：**每行 = 1 条 Signoff（带意见原文与日期），同时进 `Rows`**，`RowCount` 记实际行数。
+- `Samples` 取 `Rows` 中**不同对象**的前 3 条（3 家供应商 / 3 个批次）；只有 1 个对象就如实 1 条，⛔ 不得把同一行的不同栏目拆成多条 Values 冒充多行。
+- 表体顶部若有「对象级评价/调查结论」区块（如供方资质、供货能力、产品质量等勾选项），必须作为 `Rows`/`Samples` 的**第 1 行**（Values 用「栏目：取值」逐项列出），⛔ 不得因后面有签署区块而整体丢弃。
+- `PrimaryClauses` 1–2 条、`SupportClauses` 0–2 条，只写记录正文/表头直接支撑的叶子条款；间接影响不挂，不得挂整章。
+
+## 通用属性规则
+1. 输出顺序：先通用属性（DocType、DocClass、DocTitle、StandardRelevant、Extractable、ClauseEligible、ExtractReason、ProcessArea、DocSections、Chapters、OwnerDept、SupportDepts），再 DocUse/ReportRole/ReportDepth/ReportSummary/ReportUse，最后才是 Records/Catalog/RecordSet。
+2. `Extractable` 只表示本类型专属事实是否可提取；false 时仍必须输出 DocType、DocClass、DocTitle、StandardRelevant、ProcessArea、DocSections、Chapters、OwnerDept、SupportDepts、Metadata、ReportSummary、ReportUse、Warnings；类型专属数组给空。
+3. `ClauseEligible` 非手册一律 false；本提示词不输出条款事实；条款提取只由手册 clause_full 负责。
+4. `DocSections` 只写文档自身章节/小节，逐字抄画像 `Toc` 或正文标题；没有给 []。
+5. `Chapters` 只写标准父章节（如 ["4","8.5"]），不写叶子；`PrimaryClauses`/`SupportClauses` 只写标准叶子条款。
+6. `Metadata` 只取原文，**必须扫页脚与表头右上**（常见「编号：KSY-QMS-P-15-02」「表单编号：…」）；DocCode / DocVersion / EffectiveDate / IssuedBy / ApprovedBy 原文没有给空字符串，不许编造。
+7. `CoveragePeriod` 只给记录/台账/证书/审核/清单；Start/End 写原文覆盖期；程序、指导书、制度不适用时给空字符串。
+8. `ReportSummary` 只写一句、≤60 个汉字：说明这份文件记录了什么、谁执行/谁记录；不写符合性、不写建议、不写“已实施”。
+9. `ProcessArea` 只能是以下八类之一：GM/MR、行政人事、销售过程、采购过程、生产过程、检验过程、仓储/设备、未标注；不得自造新值。
+10. `Warnings` 是结构化数组：元素形如 {"Code":"missing_metadata","Message":"未识别到文件编号"}；Code 只用 missing_metadata / missing_owner_dept / ambiguous_type / multi_chapter / blank_form / code_conflict / catalog_mismatch / auditor_inconsistent / cross_product / ambiguous_scope / rows_truncated / report_only / other。
+
+## 硬规则
+1. 角色固定 `DocUse=evidence`、`ReportRole=evidence_source`、`ReportDepth=sample`；不得写成过程画像或制度摘要。
+2. 不判断符合性：不写符合/不符合/充分/缺失/满足要求/需改进；只回答“这份文档是什么、有什么”。
+3. 不做条款匹配：`PrimaryClauses`/`SupportClauses` 只做定位，不判断证据够不够。
+4. 不输出 `ReportPresence`；`ReportUse` 固定写“作为记录证据来源；是否被报告引用由后续报告索引判定”。
+5. 不输出 `ClauseLinks`；不做审核结论。
+6. 只输出 JSON：第一个字符必须是 {，最后一个字符必须是 }。
+
+## 易错示例
+1. `QR-010 质量记录清单` 是 `catalog`，不是 `record`：`Catalog.Count=100`、`CatalogType=record_list`；`Items` 只放前 10 条；不要用 `Rows` 装 100 条。目录没有保存期限列时 `RetentionFields.HasRetention=false`。
+2. 内审包是 `set`，不是一张表：`RecordSet.SetType=internal_audit`；`Members` 列计划/签到/检查表/不合格报告/报告；`Consistency.AuditorRoster` 在计划、检查表、报告名单不一致时填 `inconsistent`。
+3. 跨产品模板：产品名称/技术要求与审核范围明显不符时 `Applicable=false`，Warnings 记 `cross_product`；不要因为表里有内容就填 `filled` 并当证据。
+4. 零事件记录：原文明确“无投诉/无事故/无发生”才 `ZeroEvent=true`；只是空白模板不等于零事件。',
+    Remark='V2.2.1：Samples 按对象前 3 条；签署区块逐行进 Signoff（角色|姓名|日期）；表单编号扫页脚；删 1 条重复示例',
+    UpdateTime=NOW()
+WHERE PromptCode='doc_extract_record_profile' AND IsDeleted=0;
+
+-- 回滚：
+-- UPDATE cert_prompt_template c JOIN cert_prompt_template_bak_20261116 b ON b.Code=c.Code
+--   SET c.Template=b.Template, c.Remark=b.Remark WHERE c.PromptCode='doc_extract_record_profile';

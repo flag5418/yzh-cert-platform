@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Auditor.Entities.Expert;
+using CertPlatform.Auditor.Services.Ent;
 using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
 using Microsoft.Extensions.Logging;
@@ -1976,6 +1977,11 @@ namespace CertPlatform.Auditor.Services.Expert
                     numbers.Add(number);
                 }
                 if (clausesByStandard.Count == 0) return rows;
+
+                // ★ 过程域关键词：由检查项条款的 cert_clause_attr.Process 属性翻译而来，
+                //   用于「条款轴没命中时」按过程召回程序/指导书/记录（不产生条款号）。
+                var processKeywords = await ResolveProcessKeywordsAsync(clauses);
+
                 var extractions = (await _db.GetListAsync<DocumentExtraction>(x =>
                     stdCodes.Contains(x.StandardCode)
                     && x.EnterpriseCode == plan.EnterpriseCode
@@ -1993,13 +1999,48 @@ namespace CertPlatform.Auditor.Services.Expert
                         && matchingFiles.Count == 1 && !string.IsNullOrWhiteSpace(ext.SourceSha256)
                         && string.Equals(ext.SourceSha256, matchingFiles[0].Sha256, StringComparison.OrdinalIgnoreCase)
                         && clausesByStandard.TryGetValue(ext.StandardCode, out var clauseNos))
-                        rows.AddRange(ProjectDocSlices(ext, detail.Code, clauseNos, rows.Count));
+                        rows.AddRange(ProjectDocSlices(ext, detail.Code, clauseNos, rows.Count, processKeywords));
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "投影企业文档切片失败，detail={DetailCode}", detail.Code);
             }
-            return rows;
+            return DedupeNestedSlices(rows);
+        }
+
+        /// <summary>
+        /// 同一份文档、同一锚点下，一段摘录被另一段"整段包含"时只留长的那条。
+        /// <para>为什么要：手册里 8.4.1 的两条摘录（条款片段 / 带 <c>### 8.4.1 总则</c> 的整段）
+        /// 会给审核员看成"同样的证据出现两次"，也白占报告篇幅。</para>
+        /// <para>⛔ 只处理**同 SourceCode + 同 Anchor** 且一条包含另一条的情况，不做模糊相似度，
+        /// 避免把两条不同的抽样行误合成一条。</para>
+        /// </summary>
+        private static List<CertEvidenceRow> DedupeNestedSlices(List<CertEvidenceRow> rows)
+        {
+            if (rows.Count <= 1) return rows;
+
+            static string Norm(string? text)
+                => (text ?? string.Empty).Replace("#", "").Replace(" ", "").Replace("\r", "").Replace("\n", "").Replace("\t", "");
+
+            var drop = new HashSet<CertEvidenceRow>();
+            for (var i = 0; i < rows.Count; i++)
+            {
+                if (drop.Contains(rows[i])) continue;
+                var a = Norm(rows[i].Snippet);
+                if (a.Length == 0) continue;
+                for (var j = 0; j < rows.Count; j++)
+                {
+                    if (i == j || drop.Contains(rows[j])) continue;
+                    if (!string.Equals(rows[i].SourceCode, rows[j].SourceCode, StringComparison.Ordinal)) continue;
+                    if (!string.Equals(rows[i].Anchor, rows[j].Anchor, StringComparison.Ordinal)) continue;
+                    var b = Norm(rows[j].Snippet);
+                    if (b.Length <= a.Length) continue;
+                    if (!b.Contains(a, StringComparison.Ordinal)) continue;
+                    drop.Add(rows[i]);   // a 被 b 完整包含 ⇒ 丢短的
+                    break;
+                }
+            }
+            return drop.Count == 0 ? rows : rows.Where(r => !drop.Contains(r)).ToList();
         }
 
         /// <summary>
@@ -2044,8 +2085,10 @@ namespace CertPlatform.Auditor.Services.Expert
 
         /// <summary>把一份文档提取结果里属于这些条款的摘录投影成证据行。</summary>
         private static List<CertEvidenceRow> ProjectDocSlices(
-            DocumentExtraction ext, string checkItemCode, HashSet<string> clauseNos, int sortBase)
+            DocumentExtraction ext, string checkItemCode, HashSet<string> clauseNos, int sortBase,
+            IReadOnlySet<string>? processKeywords = null)
         {
+            var keywords = processKeywords ?? new HashSet<string>();
             var rows = new List<CertEvidenceRow>();
             if (ext.IsStale || ext.ExtractStatus != "done" || string.IsNullOrWhiteSpace(ext.ContentJson))
                 return rows;
@@ -2061,6 +2104,39 @@ namespace CertPlatform.Auditor.Services.Expert
                 var markdownHash = meta.ValueKind == JsonValueKind.Object
                     ? GetJsonString(meta, "MarkdownSha256")
                     : string.Empty;
+                // ★ 模式产物先投影：Clauses[] 恒为空，且不能依赖 Clauses 键是否存在
+                var clauseAxisRows = ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
+                    fileName, markdownHash, rows);
+
+                // ★ 条款轴没命中时，按「过程域」召回程序/指导书，按「过程域 + 记录」召回记录表（2026-11-16）。
+                //   ⛔ 两条轴都不产生条款号：ClauseCode 保持 null、Anchor 写召回理由，
+                //      条款号只能来自文档自身，避免把采购记录挂到环境因素这类串条款错误。
+                if (clauseAxisRows == 0 && keywords.Count > 0)
+                {
+                    var mode = GetJsonString(root, "ExtractionMode");
+                    var modeOutput = root.TryGetProperty("ModeOutput", out var mo)
+                                     && mo.ValueKind == JsonValueKind.Object
+                        ? ModeOutputProjector.ForProjection(mo, mode)
+                        : (JsonElement?)null;
+                    var processArea = modeOutput.HasValue ? GetJsonString(modeOutput.Value, "ProcessArea") : string.Empty;
+
+                    if (ProcessAreaRecall.Matches(processArea, keywords))
+                    {
+                        if (mode == EnterpriseDocExtractionRouter.ProcessProfile
+                            || mode == EnterpriseDocExtractionRouter.WorkInstructionCitation)
+                        {
+                            ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
+                                fileName, markdownHash, rows, ProcessAreaRecall.ProgramAnchor, ignoreClauses: true);
+                        }
+                        else if (mode == EnterpriseDocExtractionRouter.RecordProfile
+                                 && modeOutput.HasValue && HasRecordData(modeOutput.Value))
+                        {
+                            ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
+                                fileName, markdownHash, rows, ProcessAreaRecall.RecordAnchor, ignoreClauses: true);
+                        }
+                    }
+                }
+
                 if (!root.TryGetProperty("Clauses", out var clauses)
                     || clauses.ValueKind != JsonValueKind.Array) return rows;
 
@@ -2135,6 +2211,142 @@ namespace CertPlatform.Auditor.Services.Expert
                 // 旧提取结果损坏按空处理，不阻断详情
             }
             return rows;
+        }
+
+        /// <summary>
+        /// 模式产物投影：记录/过程/制度/索引类文档的 <c>Clauses[]</c> 恒为空，事实全在 <c>ModeOutput</c>。
+        ///
+        /// <para>⛔ 必须<b>独立于 <c>Clauses</c> 是否存在</b>调用：放在 <c>Clauses</c> 循环之后，
+        /// 一旦某模式不写 <c>Clauses</c> 键，整块就静默跳过、证据行归零，且没有任何报错。</para>
+        /// </summary>
+        private static int ProjectModeOutputSlices(
+            DocumentExtraction ext, JsonElement root, string checkItemCode,
+            HashSet<string> clauseNos, int sortBase, string fileName, string markdownHash,
+            List<CertEvidenceRow> rows, string? recallReason = null, bool ignoreClauses = false)
+        {
+            if (!root.TryGetProperty("ModeOutput", out var modeOutput)
+                || modeOutput.ValueKind != JsonValueKind.Object) return 0;
+
+            // 存量产物没跑过护栏 ⇒ 读取时校正一次（不动库、幂等）
+            var mode = GetJsonString(root, "ExtractionMode");
+            modeOutput = ModeOutputProjector.ForProjection(modeOutput, mode);
+
+            var matchedNos = ignoreClauses
+                ? new List<string>()
+                : ModeOutputProjector.ClauseNumbers(modeOutput)
+                    .Where(no => IsClauseOrDescendantMatch(no, clauseNos))
+                    .Take(3)
+                    .ToList();
+            if (matchedNos.Count == 0 && recallReason == null) return 0;
+
+            var excerpt = ModeOutputProjector.Excerpt(modeOutput, mode);
+            if (string.IsNullOrWhiteSpace(excerpt)) return 0;
+
+            var recordName = modeOutput.TryGetProperty("Records", out var recs)
+                             && recs.ValueKind == JsonValueKind.Array
+                             && recs.GetArrayLength() > 0
+                             && recs[0].ValueKind == JsonValueKind.Object
+                ? GetJsonString(recs[0], "RecordName")
+                : string.Empty;
+
+            var added = 0;
+            if (recallReason != null)
+            {
+                // 过程/记录召回：一行一份文档，锚点写召回理由，⛔ 不带条款号
+                rows.Add(new CertEvidenceRow
+                {
+                    Code = $"doc-{ext.Code}-{rows.Count}",
+                    CheckItemCode = checkItemCode,
+                    ClauseCode = null,
+                    CapturedIn = "doc",
+                    EvidenceKind = "doc_slice",
+                    SourceCode = ext.FileCode,
+                    SourceName = string.IsNullOrWhiteSpace(fileName) ? ext.FileCode : fileName,
+                    Anchor = recallReason,
+                    SourceAnchor = string.IsNullOrWhiteSpace(recordName)
+                        ? $"{recallReason}摘录"
+                        : $"{recallReason}摘录（{recordName}）",
+                    SourceMatchStatus = "unverified",
+                    SourceStart = null,
+                    SourceEnd = null,
+                    MarkdownSha256 = markdownHash,
+                    Snippet = excerpt,
+                    LlmSummary = excerpt,
+                    Status = "collected",
+                    Sort = sortBase + rows.Count
+                });
+                return 1;
+            }
+
+            foreach (var no in matchedNos)
+            {
+                rows.Add(new CertEvidenceRow
+                {
+                    Code = $"doc-{ext.Code}-{rows.Count}",
+                    CheckItemCode = checkItemCode,
+                    ClauseCode = null,
+                    CapturedIn = "doc",
+                    EvidenceKind = "doc_slice",
+                    SourceCode = ext.FileCode,
+                    SourceName = string.IsNullOrWhiteSpace(fileName) ? ext.FileCode : fileName,
+                    Anchor = no,
+                    SourceAnchor = string.IsNullOrWhiteSpace(recordName)
+                        ? "文档提取摘录"
+                        : $"文档提取摘录（{recordName}）",
+                    // 投影不是逐字切片：⛔ 不标 matched，避免下游当成"已核验原文"
+                    SourceMatchStatus = "unverified",
+                    SourceStart = null,
+                    SourceEnd = null,
+                    MarkdownSha256 = markdownHash,
+                    Snippet = excerpt,
+                    LlmSummary = excerpt,
+                    Status = "collected",
+                    Sort = sortBase + rows.Count
+                });
+                added++;
+            }
+            return added;
+        }
+
+        /// <summary>
+        /// 检查项条款 → Process 属性 → 中文过程域关键词。
+        /// <para>⛔ 拿不到属性就返回空集合 ⇒ 过程轴不启用（宁可不召回，也不靠写死编号猜）。</para>
+        /// </summary>
+        private async Task<IReadOnlySet<string>> ResolveProcessKeywordsAsync(List<ISOClause> clauses)
+        {
+            var codes = clauses.Select(c => c.Code).Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal).ToList();
+            if (codes.Count == 0) return new HashSet<string>();
+
+            var attrs = (await _db.GetListAsync<ClauseAttrRow>(a =>
+                codes.Contains(a.ClauseCode) && a.AttrCode == "Process"
+                && !a.IsDeleted && a.IsValid == 1)).Data ?? new List<ClauseAttrRow>();
+            var keys = attrs.SelectMany(a => ProcessAreaRecall.ParseKeys(a.AttrValue)).ToList();
+            return ProcessAreaRecall.KeywordsFor(keys);
+        }
+
+        /// <summary>
+        /// 记录产物是否真有数据：护栏判过 blank 的直接不召回；条数为 0 且无样本也视为没数据。
+        /// <para>⛔ 不为了让证据变多而放行空表格——空表进报告就是"误识别"。</para>
+        /// </summary>
+        private static bool HasRecordData(JsonElement modeOutput)
+        {
+            if (!modeOutput.TryGetProperty("Records", out var recs)
+                || recs.ValueKind != JsonValueKind.Array || recs.GetArrayLength() == 0) return false;
+
+            foreach (var rec in recs.EnumerateArray())
+            {
+                if (rec.ValueKind != JsonValueKind.Object) continue;
+                var state = GetJsonString(rec, "RecordState");
+                if (string.Equals(state, "blank", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var rowCount = rec.TryGetProperty("RowCount", out var rc)
+                               && rc.ValueKind == JsonValueKind.Number && rc.TryGetInt32(out var n) ? n : 0;
+                var hasSamples = rec.TryGetProperty("Samples", out var sp)
+                                 && sp.ValueKind == JsonValueKind.Array && sp.GetArrayLength() > 0;
+                if (rowCount > 0 || hasSamples) return true;
+            }
+            return false;
         }
 
         /// <summary>

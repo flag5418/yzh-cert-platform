@@ -586,13 +586,17 @@ namespace CertPlatform.Auditor.Services.Ent
                 return new TaskExecutionResult { Success = false, Message = why, Retryable = false };
             }
 
+            // 记录类要逐行枚举表格（33 行培训/19 行台账），4000 输出额度会被截断 ⇒ 判 failed 并把旧结果作废。
+            // 只给记录模式加额度，其他模式维持原值（手册/程序输出量本来就小）。
+            var maxOut = extractionMode == EnterpriseDocExtractionRouter.RecordProfile ? 8000 : 4000;
+
             var markdownHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(markdown))).ToLowerInvariant();
             var fingerprint = DocumentExtractionFingerprint.Compute(
                 "doc-mode-extract-v1", doc.Sha256 ?? "", doc.VersionNumber.ToString(),
                 markdownHash, standard.Code ?? "", standard.StandardCode ?? "",
                 standard.VersionYear.ToString(), standard.StandardName ?? "",
                 extractionMode, doc.DocProfileJson ?? "", template,
-                settings.BaseUrl ?? "", settings.Model ?? "", "0.2", "4000");
+                settings.BaseUrl ?? "", settings.Model ?? "", "0.2", maxOut.ToString());
 
             if (!force
                 && existing is { IsDeleted: false, IsStale: false, ExtractStatus: ExtractRowStatus.Done }
@@ -613,7 +617,7 @@ namespace CertPlatform.Auditor.Services.Ent
                 ApiKey = settings.ApiKey,
                 Model = settings.Model,
                 Temperature = 0.2f,
-                MaxTokens = 4000,
+                MaxTokens = maxOut,
                 Prompt = prompt,
                 ForceJson = true,
                 TimeoutSeconds = 600,
@@ -633,9 +637,14 @@ namespace CertPlatform.Auditor.Services.Ent
             JsonElement modeOutput;
             using (resp.Json)
             {
-                if (resp.JsonRepaired
-                    || string.Equals(resp.FinishReason, "length", StringComparison.OrdinalIgnoreCase)
-                    || (resp.CompletionTokens.HasValue && resp.CompletionTokens.Value >= 4000))
+                // ⚠️ JsonRepaired 不再算失败：模型偶尔把 JSON 包一层代码块/多几句解释，
+                //    修复后内容完整，判失败会把上一份好结果作废（2026-11-16 实测丢过 2 份记录）。
+                //    真正的截断只认 FinishReason=length 或 token 打满。
+                if (resp.JsonRepaired)
+                    _logger.LogInformation("[模式提取] {File} 的 JSON 需要修复后解析（内容完整，按成功处理）", doc.Code);
+
+                if (string.Equals(resp.FinishReason, "length", StringComparison.OrdinalIgnoreCase)
+                    || (resp.CompletionTokens.HasValue && resp.CompletionTokens.Value >= maxOut))
                 {
                     var why = "模型输出被截断或疑似达到输出上限";
                     await store.UpsertAsync(doc.Code!, standardCode, doc.EnterpriseCode,
@@ -670,6 +679,10 @@ namespace CertPlatform.Auditor.Services.Ent
                         modeOutput = JsonSerializer.SerializeToElement(node);
                     }
                 }
+
+                // 表格数据识别：RowCount 一律由代码按「有数据的行」重算，不采信模型自报条数；
+                //   空行/占位行/合计备注行不计记录；摘要出现「等 X」但只有 1 条时只告警、不改原文。
+                modeOutput = RecordQualityGuard.Apply(extractionMode, modeOutput);
 
                 // PDCA 定位 + 部门归集：代码按条款算，模型不参与
                 modeOutput = DocPdcaClassifier.Apply(extractionMode, modeOutput);

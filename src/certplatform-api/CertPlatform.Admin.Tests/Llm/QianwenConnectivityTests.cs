@@ -110,15 +110,47 @@ public class QianwenConnectivityTests
         );
     }
 
+
+    /// <summary>从应用 appsettings 的连接串里取 MySQL 密码；取不到返回 null（不猜）。</summary>
+    private static string? ReadPasswordFromAppSettings()
+    {
+        try
+        {
+            // 测试程序集目录 → 仓库内 src/yzh-core/YZH.Core.Web/appsettings.json
+            var dir = AppContext.BaseDirectory;
+            for (var i = 0; i < 10 && dir != null && i < dir.Length; i++)
+            {
+                var candidate = Path.Combine(dir, "src", "yzh-core", "YZH.Core.Web", "appsettings.json");
+                if (!File.Exists(candidate)) { dir = Path.GetDirectoryName(dir); continue; }
+
+                var text = File.ReadAllText(candidate);
+                var m = System.Text.RegularExpressions.Regex.Match(text, @"Pwd=([^;]+)");
+                return m.Success ? m.Groups[1].Value : null;
+            }
+        }
+        catch
+        {
+            // 诊断用例：读配置失败不影响主断言，交由上层按"未配置"处理
+        }
+        return null;
+    }
+
     private async Task<(string BaseUrl, string ApiKey, string Model)> ReadConfigFromDockerAsync()
     {
         const string sql =
             "SELECT ConfigKey, ConfigValue FROM cert_sys_config WHERE Category = 'ai_model';";
 
+        // ⚠️ 密码不能写死：各环境 root 密码不同，写死会让"能连上库"的环境也读不到 key，
+        //    把用例判成失败（假红灯）。优先级：环境变量 → 应用 appsettings 连接串 → 旧默认值。
+        var pwd = Environment.GetEnvironmentVariable("YZH_MYSQL_PWD")
+                  ?? Environment.GetEnvironmentVariable("MYSQL_PWD")
+                  ?? ReadPasswordFromAppSettings()
+                  ?? "Yzh123456.";
+
         var psi = new ProcessStartInfo
         {
             FileName = "docker",
-            Arguments = $"exec -i yzh-mysql mysql -uroot -pYzh123456. --skip-column-names --silent --default-character-set=utf8mb4 yzh_cert_platform -e \"{sql}\"",
+            Arguments = $"exec -e MYSQL_PWD={pwd} -i yzh-mysql mysql -uroot --skip-column-names --silent --default-character-set=utf8mb4 yzh_cert_platform -e \"{sql}\"",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

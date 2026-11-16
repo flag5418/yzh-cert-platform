@@ -14,7 +14,7 @@ public class AuditFindingsTests
             BindingFlags.Static | BindingFlags.NonPublic);
         Assert.NotNull(method);
         return (List<CertEvidenceRow>)method!.Invoke(null,
-            new object[] { extraction, "item", new HashSet<string> { "4.1" }, 0 })!;
+            new object[] { extraction, "item", new HashSet<string> { "4.1" }, 0, null })!;
     }
 
     private static DocumentExtraction Extraction(string status, bool stale, string text)

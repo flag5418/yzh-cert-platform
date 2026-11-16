@@ -696,6 +696,10 @@ public sealed class CertCheckContextBuilder
         var result = new List<(string, ParsedSlice)>();
         if (GetObject(root, "ModeOutput", "modeOutput") is not { } output) return result;
 
+        // 存量记录产物没跑过护栏：读时校正一次，避免把模型自报条数/空表格送进模型上下文
+        var mode = GetString(root, "ExtractionMode", "extractionMode") ?? "";
+        output = ModeOutputProjector.ForProjection(output, mode);
+
         var fileName = "";
         if (GetObject(root, "DocMeta", "docMeta") is { } meta)
             fileName = GetString(meta, "FileName", "fileName") ?? "";
@@ -707,7 +711,7 @@ public sealed class CertCheckContextBuilder
             .ToList();
         if (clauseNumbers.Count == 0) return result;
 
-        var excerpt = BuildModeExcerpt(output, GetString(root, "ExtractionMode", "extractionMode") ?? "");
+        var excerpt = BuildModeExcerpt(output, mode);
         if (string.IsNullOrWhiteSpace(excerpt)) return result;
 
         foreach (var number in clauseNumbers)
@@ -743,66 +747,9 @@ public sealed class CertCheckContextBuilder
         return result;
     }
 
+    /// <summary>模式产物摘录：统一走 <see cref="ModeOutputProjector"/>（证据行与模型上下文同源）。</summary>
     private static string BuildModeExcerpt(JsonElement output, string mode)
-    {
-        var parts = new List<string>();
-
-        void Add(string label, JsonElement value, int maxItems = 3)
-        {
-            if (value.ValueKind == JsonValueKind.Null || value.ValueKind == JsonValueKind.Undefined) return;
-            var text = ElementText(value, maxItems);
-            if (!string.IsNullOrWhiteSpace(text)) parts.Add($"{label}：{text.Trim()}");
-        }
-
-        foreach (var name in new[] { "ReportSummary", "reportSummary", "ReportUse", "reportUse" })
-        {
-            if (output.TryGetProperty(name, out var v)) Add("报告用途摘要", v);
-        }
-        foreach (var name in new[] { "DocumentTitle", "documentTitle", "PolicyTitle", "policyTitle", "CatalogSummary", "catalogSummary" })
-        {
-            if (output.TryGetProperty(name, out var v)) Add("文档信息", v);
-        }
-        foreach (var name in new[] { "KeyControls", "keyControls", "KeyRules", "keyRules", "KeySteps", "keySteps" })
-        {
-            if (output.TryGetProperty(name, out var v)) Add("关键要求/步骤", v, 5);
-        }
-        foreach (var name in new[] { "Findings", "findings", "Records", "records", "Entries", "entries", "IndexEntries", "indexEntries" })
-        {
-            if (output.TryGetProperty(name, out var v)) Add("原文/抽样", v, 3);
-        }
-        if (mode == "document_control")
-        {
-            if (output.TryGetProperty("Entries", out var entries)) Add("目录摘要", entries, 2);
-        }
-
-        var text = string.Join("\n", parts);
-        return text.Length <= 3000 ? text : text[..3000] + "…";
-    }
-
-    private static string ElementText(JsonElement value, int maxItems)
-    {
-        switch (value.ValueKind)
-        {
-            case JsonValueKind.String:
-                return value.GetString() ?? "";
-            case JsonValueKind.Number:
-            case JsonValueKind.True:
-            case JsonValueKind.False:
-                return value.ToString();
-            case JsonValueKind.Array:
-                var items = value.EnumerateArray()
-                    .Take(maxItems)
-                    .Select(x => ElementText(x, 1))
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .ToList();
-                return string.Join("；", items);
-            case JsonValueKind.Object:
-                var raw = value.ToString();
-                return raw.Length <= 800 ? raw : raw[..800] + "…";
-            default:
-                return "";
-        }
-    }
+        => ModeOutputProjector.Excerpt(output, mode);
 
     // ================================================================
     // 二、渲染

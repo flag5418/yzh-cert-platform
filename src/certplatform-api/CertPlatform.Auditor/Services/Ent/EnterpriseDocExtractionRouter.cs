@@ -9,6 +9,9 @@ namespace CertPlatform.Auditor.Services.Ent
     /// <para><b>唯一判据</b>：先读 <c>cert_enterprise_doc.DocProfileJson</c> 的 <c>ExtractionMode</c>；
     /// 旧画像没有该字段时，退回 <c>DocType</c> 中文类型；再没有才按文件名兜底。</para>
     ///
+    /// <para>两处让位（都是「画像退化」而非「模型判断」）：① 文件名命中文件控制/作业指导/制度/因素清单
+    /// 时优先；② 画像给 <c>index_only</c>（最丢信息的兜底桶）而文件名能给出更具体模式时。</para>
+    ///
     /// <para>⛔ 本类只做路由，不判断文档是否与标准相关；相关性由画像字段
     /// <c>StandardRelevance</c> / <c>ExtractionMode=none</c> 决定。</para>
     /// </summary>
@@ -42,7 +45,17 @@ namespace CertPlatform.Auditor.Services.Ent
 
             var fromJson = ReadProfile(docProfileJson);
             if (!string.IsNullOrWhiteSpace(fromJson.Mode))
-                return NormalizeMode(fromJson.Mode!, fromJson.DocType);
+            {
+                var mode = NormalizeMode(fromJson.Mode!, fromJson.DocType);
+
+                // ★ 弱模式让位：<c>index_only</c> 只是「知道是清单/目录、不知道装了什么」的兜底桶。
+                // 文件名能给出更具体模式时以文件名为准 —— 否则「合格供应商清单」这类
+                // 画像生成的旧 index_only 永远进不了记录画像（97 号 G1：IndexEntries 为空 ⇒ 供应商全丢）。
+                if (mode == IndexOnly && fromName != null && fromName != IndexOnly && fromName != None)
+                    return fromName;
+
+                return mode;
+            }
 
             var fromDocType = FromDocType(fromJson.DocType);
             if (!string.IsNullOrEmpty(fromDocType)) return fromDocType;
@@ -174,6 +187,12 @@ namespace CertPlatform.Auditor.Services.Ent
             if (fn.Contains("财务") || fn.Contains("考勤") || fn.Contains("宿舍")
                 || fn.Contains("报销") || fn.Contains("薪资") || fn.Contains("工资"))
                 return None;
+
+            // ★ 合格供应商清单 / 供方名录：条目本身就是 8.4.1 的证据。
+            // 若落到 index_only，IndexEntries 为空 ⇒ 供应商名称/产品/承认日期/评审人全丢（97 号 G1）。
+            if ((fn.Contains("供应商") || fn.Contains("供方"))
+                && (fn.Contains("清单") || fn.Contains("名录")))
+                return RecordProfile;
 
             // 文件控制类：封面/清单本身就是 7.5.3 证据，不能降级成普通索引
             if (fn.Contains("程序文件汇编") || fn.Contains("三阶文件汇编")
