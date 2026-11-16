@@ -1,0 +1,312 @@
+{
+  "meta": {
+    "clause": "8.3.2",
+    "mode": "findings",
+    "status": "JSON_OK"
+  },
+  "result": {
+    "ClauseContext": {
+      "ClauseNumber": "8.3.2",
+      "ClauseTitle": "交付前发现不合格品的响应措施",
+      "ScopeType": "clause",
+      "IsCheckable": true,
+      "CheckMode": "single",
+      "Boundary": "本条款规范组织在产品交付前（含进货、过程、最终检验阶段）识别出不合格品后必须采取的三种法定处置路径及其控制要求；不覆盖交付后发现的不合格（由8.3.3管辖），也不规定不合格判定准则本身（属8.2.4/8.2.5范畴）。",
+      "ParentClause": "8.3.1",
+      "Children": []
+    },
+    "ChapterContext": {
+      "ChapterCode": "8",
+      "ChapterTitle": "测量、分析和改进",
+      "ChapterIntent": "验证质量管理体系与产品是否符合要求，处置不合格，分析数据并持续改进",
+      "ChapterEvidenceFocus": [
+        "内审包",
+        "产品检验与放行记录",
+        "不合格品处置记录",
+        "数据分析记录",
+        "纠正与预防措施记录"
+      ],
+      "ClauseRoleInChapter": "作为‘处置不合格’的核心执行条款，承接8.3.1总则，为8.3.3（交付后）提供逻辑对照，并与8.3.4（返工）形成处置方式的细化支撑；其证据链直接体现‘C（Check）’与‘A（Act）’双阶段闭环能力。",
+      "ChapterGap": [
+        "缺乏对不合格趋势分析及系统性原因识别的强制要求（需结合8.5.2/8.5.3）",
+        "未明确不合格品处置决策的跨职能评审机制（如MRB职责未在本章明示）"
+      ]
+    },
+    "ReferencedAnalysis": [
+      {
+        "ClauseNumber": "4.2.5",
+        "Title": "记录控制",
+        "RelationType": "record_rule",
+        "Influence": "规定让步接收记录的标识、贮存、保护、检索、保存期限和处置控制要求，是本条款中‘应保留让步接收和授权让步人员身份的记录’的支撑性控制规则。",
+        "AppliedTo": [
+          "c)"
+        ],
+        "ReferenceStatus": "full"
+      }
+    ],
+    "EvidenceContract": {
+      "ContractVersion": "v5.2",
+      "ChapterCode": "8",
+      "PDCAPhase": [
+        "C",
+        "A"
+      ],
+      "EvidenceItems": [
+        {
+          "ItemId": "E1",
+          "Name": "不合格品通知及评审处置表",
+          "DocClass": "record",
+          "DocScope": "event",
+          "ExtractionDepth": "fact_profile",
+          "DocProfileKey": "record_v1",
+          "DocBoundary": "覆盖交付前各环节（进货、过程、成品）发现的不合格品的识别、评审、处置决策全过程；不覆盖交付后处置或让步接收的法规符合性审查。",
+          "EvidenceRole": "implementation",
+          "Required": true,
+          "Condition": "",
+          "ExpectedFields": [
+            "日期",
+            "品名",
+            "规格型号",
+            "数量",
+            "不合格描述",
+            "处置方式",
+            "批准人"
+          ],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": "combination",
+          "ClauseItemRefs": [
+            "a",
+            "b",
+            "c"
+          ]
+        },
+        {
+          "ItemId": "E2",
+          "Name": "让步接收申请表",
+          "DocClass": "record",
+          "DocScope": "event",
+          "ExtractionDepth": "fact_profile",
+          "DocProfileKey": "record_v1",
+          "DocBoundary": "专用于支持条款c）中‘授权让步使用、放行或接收’的独立审批流程；包含让步理由、法规符合性声明、批准权限等要素；不覆盖返工或报废等其他处置方式。",
+          "EvidenceRole": "implementation",
+          "Required": false,
+          "Condition": "当选择c)处置方式时触发",
+          "ExpectedFields": [
+            "日期",
+            "品名",
+            "数量",
+            "让步理由",
+            "批准人"
+          ],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": "criteria",
+          "ClauseItemRefs": [
+            "c"
+          ]
+        },
+        {
+          "ItemId": "E3",
+          "Name": "报废申请单",
+          "DocClass": "record",
+          "DocScope": "event",
+          "ExtractionDepth": "fact_profile",
+          "DocProfileKey": "record_v1",
+          "DocBoundary": "支撑条款b）中‘防止其原预期的使用或应用’的具体实施证据；记录物理隔离、销毁或转用等非预期用途处置；不覆盖返工或让步。",
+          "EvidenceRole": "implementation",
+          "Required": false,
+          "Condition": "当选择b)处置方式时触发",
+          "ExpectedFields": [
+            "日期",
+            "品名",
+            "数量",
+            "报废原因",
+            "批准人"
+          ],
+          "Frequency": "每事件",
+          "Coverage": "全批次",
+          "ReportUse": "criteria",
+          "ClauseItemRefs": [
+            "b"
+          ]
+        },
+        {
+          "ItemId": "E4",
+          "Name": "结构化报告 8.3.2",
+          "DocClass": "report",
+          "DocScope": "event",
+          "ExtractionDepth": "fact_profile",
+          "DocProfileKey": "report_v1",
+          "DocBoundary": "汇总性证据，反映某次具体不合格事件的处置过程与结论；可作为E1/E2/E3的交叉验证来源；不替代原始处置记录。",
+          "EvidenceRole": "support",
+          "Required": false,
+          "Condition": "",
+          "ExpectedFields": [
+            "日期",
+            "品名",
+            "数量",
+            "不良数量",
+            "处理意见",
+            "结论",
+            "检验员",
+            "复核"
+          ],
+          "Frequency": "每事件",
+          "Coverage": "抽样",
+          "ReportUse": "support",
+          "ClauseItemRefs": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      ],
+      "Dependencies": [],
+      "CrossChecks": [],
+      "Gaps": [
+        "缺少对‘提供理由、获得批准和满足适用的法规要求’三项条件的独立验证字段（如法规条款引用栏、法务/注册人员会签栏）",
+        "未明确‘授权让步人员身份’在记录中的呈现形式（如职务、授权编号、签字样本备案）"
+      ]
+    },
+    "EvidenceFindings": [
+      {
+        "FindingId": "F1",
+        "ClauseItemRef": [
+          "a",
+          "b",
+          "c"
+        ],
+        "DocClass": "record",
+        "DocName": "QR-020 不合格品通知及评审处置表",
+        "DocLocation": "表头",
+        "FindingType": "template_only",
+        "FillStatus": "template_only",
+        "OriginalQuote": "不合格品通知及评审处置表；日期；品名；规格型号；数量；不合格描述；处置方式；批准人",
+        "WhatItProves": "该表单已建立，字段设计覆盖条款a) b) c)所需核心信息项",
+        "RiskLevel": "medium"
+      },
+      {
+        "FindingId": "F2",
+        "ClauseItemRef": [
+          "c"
+        ],
+        "DocClass": "record",
+        "DocName": "QR-021 让步接收申请表",
+        "DocLocation": "表头",
+        "FindingType": "template_only",
+        "FillStatus": "template_only",
+        "OriginalQuote": "让步接收申请表；日期；品名；数量；让步理由；批准人",
+        "WhatItProves": "该表单已建立，字段设计覆盖条款c）中让步理由与批准人两项关键要求",
+        "RiskLevel": "medium"
+      },
+      {
+        "FindingId": "F3",
+        "ClauseItemRef": [
+          "b"
+        ],
+        "DocClass": "record",
+        "DocName": "QR-022 报废申请单",
+        "DocLocation": "表头",
+        "FindingType": "template_only",
+        "FillStatus": "template_only",
+        "OriginalQuote": "报废申请单；日期；品名；数量；报废原因；批准人",
+        "WhatItProves": "该表单已建立，字段设计覆盖条款b）中防止原预期使用所需的报废原因与批准人要素",
+        "RiskLevel": "low"
+      },
+      {
+        "FindingId": "F4",
+        "ClauseItemRef": [
+          "a",
+          "b",
+          "c"
+        ],
+        "DocClass": "report",
+        "DocName": "尚龙-ACM二阶段-结构化报告 8.3.2",
+        "DocLocation": "8.3.2 报告段落",
+        "FindingType": "report_only",
+        "FillStatus": "filled",
+        "OriginalQuote": "提供《进货不合格检验记录》30/06/2026，品名：黑色车架，数量：100个，外观表面2件不良，处理意见：1件退回厂家重新褪色氧化；1件返修重新补焊，结论：两件不良品退回厂家，其余98件入库，检验员：尚月茂，复核：王倩。",
+        "WhatItProves": "报告中记载了交付前不合格事件的处置过程（退回、返修）、结果（98件入库）及人员角色，但未说明是否构成让步接收或报废",
+        "RiskLevel": "high"
+      }
+    ],
+    "Doubts": [
+      {
+        "DoubtId": "D1",
+        "DoubtType": "template_only",
+        "Description": "所有不合格品处置类记录均为模板状态，无实际填写实例",
+        "RelatedFindings": [
+          "F1",
+          "F2",
+          "F3"
+        ],
+        "WhyItMatters": "无法确认条款a) b) c)三种处置路径是否真实运行，亦无法验证批准权限、让步理由充分性等控制有效性",
+        "SuggestedCheck": "抽样调阅近3个月进货/过程/成品检验记录，追踪对应QR-020/QR-021/QR-022的实际填写情况",
+        "Confidence": "high"
+      },
+      {
+        "DoubtId": "D2",
+        "DoubtType": "report_only",
+        "Description": "结构化报告中提及‘两件不良品退回厂家’，但未关联QR-020或QR-022等原始处置记录",
+        "RelatedFindings": [
+          "F4"
+        ],
+        "WhyItMatters": "存在报告数据与底层记录脱节风险，无法验证处置方式是否经正式评审、批准及记录控制",
+        "SuggestedCheck": "核查该报告所引《进货不合格检验记录》是否真实存在，并比对QR-020中同批次信息是否一致",
+        "Confidence": "high"
+      },
+      {
+        "DoubtId": "D3",
+        "DoubtType": "scope_mismatch",
+        "Description": "报告中‘1件返修重新补焊’属于返工行为，应受8.3.4管控，但未见QR-024/QR-025等检验记录与返工指令的衔接",
+        "RelatedFindings": [
+          "F4"
+        ],
+        "WhyItMatters": "返工活动若未经8.3.4规定的验证即放行，可能影响产品安全性与法规符合性",
+        "SuggestedCheck": "检查返修后是否执行了再检验（QR-025）及放行审批（QR-020）",
+        "Confidence": "medium"
+      }
+    ],
+    "EvidenceAssembly": [
+      {
+        "AssemblyId": "A1",
+        "ClauseItemRef": [
+          "a",
+          "b",
+          "c"
+        ],
+        "RequiredDocClasses": [
+          "record"
+        ],
+        "MinDocs": 1,
+        "CombineRule": "一份完整填写的QR-020（含明确处置方式、批准人签字、日期）可单独证明a)/b)/c)任一路径的实施",
+        "CanFormEvidence": "partial",
+        "Gap": "当前仅见模板，无实际填写记录，无法完成证据组合"
+      },
+      {
+        "AssemblyId": "A2",
+        "ClauseItemRef": [
+          "c"
+        ],
+        "RequiredDocClasses": [
+          "record",
+          "record"
+        ],
+        "MinDocs": 2,
+        "CombineRule": "QR-021（让步理由+批准人） + QR-020（同一事件中引用该让步申请并标注处置方式为‘让步接收’）",
+        "CanFormEvidence": "false",
+        "Gap": "QR-021仅模板；QR-020未见实际填写；无交叉引用证据"
+      }
+    ],
+    "ReportHint": {
+      "ReportMode": "direct",
+      "ReportParent": "",
+      "ReportReason": "8.3.2为独立可查条款，具备完整处置路径定义与记录要求，无需合并至父条款",
+      "ReportUse": [
+        "combination",
+        "criteria"
+      ]
+    }
+  }
+}

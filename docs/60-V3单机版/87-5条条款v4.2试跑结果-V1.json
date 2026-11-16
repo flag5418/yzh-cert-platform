@@ -1,0 +1,1694 @@
+[
+  {
+    "_meta": {
+      "clause": "7.5.1",
+      "title": "生产和服务提供的控制",
+      "status": "JSON_OK"
+    },
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "7.5.1",
+        "ClauseTitle": "生产和服务提供的控制",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款管控生产和服务提供全过程的策划、实施、监视和控制，确保产品符合规范；不含采购过程（属7.4）、设计转换活动（属7.3.8）、过程确认（属7.5.6）、灭菌/清洁/安装/服务等专项活动（属7.5.2–7.5.4、7.5.5、7.5.7）、标识与防护（属7.5.8、7.5.11）、可追溯性记录的具体内容（属7.5.9）、不合格品处置（属8.3）。",
+        "ParentClause": "7.5",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "编制生产控制程序和控制方法的文件",
+            "EvidenceHint": "生产控制程序"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "基础设施鉴定",
+            "EvidenceHint": "基础设施鉴定记录"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "requirement",
+            "Text": "实施过程参数和产品特性的监视和测量",
+            "EvidenceHint": "过程参数监视记录、产品特性检验记录"
+          },
+          {
+            "ItemCode": "d",
+            "ItemType": "requirement",
+            "Text": "获得和使用监视和测量设备",
+            "EvidenceHint": "监视和测量设备使用记录"
+          },
+          {
+            "ItemCode": "e",
+            "ItemType": "requirement",
+            "Text": "对标记和包装实施规定的操作",
+            "EvidenceHint": "标记与包装作业记录"
+          },
+          {
+            "ItemCode": "f",
+            "ItemType": "requirement",
+            "Text": "实施产品放行、交付和交付后活动",
+            "EvidenceHint": "产品放行记录、交付记录、交付后活动记录"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "7",
+        "ChapterTitle": "产品实现",
+        "ChapterIntent": "策划并控制产品实现全过程，确保设计、采购、生产、标识、防护、放行和监视测量设备满足要求",
+        "ChapterEvidenceFocus": [
+          "设计开发文档",
+          "供方与采购记录",
+          "生产记录/批记录",
+          "标识与防护记录",
+          "检验与放行记录",
+          "监视测量设备校准记录"
+        ],
+        "ClauseRoleInChapter": "本条款是第7章‘产品实现’的操作中枢，承接7.1策划输出，将产品实现从输入转化为受控输出；它整合基础设施（7.5.1b）、过程监控（7.5.1c）、设备使用（7.5.1d）、标识包装（7.5.1e）、放行交付（7.5.1f）等执行层控制要素，为7.5.9可追溯性提供批次级事实基础，并依赖7.6设备控制与4.2.4/4.2.5文件记录体系支撑。",
+        "ChapterGap": [
+          "缺少对生产环境洁净度/温湿度等特殊条件的独立控制要求（需结合7.5.5或组织适用法规补充）",
+          "未显式覆盖生产人员能力确认（需通过6.2.2及7.5.1实施记录间接验证）"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "4.2.4",
+          "Title": "文件控制",
+          "RelationType": "document_rule",
+          "Influence": "规定生产控制程序等文件必须经评审批准、版本受控、现场有效，约束条款7.5.1a中‘编制文件’的合规性形式。",
+          "AppliedTo": [
+            "a"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        },
+        {
+          "ClauseNumber": "4.2.5",
+          "Title": "记录控制",
+          "RelationType": "record_rule",
+          "Influence": "规定所有生产记录（含批记录、放行记录、监视记录等）须标识、贮存、保护、检索、保存期限及处置，支撑7.5.1末段‘建立并保留记录’及‘核验和批准该记录’的管理要求。",
+          "AppliedTo": [
+            "b",
+            "c",
+            "d",
+            "e",
+            "f"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        },
+        {
+          "ClauseNumber": "7.5.9.1",
+          "Title": "可追溯性 总则",
+          "RelationType": "traceability",
+          "Influence": "明确7.5.1末段所要求的记录须满足7.5.9规定的可追溯性范围和程度，构成该记录的内容边界与结构依据。",
+          "AppliedTo": [
+            "b",
+            "c",
+            "d",
+            "e",
+            "f"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        },
+        {
+          "ClauseNumber": "7.5.9.2",
+          "Title": "植入性医疗器械的专用要求",
+          "RelationType": "condition",
+          "Influence": "当产品为植入性医疗器械时，7.5.1末段所要求的记录须额外包含组件、材料、工作环境等影响安全性能的因素，构成记录字段的扩展条件。",
+          "AppliedTo": [
+            "b",
+            "c",
+            "d",
+            "e",
+            "f"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v4",
+        "ChapterCode": "7",
+        "PDCAPhase": [
+          "P",
+          "D"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "生产控制程序",
+            "DocRole": "procedure",
+            "EvidenceRole": "establishment",
+            "DocClass": "procedure",
+            "DocScope": "process",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖7.5.1全部子项（a-f）的控制逻辑、职责、方法、接口，不含具体参数限值或检验接收准则。",
+            "NameAliases": [
+              "生产过程控制程序",
+              "制造控制程序",
+              "生产和服务提供控制程序"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "适用产品范围",
+              "控制流程图",
+              "关键过程识别",
+              "基础设施管理要求",
+              "监视测量活动定义",
+              "标识与包装操作要求",
+              "放行与交付职责"
+            ],
+            "Frequency": "每产品族/每次重大变更",
+            "Coverage": "全工序",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "生产批记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "为每一台或每一批医疗器械建立，包含7.5.1b-f实际执行证据及7.5.9要求的可追溯性信息（如制造数量、批准流通数量、核验批准签名），不含设计输入或采购验收数据。",
+            "NameAliases": [
+              "制造批记录",
+              "生产记录",
+              "批生产记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "产品名称与批号",
+              "生产日期与操作员",
+              "基础设施使用记录（如设备编号/运行参数）",
+              "过程参数监视结果",
+              "产品特性检验结果",
+              "标记与包装操作确认",
+              "产品放行批准签名",
+              "交付记录",
+              "交付后活动记录"
+            ],
+            "Frequency": "每批",
+            "Coverage": "全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "b",
+              "c",
+              "d",
+              "e",
+              "f"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "基础设施鉴定记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "equipment",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "证明7.5.1b所涉基础设施（如洁净室、压缩空气系统、纯化水系统）已按程序完成安装确认（IQ）、运行确认（OQ）及必要时的性能确认（PQ），不包含日常维护记录。",
+            "NameAliases": [
+              "设施鉴定报告",
+              "设备鉴定记录",
+              "基础设施确认记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "基础设施名称与编号",
+              "鉴定方法与标准",
+              "测试项目与接受准则",
+              "实测数据与结论",
+              "鉴定人员与批准签名",
+              "有效期或再鉴定周期"
+            ],
+            "Frequency": "每设备/首次启用及重大变更后",
+            "Coverage": "全设备",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "过程参数与产品特性监视测量记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录7.5.1c要求的过程参数（如温度、时间、压力）及产品特性（尺寸、功能、无菌性）的实际监视与测量结果，不包含设备校准数据或检验规程本身。",
+            "NameAliases": [
+              "过程监控记录",
+              "制程检验记录",
+              "关键工艺参数记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "工序名称与批号",
+              "监视/测量项目",
+              "规定限值",
+              "实测值",
+              "操作员与日期",
+              "偏差处理记录",
+              "审核批准签名"
+            ],
+            "Frequency": "每批/每班次/每运行周期",
+            "Coverage": "全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E5",
+            "Name": "监视和测量设备使用记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "equipment",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "证明7.5.1d所涉设备在生产中被正确选择、校准状态受控、使用条件合规，不替代7.6校准记录，但须引用其校准状态。",
+            "NameAliases": [
+              "检测设备使用日志",
+              "量具使用记录",
+              "测量设备运行记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "设备编号与名称",
+              "使用工序与批号",
+              "校准有效期状态",
+              "使用前检查结果",
+              "操作员与日期",
+              "异常情况记录"
+            ],
+            "Frequency": "每次使用",
+            "Coverage": "全设备",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E6",
+            "Name": "标记与包装作业记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "证实7.5.1e规定的标记（UDI、批号、有效期等）与包装（内包、外包、运输包装）操作已按程序执行并验证，不包含包装设计文件或标签样稿。",
+            "NameAliases": [
+              "标签贴附记录",
+              "包装确认记录",
+              "标识操作记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "产品批号",
+              "标记内容与位置",
+              "包装材料批号",
+              "封口/密封验证结果",
+              "操作员与复核员签名",
+              "日期"
+            ],
+            "Frequency": "每批",
+            "Coverage": "全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "e"
+            ]
+          },
+          {
+            "ItemId": "E7",
+            "Name": "产品放行与交付记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "涵盖7.5.1f中产品放行（质量受权人批准）、交付（物流单据）、交付后活动（如培训、安装支持）三类事实，不包含顾客投诉或不良事件报告。",
+            "NameAliases": [
+              "成品放行单",
+              "发货记录",
+              "交付后服务记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "产品名称与批号",
+              "放行批准签名与日期",
+              "交付方式与承运商",
+              "收货方名称地址",
+              "交付日期",
+              "交付后活动类型与执行记录"
+            ],
+            "Frequency": "每批",
+            "Coverage": "全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "f"
+            ]
+          }
+        ],
+        "Dependencies": [
+          "4.2.4",
+          "4.2.5",
+          "7.5.9.1",
+          "7.5.9.2"
+        ],
+        "CrossChecks": [
+          "7.5.9.1→E2",
+          "7.5.9.2→E2",
+          "7.6→E5"
+        ],
+        "AuditorRules": []
+      },
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "7.5.1为独立可查条款，具有完整正文、无子条款、具备明确检查对象与证据链，且输入指定CheckMode为single。",
+        "ReportUse": [
+          "establishment",
+          "sample",
+          "coverage"
+        ]
+      }
+    }
+  },
+  {
+    "_meta": {
+      "clause": "8.2.4",
+      "title": "内部审核",
+      "status": "JSON_OK"
+    },
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.2.4",
+        "ClauseTitle": "内部审核",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款规定质量管理体系内部审核的策划、实施、记录与结果处置要求；不管过程监视（8.2.5）、产品监视和测量（8.2.6）、投诉处置（8.2.2）或不合格品控制（8.3）的具体执行，也不管审核员能力评价的初始确认（属7.1/7.2/7.5等过程能力要求）。",
+        "ParentClause": "8.2",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "符合策划并形成文件的安排、本文件的要求以及组织所确定的质量管理体系要求和适用的法规要求",
+            "EvidenceHint": "内审计划、检查表、审核报告、合规性比对记录"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "得到有效实施和保持",
+            "EvidenceHint": "内审发现的不合格报告、纠正措施验证记录、管理评审输入"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "测量、分析和改进",
+        "ChapterIntent": "验证质量管理体系与产品是否符合要求，处置不合格，分析数据并持续改进",
+        "ChapterEvidenceFocus": [
+          "内审包（计划/签到/检查表/不合格报告/报告）",
+          "产品检验与放行记录",
+          "不合格品处置记录",
+          "数据分析记录",
+          "纠正与预防措施记录"
+        ],
+        "ClauseRoleInChapter": "作为第8章中体系层面的监视证据主干，与8.2.5（过程监视）和8.2.6（产品监视）构成三层监视结构；其输出直接支撑8.4（数据分析）和8.5（改进）的输入，是C（Check）与A（Act）阶段的关键闭环触点。",
+        "ChapterGap": [
+          "缺乏对审核员持续能力保持（如年度复训、审核绩效评估）的显性证据要求",
+          "未明确要求将内审结果纳入管理评审输入的强制性路径"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "4.2.5",
+          "Title": "记录控制",
+          "RelationType": "record_rule",
+          "Influence": "补充了内审记录的标识、贮存、保护、检索、保存期限和处置控制要求，并明确记录保存期限至少相当于医疗器械寿命期且不少于2年。",
+          "AppliedTo": [
+            "ClauseItems"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v4",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "C",
+          "A"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "内部审核程序",
+            "DocRole": "procedure",
+            "EvidenceRole": "establishment",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "规定内部审核的职责、策划、实施、记录、报告及纠正措施跟踪要求；不覆盖具体审核检查表内容或单次审核日程安排。",
+            "NameAliases": [
+              "内审管理程序",
+              "内部质量审核控制程序",
+              "质量体系内部审核规程"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核职责分配",
+              "审核方案策划方法",
+              "审核员选择准则",
+              "审核结果报告路径",
+              "纠正措施跟踪机制"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全体系",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "内部审核计划",
+            "DocRole": "plan",
+            "EvidenceRole": "implementation",
+            "DocClass": "plan",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "plan_v1",
+            "DocBoundary": "覆盖审核准则、范围、时间间隔、方法及拟审核的过程和区域；不包含具体审核发现或结论。",
+            "NameAliases": [
+              "年度内审计划",
+              "审核方案",
+              "内审排程表"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核周期设定依据",
+              "区域/过程重要性评估说明",
+              "以往审核结果应用记录",
+              "审核准则引用清单",
+              "时间间隔合理性说明"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全部门",
+            "ReportUse": "coverage",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "审核签到表与首末次会议记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "证明审核按计划实施、人员出席、会议召开及沟通内容；不替代检查表或不合格报告。",
+            "NameAliases": [
+              "内审签到表",
+              "首末次会议纪要",
+              "审核活动见证记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核日期与地点",
+              "审核组成员签名",
+              "受审核方代表签名",
+              "首末次会议议题摘要",
+              "时间戳"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全审核事件",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "审核检查表",
+            "DocRole": "work_instruction",
+            "EvidenceRole": "criteria",
+            "DocClass": "work_instruction",
+            "DocScope": "event",
+            "ExtractionDepth": "criteria",
+            "DocProfileKey": "work_instruction_v1",
+            "DocBoundary": "体现审核准则（标准条款、法规、体系文件）与审核证据之间的映射关系；不包含审核结论或整改建议。",
+            "NameAliases": [
+              "内审查检表",
+              "审核核查清单",
+              "条款对照检查表"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "对应标准条款号",
+              "审核问题描述",
+              "证据索引位置",
+              "判定依据说明",
+              "审核员签字栏"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全审核事件",
+            "ReportUse": "criteria",
+            "ClauseItemRefs": [
+              "a"
+            ]
+          },
+          {
+            "ItemId": "E5",
+            "Name": "不合格报告",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录审核中发现的不符合项，包括事实描述、条款依据、严重程度判定及责任部门；不包含纠正措施本身。",
+            "NameAliases": [
+              "内审不符合项报告",
+              "NC报告",
+              "审核问题清单"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "不符合事实描述",
+              "违反条款号",
+              "不符合类型（体系/实施/保持）",
+              "责任部门确认",
+              "开具日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全审核事件",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E6",
+            "Name": "内部审核报告",
+            "DocRole": "report",
+            "EvidenceRole": "implementation",
+            "DocClass": "report",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "report_v1",
+            "DocBoundary": "汇总审核发现、结论及整体有效性评价，覆盖所有审核区域；不替代单个不合格报告或纠正措施验证记录。",
+            "NameAliases": [
+              "内审总结报告",
+              "管理体系审核报告",
+              "年度内审综合报告"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核范围与准则说明",
+              "审核发现统计（合格/不合格数量）",
+              "体系有效性总体结论",
+              "改进建议汇总",
+              "批准人与日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全审核事件",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E7",
+            "Name": "纠正措施验证记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "证明针对不合格项所采取的纠正和纠正措施已实施并验证有效；不包含措施制定过程或原因分析原始记录。",
+            "NameAliases": [
+              "NC纠正措施验证表",
+              "内审整改闭环记录",
+              "措施有效性确认记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "对应不合格报告编号",
+              "纠正措施描述",
+              "完成日期",
+              "验证方法与证据",
+              "验证人与日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全不合格项",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E8",
+            "Name": "审核员能力/授权/任命记录",
+            "DocRole": "record",
+            "EvidenceRole": "support",
+            "DocClass": "record",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "证明审核员具备所需能力、经授权且未审核自身工作；不覆盖培训课程内容或考试试卷。",
+            "NameAliases": [
+              "内审员资格档案",
+              "审核员任命书",
+              "审核员能力评估记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核员姓名与岗位",
+              "能力评价方式与结果",
+              "授权范围与有效期",
+              "回避声明或职责分离说明",
+              "最近一次能力更新日期"
+            ],
+            "Frequency": "每周期",
+            "Coverage": "全审核员",
+            "ReportUse": "support",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          }
+        ],
+        "Dependencies": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5",
+          "E6",
+          "E7",
+          "E8"
+        ],
+        "CrossChecks": [
+          "E5→E7",
+          "E2→E3",
+          "E1→E2",
+          "E4→E5",
+          "E6→E7"
+        ],
+        "AuditorRules": [
+          "审核员不得审核自身工作须在E8中可追溯",
+          "E7必须关联E5编号并提供验证证据而非仅声明完成"
+        ]
+      },
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "8.2.4为独立可检查条款，无子条款合并需求，且输入明确CheckMode=single",
+        "ReportUse": [
+          "establishment",
+          "sample",
+          "coverage",
+          "counter",
+          "combination",
+          "support"
+        ]
+      }
+    }
+  },
+  {
+    "_meta": {
+      "clause": "8.2.6",
+      "title": "产品的监视和测量",
+      "status": "JSON_OK"
+    },
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.2.6",
+        "ClauseTitle": "产品的监视和测量",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款管产品实现过程中各适当阶段对产品特性的监视和测量活动，包括接收准则符合性验证、放行授权记录、检测设备标识及植入性器械检验人员身份记录；不管过程本身的监视（属8.2.5）、不合格品处置（属8.3）、监视和测量设备控制（属7.6）、或反馈/投诉等外部信息收集（属8.2.1–8.2.3）。",
+        "ParentClause": "8.2",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "应对产品的特性进行监视和测量，以验证产品要求已得到满足",
+            "EvidenceHint": "产品检验记录"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "监视和测量应依据策划并形成文件的安排和形成文件的程序，在产品实现过程的适当阶段进行",
+            "EvidenceHint": "检验规程、检验计划"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "requirement",
+            "Text": "应保持符合接收准则的证据",
+            "EvidenceHint": "产品检验记录"
+          },
+          {
+            "ItemCode": "d",
+            "ItemType": "requirement",
+            "Text": "应记录有权放行产品的人员的身份（见4.2.5）",
+            "EvidenceHint": "产品放行记录"
+          },
+          {
+            "ItemCode": "e",
+            "ItemType": "requirement",
+            "Text": "适当时，记录应识别用于执行测量活动的检测设备",
+            "EvidenceHint": "产品检验记录"
+          },
+          {
+            "ItemCode": "f",
+            "ItemType": "requirement",
+            "Text": "在策划并形成文件的安排圆满完成前不应放行产品和交付服务",
+            "EvidenceHint": "产品放行记录、检验计划完成状态标识"
+          },
+          {
+            "ItemCode": "g",
+            "ItemType": "requirement",
+            "Text": "对于植入性医疗器械，组织应记录进行任何检验或试验的人员的身份",
+            "EvidenceHint": "植入性医疗器械检验记录"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "测量、分析和改进",
+        "ChapterIntent": "验证质量管理体系与产品是否符合要求，处置不合格，分析数据并持续改进",
+        "ChapterEvidenceFocus": [
+          "内审包（计划/签到/检查表/不合格报告/报告）",
+          "产品检验与放行记录",
+          "不合格品处置记录",
+          "数据分析记录",
+          "纠正与预防措施记录"
+        ],
+        "ClauseRoleInChapter": "作为第8章‘测量’维度的产品级验证证据链核心，本条款与8.2.4（体系审核）、8.2.5（过程监视）构成三层监视结构：8.2.4验证体系有效性，8.2.5验证过程受控性，8.2.6验证产品符合性；其输出是8.3不合格控制、8.4数据分析及8.5改进的直接输入。",
+        "ChapterGap": [
+          "缺乏对检验结果趋势分析的强制要求（需依赖8.4补充）",
+          "未明确要求检验数据与设计输入/生产参数的关联追溯（需结合7.3.3、7.5.1）"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "4.2.5",
+          "Title": "记录控制",
+          "RelationType": "record_rule",
+          "Influence": "为本条款中‘应保持符合接收准则的证据’‘应记录有权放行产品的人员的身份’‘应记录检验人员身份’等记录要求提供通用控制框架，规定记录的标识、贮存、保护、检索、保存期限和处置。",
+          "AppliedTo": [
+            "c",
+            "d",
+            "g"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v4",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "C",
+          "A"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "产品检验规程",
+            "DocRole": "procedure",
+            "EvidenceRole": "establishment",
+            "DocClass": "procedure",
+            "DocScope": "process",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "规定产品监视和测量的项目、方法、频次、接收准则、职责及适用阶段；不包含具体检验数据或放行决策。",
+            "NameAliases": [
+              "检验作业指导书",
+              "产品检验标准",
+              "检验规范"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "适用产品范围",
+              "检验项目",
+              "检验方法",
+              "接收准则",
+              "检验频次/抽样方案",
+              "检验阶段（如过程/成品）",
+              "职责分工"
+            ],
+            "Frequency": "每产品类型/每次修订",
+            "Coverage": "全产品",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "过程检验记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录特定批次/产品在制造过程中的检验结果、判定结论、检验人员、日期及检测设备编号；不包含放行决策或最终批准。",
+            "NameAliases": [
+              "工序检验记录",
+              "制程检验报告",
+              "中间检验单"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "产品/批次标识",
+              "检验项目",
+              "实测值/判定结果",
+              "接收准则引用",
+              "检验日期",
+              "检验人员签名",
+              "检测设备编号（如适用）"
+            ],
+            "Frequency": "每批/每事件",
+            "Coverage": "全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "c",
+              "e",
+              "f"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "成品检验记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录最终放行前对成品的全部检验结果、判定结论、放行人身份、日期及检测设备编号；必须体现接收准则符合性及放行授权。",
+            "NameAliases": [
+              "出厂检验记录",
+              "终检报告",
+              "成品放行检验单"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "产品/批次标识",
+              "检验项目",
+              "实测值/判定结果",
+              "接收准则引用",
+              "检验日期",
+              "检验人员签名",
+              "放行人签名/工号",
+              "检测设备编号（如适用）"
+            ],
+            "Frequency": "每批/每事件",
+            "Coverage": "全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "c",
+              "d",
+              "e",
+              "f"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "植入性医疗器械专项检验记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "专用于植入性医疗器械，除含成品检验全部字段外，必须单独标识执行检验/试验的人员姓名及唯一身份标识（如工号），不可仅用签名缩写。",
+            "NameAliases": [
+              "植入器械检验记录",
+              "植入类终检单",
+              "植入产品试验人员登记表"
+            ],
+            "Required": true,
+            "Condition": "适用于植入性医疗器械",
+            "ExpectedFields": [
+              "产品/批次标识",
+              "检验/试验项目",
+              "实测值/判定结果",
+              "接收准则引用",
+              "检验/试验日期",
+              "执行检验/试验人员全名及工号",
+              "放行人签名/工号",
+              "检测设备编号"
+            ],
+            "Frequency": "每批/每事件",
+            "Coverage": "植入性产品全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "g"
+            ]
+          },
+          {
+            "ItemId": "E5",
+            "Name": "产品放行审批单",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "独立于检验记录，聚焦放行决策环节，明确记录放行人身份、放行日期、放行依据（如检验报告编号）、放行结论；不重复记录检验数据。",
+            "NameAliases": [
+              "放行单",
+              "出厂放行审批表",
+              "产品放行授权记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "产品/批次标识",
+              "放行结论（合格/不合格）",
+              "放行人全名及工号",
+              "放行日期",
+              "放行依据（如检验报告编号）",
+              "备注（如例外放行说明）"
+            ],
+            "Frequency": "每批/每事件",
+            "Coverage": "全批次",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "d",
+              "f"
+            ]
+          }
+        ],
+        "Dependencies": [
+          "E1 → E2, E3, E4, E5",
+          "E2/E3/E4 → E5"
+        ],
+        "CrossChecks": [
+          "E2/E3/E4中检验人员与E5中放行人不得为同一人（除非经授权且有隔离机制）",
+          "E3/E4中检测设备编号应在7.6设备台账中可查"
+        ],
+        "AuditorRules": [
+          "若E4存在，则E3必须覆盖非植入类产品；若E4不存在，则组织无植入性医疗器械"
+        ]
+      },
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "本条款为独立可检查的叶子条款，具有完整要求、可验证证据项及明确判定逻辑，不合并至父条款。",
+        "ReportUse": [
+          "criteria",
+          "sample",
+          "counter"
+        ]
+      }
+    }
+  },
+  {
+    "_meta": {
+      "clause": "8.3.2",
+      "title": "交付前发现不合格品的响应措施",
+      "status": "JSON_OK"
+    },
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.3.2",
+        "ClauseTitle": "交付前发现不合格品的响应措施",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款仅适用于在组织控制下、产品交付顾客之前发现的不合格品的处置；不含交付后发现的不合格品（属8.3.3）、过程监视中发现的潜在不合格（属8.2.5）、产品检验活动本身（属8.2.6）、采购产品验证（属7.4.3）及设计开发阶段的不合格（属7.3）。",
+        "ParentClause": "8.3",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "disposition_path",
+            "Text": "采取措施以消除已发现的不合格",
+            "EvidenceHint": "返工/返修记录"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "disposition_path",
+            "Text": "采取措施以防止其原预期的使用或应用",
+            "EvidenceHint": "报废/隔离/转用记录"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "disposition_path",
+            "Text": "授权让步使用、放行或接收",
+            "EvidenceHint": "让步接收审批记录"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "测量、分析和改进",
+        "ChapterIntent": "验证质量管理体系与产品是否符合要求，处置不合格，分析数据并持续改进",
+        "ChapterEvidenceFocus": [
+          "内审包（计划/签到/检查表/不合格报告/报告）",
+          "产品检验与放行记录",
+          "不合格品处置记录",
+          "数据分析记录",
+          "纠正与预防措施记录"
+        ],
+        "ClauseRoleInChapter": "作为第8章‘不合格品控制’的核心执行条款，本条承接8.3.1总则，聚焦交付前这一关键时间窗口，与8.3.3（交付后）形成时空闭环，并为8.5.2（纠正措施）提供不合格事实输入；其处置路径直接支撑‘改进’子过程的数据溯源与有效性验证。",
+        "ChapterGap": [
+          "缺少对不合格品处置决策层级与授权权限的体系化定义证据",
+          "未覆盖处置结果对相关过程（如采购、设计）的反馈机制"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "4.2.5",
+          "Title": "记录控制",
+          "RelationType": "record_rule",
+          "Influence": "规定让步接收记录必须保留，明确记录标识、贮存、保护、检索、保存期限和处置要求，并强制满足法规寿命期+2年最低保存期限",
+          "AppliedTo": [
+            "c"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v4",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "C",
+          "A"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "不合格品处置程序",
+            "DocRole": "procedure",
+            "EvidenceRole": "establishment",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "规定8.3.2全部三种处置路径（消除、防止使用、让步）的触发条件、职责分工、审批权限、记录要求；不包含具体检验方法或接收准则。",
+            "NameAliases": [
+              "不合格品控制程序",
+              "不合格处理规程",
+              "不合格处置作业指导书"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "处置路径选择规则",
+              "授权让步的审批层级",
+              "让步理由书面化要求",
+              "记录保存期限规定",
+              "法规符合性声明"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全工序",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "返工/返修记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录针对交付前不合格所实施的具体返工/返修操作，包括产品标识、不合格描述、处置措施、验证结果、批准人员；不包含报废或让步信息。",
+            "NameAliases": [
+              "返工记录",
+              "返修记录",
+              "不合格消除记录"
+            ],
+            "Required": false,
+            "Condition": "选择a)路径时",
+            "ExpectedFields": [
+              "不合格品唯一标识",
+              "返工依据文件编号",
+              "返工后检验结果",
+              "返工批准人签名",
+              "返工完成日期"
+            ],
+            "Frequency": "每批",
+            "Coverage": "全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "报废/隔离/转用记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录交付前不合格品被报废、物理隔离或转作他用的完整信息，含处置方式、去向、批准人、防止误用措施；不包含返工或让步内容。",
+            "NameAliases": [
+              "不合格品隔离记录",
+              "报废单",
+              "转用审批记录"
+            ],
+            "Required": false,
+            "Condition": "选择b)路径时",
+            "ExpectedFields": [
+              "不合格品唯一标识",
+              "处置方式（报废/隔离/转用）",
+              "处置后状态确认",
+              "批准人签名",
+              "处置日期"
+            ],
+            "Frequency": "每批",
+            "Coverage": "全批次",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "让步接收审批记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录交付前不合格品让步使用的完整审批过程，含不合格描述、让步理由、适用法规符合性声明、授权人员身份、批准日期；必须可追溯至4.2.5记录控制要求。",
+            "NameAliases": [
+              "让步放行单",
+              "特采审批表",
+              "授权接收记录"
+            ],
+            "Required": false,
+            "Condition": "选择c)路径时",
+            "ExpectedFields": [
+              "不合格品唯一标识",
+              "让步使用范围说明",
+              "法规符合性确认栏",
+              "授权让步人员姓名与职务",
+              "批准日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全事件",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E5",
+            "Name": "让步接收授权人员清单",
+            "DocRole": "list",
+            "EvidenceRole": "support",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "列明经组织正式授权可批准让步接收的人员姓名、职务、授权范围及有效期；不包含具体让步事件审批记录。",
+            "NameAliases": [
+              "特采授权人员名单",
+              "让步审批权限表",
+              "授权签字人清单"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "人员姓名",
+              "职务",
+              "授权事项（让步类型）",
+              "授权生效日期",
+              "授权失效日期"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全部门",
+            "ReportUse": "support",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          }
+        ],
+        "Dependencies": [
+          "E1 → E2/E3/E4",
+          "E4 → E5",
+          "E4 → 4.2.5"
+        ],
+        "CrossChecks": [
+          "E2/E3/E4三者至少存在一项实际记录以证明路径选择机制运行",
+          "E4中授权人员必须在E5清单中可查"
+        ],
+        "AuditorRules": []
+      },
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "本条款为独立可检查的叶子条款，具有明确的处置路径、记录要求和引用规则，需单独出具审核发现。",
+        "ReportUse": [
+          "establishment",
+          "sample",
+          "counter",
+          "support"
+        ]
+      }
+    }
+  },
+  {
+    "_meta": {
+      "clause": "7.6",
+      "title": "监视和测量设备的控制",
+      "status": "JSON_OK"
+    },
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "7.6",
+        "ClauseTitle": "监视和测量设备的控制",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款管控组织用于产品实现过程中提供符合性证据的所有监视和测量设备（含硬件、软件、标准物质）的校准、标识、防护、调整及失效追溯；不含过程监视活动本身（如工艺参数趋势分析）、产品检验判定准则的制定、或检验人员能力管理。",
+        "ParentClause": "7",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "对照可溯源标准定期或使用前校准/检定；无标准时记录依据",
+            "EvidenceHint": "校准/检定计划、校准证书、验证依据文件"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "调整或再调整并记录",
+            "EvidenceHint": "设备调整记录、维护日志"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "requirement",
+            "Text": "标识以确定校准状态",
+            "EvidenceHint": "设备校准状态标签、台账标识字段"
+          },
+          {
+            "ItemCode": "d",
+            "ItemType": "requirement",
+            "Text": "防护防止因调整导致测量结果失效",
+            "EvidenceHint": "设备防护作业指导书、操作规程"
+          },
+          {
+            "ItemCode": "e",
+            "ItemType": "requirement",
+            "Text": "保护防止处置、维护和贮存期间损坏和衰减",
+            "EvidenceHint": "设备保管规程、贮存环境记录"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "7",
+        "ChapterTitle": "产品实现",
+        "ChapterIntent": "策划并控制产品实现全过程，确保设计、采购、生产、标识、防护、放行和监视测量设备满足要求",
+        "ChapterEvidenceFocus": [
+          "设计开发文档",
+          "供方与采购记录",
+          "生产记录/批记录",
+          "标识与防护记录",
+          "检验与放行记录",
+          "监视测量设备校准记录"
+        ],
+        "ClauseRoleInChapter": "作为产品实现过程的测量能力保障支柱，为7.1策划输出、7.5生产控制、7.6自身及8.2.6产品监视等环节提供可信数据基础；其有效性直接支撑产品符合性证据链的完整性，而非仅设备台账管理。",
+        "ChapterGap": [
+          "缺少对测量不确定度在关键特性判定中应用的明确要求支撑",
+          "未覆盖外部实验室服务协议中对设备溯源性的具体约束"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "4.2.4",
+          "Title": "文件控制",
+          "RelationType": "document_rule",
+          "Influence": "规定监视和测量设备控制程序必须经评审批准、版本受控、现场有效，确保程序内容充分适宜且持续适用",
+          "AppliedTo": [
+            "a",
+            "b",
+            "c",
+            "d",
+            "e"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        },
+        {
+          "ClauseNumber": "4.2.5",
+          "Title": "记录控制",
+          "RelationType": "record_rule",
+          "Influence": "规定校准/检定记录、调整记录、确认记录等须标识、贮存、保护、检索、保存期限（至少等于产品寿命期，不少于2年）并受控",
+          "AppliedTo": [
+            "a",
+            "b",
+            "e"
+          ],
+          "ReferenceStatus": "full",
+          "MissingAction": ""
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v4",
+        "ChapterCode": "7",
+        "PDCAPhase": [
+          "P",
+          "D"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "监视和测量设备控制程序",
+            "DocRole": "procedure",
+            "EvidenceRole": "establishment",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖设备范围识别、校准周期设定、溯源路径、标识规则、调整控制、防护要求、失效评估流程及软件确认要求；不包含具体设备清单或单次校准数据。",
+            "NameAliases": [
+              "MSA程序",
+              "计量管理程序",
+              "检测设备管理程序"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "设备识别方法",
+              "校准周期确定依据",
+              "溯源标准等级要求",
+              "标识方式与含义",
+              "调整权限与记录要求",
+              "防护与贮存条件",
+              "软件确认触发条件"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "监视和测量设备台账",
+            "DocRole": "list",
+            "EvidenceRole": "support",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "包含每台受控设备唯一编号、名称、型号、量程、精度、校准周期、当前校准状态、存放位置、责任人；不包含校准原始数据或证书副本。",
+            "NameAliases": [
+              "计量设备清单",
+              "检测设备总表",
+              "MSA设备登记册"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "设备唯一编号",
+              "设备名称与型号",
+              "测量范围与精度",
+              "校准周期",
+              "最近校准日期",
+              "下次校准日期",
+              "校准状态标识",
+              "存放位置"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全设备",
+            "ReportUse": "coverage",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "校准/检定计划",
+            "DocRole": "plan",
+            "EvidenceRole": "implementation",
+            "DocClass": "plan",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "plan_v1",
+            "DocBoundary": "按设备台账生成的周期性校准任务安排，含设备编号、计划校准日期、执行部门、依据标准；不包含实际执行结果或偏差处理。",
+            "NameAliases": [
+              "计量检定计划",
+              "年度校准计划",
+              "设备周期校验计划"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "设备编号",
+              "计划校准日期",
+              "校准依据标准",
+              "执行责任部门",
+              "校准方法编号",
+              "允许误差限"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全设备",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "校准/检定记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "单次校准/检定活动的完整证据，含设备信息、标准器信息、环境条件、原始数据、结论、有效期、操作人、批准人；不包含设备台账或程序。",
+            "NameAliases": [
+              "校准证书",
+              "检定报告",
+              "验证记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "设备唯一编号",
+              "校准日期",
+              "标准器编号及有效期",
+              "环境温湿度",
+              "示值误差/不确定度",
+              "合格判定结论",
+              "有效期截止日",
+              "校准员签字",
+              "批准人签字"
+            ],
+            "Frequency": "每设备每次校准/检定",
+            "Coverage": "全设备",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E5",
+            "Name": "设备校准状态标识",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "实物标签或电子系统中体现的校准状态信息，含有效期、校准日期、状态（合格/限用/停用）；不包含台账或程序。",
+            "NameAliases": [
+              "计量标签",
+              "校准标牌",
+              "状态标识照片"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "设备唯一编号",
+              "校准状态文字",
+              "有效期截止日",
+              "校准日期",
+              "标识方式（贴纸/电子）",
+              "标识位置"
+            ],
+            "Frequency": "每设备每次校准后",
+            "Coverage": "全设备",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E6",
+            "Name": "监视和测量设备防护与调整作业指导书",
+            "DocRole": "work_instruction",
+            "EvidenceRole": "criteria",
+            "DocClass": "work_instruction",
+            "DocScope": "process",
+            "ExtractionDepth": "criteria",
+            "DocProfileKey": "work_instruction_v1",
+            "DocBoundary": "规定设备搬运、清洁、贮存、调整的操作步骤、环境要求、禁止行为及防护措施；不包含校准数据或台账。",
+            "NameAliases": [
+              "设备操作规程",
+              "计量设备使用规范",
+              "MSA设备维护指南"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "适用设备类型",
+              "搬运防护要求",
+              "清洁方法",
+              "贮存环境参数",
+              "允许调整部位",
+              "调整后复检要求",
+              "禁止操作清单"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全设备",
+            "ReportUse": "criteria",
+            "ClauseItemRefs": [
+              "d",
+              "e"
+            ]
+          },
+          {
+            "ItemId": "E7",
+            "Name": "计算机软件确认记录",
+            "DocRole": "record",
+            "EvidenceRole": "implementation",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "针对用于监视和测量的计算机软件（如SPC系统、自动测试软件）开展的首次确认及再确认活动记录，含风险评估、测试用例、结果、结论及批准；不包含通用IT系统运维记录。",
+            "NameAliases": [
+              "软件验证报告",
+              "MSA软件确认档案",
+              "测量软件测试记录"
+            ],
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "软件名称与版本",
+              "用途描述",
+              "风险等级判定",
+              "确认测试项目",
+              "测试结果",
+              "偏差处理",
+              "确认结论",
+              "批准人"
+            ],
+            "Frequency": "首次使用前及更改后",
+            "Coverage": "全相关软件",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e"
+            ]
+          }
+        ],
+        "Dependencies": [
+          "E1→E2,E3,E6",
+          "E2→E3,E4,E5",
+          "E4→E5",
+          "E7→E1"
+        ],
+        "CrossChecks": [
+          "E4中校准依据标准应与E1中规定的溯源路径一致",
+          "E5中标识有效期应与E4中有效期截止日一致",
+          "E7中风险等级应与E1中软件确认要求相适应"
+        ],
+        "AuditorRules": []
+      },
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "7.6是独立可检查的叶子条款，具有完整的要求结构、可验证证据链和明确的判定边界",
+        "ReportUse": [
+          "establishment",
+          "sample",
+          "coverage",
+          "counter",
+          "criteria"
+        ]
+      }
+    }
+  }
+]

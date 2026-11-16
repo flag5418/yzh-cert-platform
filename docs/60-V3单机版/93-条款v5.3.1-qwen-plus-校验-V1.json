@@ -1,0 +1,319 @@
+{
+  "summary": {
+    "clauses": 10,
+    "findings": 41,
+    "doubts": 32,
+    "assemblies": 19,
+    "docfacts": 38,
+    "issues": 28,
+    "counts_by_rule": {
+      "QuoteValidator": 13,
+      "DoubtTypeValidator": 12,
+      "ClauseItemValidator": 3
+    },
+    "counts_by_severity": {
+      "P1": 16,
+      "P0": 9,
+      "P2": 3
+    }
+  },
+  "by_clause": {
+    "10.2.1": {
+      "DoubtTypeValidator": 1
+    },
+    "7.1.6": {
+      "DoubtTypeValidator": 2
+    },
+    "7.2": {
+      "QuoteValidator": 1,
+      "DoubtTypeValidator": 2
+    },
+    "7.5.3.2": {
+      "ClauseItemValidator": 1,
+      "QuoteValidator": 2
+    },
+    "8.2.2": {
+      "QuoteValidator": 2,
+      "DoubtTypeValidator": 2
+    },
+    "8.5.2": {
+      "QuoteValidator": 5,
+      "DoubtTypeValidator": 1
+    },
+    "8.5.4": {
+      "DoubtTypeValidator": 1
+    },
+    "8.6": {
+      "ClauseItemValidator": 1,
+      "QuoteValidator": 1
+    },
+    "9.1.2": {
+      "DoubtTypeValidator": 1
+    },
+    "9.3.2": {
+      "QuoteValidator": 2,
+      "ClauseItemValidator": 1,
+      "DoubtTypeValidator": 2
+    }
+  },
+  "issues": [
+    {
+      "clause": "7.2",
+      "object_type": "finding",
+      "object_id": "F4",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 少于 10 字，信息量不足",
+      "evidence": "| 1 |  |  |  |  |  |  |  |  |  |  |"
+    },
+    {
+      "clause": "7.2",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "report_only 但关联 finding 不是 report 类",
+      "evidence": "report_only"
+    },
+    {
+      "clause": "7.2",
+      "object_type": "doubt",
+      "object_id": "D4",
+      "rule": "DoubtTypeValidator",
+      "severity": "P2",
+      "message": "inconsistent_person 需人工确认是否为不同角色/职责，而不是人员矛盾",
+      "evidence": "inconsistent_person"
+    },
+    {
+      "clause": "7.5.3.2",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['main']；允许 ['a', 'b', 'c', 'd']",
+      "evidence": [
+        "main"
+      ]
+    },
+    {
+      "clause": "7.5.3.2",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "常州科斯亚自动化科技有限公司\n\nQMS程序文件\n\n文件化信息控制程序\n\n# 1 目的\n本标准规定了文件化信息控制的要求，以确保与标准相关的文件信息都得到有效控制"
+    },
+    {
+      "clause": "7.5.3.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "| 1 | 管理手册\\n程序文件汇编\\n三级文件汇编 | KSY-QMS-M-01\\nKSY-QMS-P-01--KSY-QMS-P-25\\nKSY-QMS-W"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 少于 10 字，信息量不足",
+      "evidence": "符合"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 少于 10 字，信息量不足",
+      "evidence": "具备能力完成合同"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "doubt",
+      "object_id": "D1",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "blank_template 但关联 finding 不是 template_only",
+      "evidence": "blank_template"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P2",
+      "message": "inconsistent_person 需人工确认是否为不同角色/职责，而不是人员矛盾",
+      "evidence": "inconsistent_person"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "常州科斯亚自动化科技有限公司\\nQMS程序文件\\n产品标识和可追溯性控制程序"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "客户名称： | 日期： | 序号 | 订单编号 | 物料名称规格 | 单位 | 送货数量 | 单价 | 金额 | 备注"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "入库单位： | 日期： | 序号 | 订单编号 | 物料名称规格 | 单位 | 入库数量 | 单价 | 金额 | 备注"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F4",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "收货单位： | 发货日期: | 收货地址： | 收货人： | 电话: | 邮编: | 订单号码 | 品名 | 规格 | 数量（箱） | 重量（吨） | 备注"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "领料部门： | 日期： | 序号 | 订单编号 | 物料名称规格 | 单位 | 领料数量 | 单价 | 金额 | 备注"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "missing_signature 但关联文档整体是空白模板；应判 blank_template",
+      "evidence": "missing_signature"
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "doubt",
+      "object_id": "D1",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "blank_template 但关联 finding 不是 template_only",
+      "evidence": "blank_template"
+    },
+    {
+      "clause": "8.6",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['main']；允许 ['a', 'b']",
+      "evidence": [
+        "main"
+      ]
+    },
+    {
+      "clause": "8.6",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 少于 10 字，信息量不足",
+      "evidence": "检验员 |  | 日期 |  |  |  | 审核 |  |  | 日期 |  |  |  |"
+    },
+    {
+      "clause": "9.1.2",
+      "object_type": "doubt",
+      "object_id": "D2",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "date_conflict 少于两个不同日期",
+      "evidence": "date_conflict"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 含省略号，不是连续原文",
+      "evidence": "我们在公司质量管理体系策划时，对公司质量管理体系文件的模式、数量、内容等进行了充分的考虑。……管代：胥加娟 2026.9.26"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "我们在公司质量管理体系策划时，对公司质量管理体系文件的模式、数量、内容等进行了充分的考虑。……管代：胥加娟 2026.9.26"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['main']；允许 ['a', 'b', 'c', 'd', 'e', 'f']",
+      "evidence": [
+        "main"
+      ]
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "doubt",
+      "object_id": "D1",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "report_only 但关联 finding 不是 report 类",
+      "evidence": "report_only"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "doubt",
+      "object_id": "D2",
+      "rule": "DoubtTypeValidator",
+      "severity": "P2",
+      "message": "inconsistent_person 需人工确认是否为不同角色/职责，而不是人员矛盾",
+      "evidence": "inconsistent_person"
+    },
+    {
+      "clause": "10.2.1",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "missing_signature 但关联文档整体是空白模板；应判 blank_template",
+      "evidence": "missing_signature"
+    },
+    {
+      "clause": "7.1.6",
+      "object_type": "doubt",
+      "object_id": "D1",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "blank_template 但关联 finding 不是 template_only",
+      "evidence": "blank_template"
+    },
+    {
+      "clause": "7.1.6",
+      "object_type": "doubt",
+      "object_id": "D2",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "date_conflict 少于两个不同日期",
+      "evidence": "date_conflict"
+    }
+  ]
+}

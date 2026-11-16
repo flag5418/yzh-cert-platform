@@ -1,0 +1,517 @@
+[
+  {
+    "_meta": {
+      "clause": "8.2.4",
+      "title": "内部审核",
+      "status": "JSON_OK"
+    },
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.2.4",
+        "ClauseTitle": "内部审核",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款规定组织必须系统性地实施内部审核，以验证质量管理体系的符合性（策划安排、标准、法规、组织要求）和有效性（实施与保持状态）；不覆盖外部审核、监管检查或过程监视活动。",
+        "ParentClause": "8.2",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "符合策划并形成文件的安排、本文件的要求以及组织所确定的质量管理体系要求和适用的法规要求",
+            "EvidenceHint": "需通过审核计划、检查表、不合格报告等证据交叉验证符合性"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "得到有效实施和保持",
+            "EvidenceHint": "需通过审核发现的问题分布、纠正措施闭环、管理者评审输入等综合判断"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "测量、分析和改进",
+        "ChapterIntent": "验证质量管理体系与产品是否符合要求，处置不合格，分析数据并持续改进",
+        "ChapterEvidenceFocus": [
+          "内审包（计划/签到/检查表/不合格报告/报告）",
+          "产品检验与放行记录",
+          "不合格品处置记录",
+          "数据分析记录",
+          "纠正与预防措施记录"
+        ],
+        "ClauseRoleInChapter": "作为‘C（Check）’与‘A（Act）’双阶段核心验证机制，为第8章提供体系运行真实性的第一手客观证据，并驱动8.3不合格控制、8.5纠正/预防措施及管理评审输入，是数据驱动改进的起点。",
+        "ChapterGap": []
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "4.2.5",
+          "Title": "记录控制",
+          "RelationType": "record_rule",
+          "Influence": "规定审核记录的标识、贮存、保护、检索、保存期限和处置要求，直接约束8.2.4中‘应保留审核和审核结果的记录’的执行方式与合规底线。",
+          "AppliedTo": [
+            "审核记录",
+            "审核结果记录"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "C",
+          "A"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "内部审核程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "规定内部审核的职责、策划、实施、记录、报告及审核员选择与独立性要求；不包含具体审核计划或检查表内容。",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核职责分配",
+              "审核方案策划方法",
+              "审核员资格与回避要求",
+              "审核结果报告路径",
+              "纠正措施跟踪机制"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": []
+          },
+          {
+            "ItemId": "E2",
+            "Name": "年度内部审核方案",
+            "DocClass": "plan",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "plan_v1",
+            "DocBoundary": "覆盖审核准则、范围、时间间隔、方法及资源分配；不包含单次审核的具体检查表或签到记录。",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核周期设定依据",
+              "过程/区域重要性评估说明",
+              "以往审核结果应用记录",
+              "审核准则清单（含法规引用）",
+              "审核频次与覆盖节奏"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全部门",
+            "ReportUse": "coverage",
+            "ClauseItemRefs": []
+          },
+          {
+            "ItemId": "E3",
+            "Name": "单次内部审核检查表",
+            "DocClass": "work_instruction",
+            "DocScope": "process",
+            "ExtractionDepth": "criteria",
+            "DocProfileKey": "work_instruction_v1",
+            "DocBoundary": "依据审核准则逐项设计检查要点，用于验证特定过程或区域的符合性与有效性；不包含审核发现结论或整改信息。",
+            "EvidenceRole": "criteria",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "被审核过程/区域名称",
+              "对应条款号（如7.5.1、8.2.6）",
+              "检查方法（查/问/看/测）",
+              "判定准则（符合/不符合/观察项）",
+              "抽样逻辑说明"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "抽样",
+            "ReportUse": "criteria",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "内部审核首末次会议记录",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录会议时间、地点、出席人员、议程、关键陈述及确认事项；不包含审核发现细节或整改承诺。",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "会议日期与时段",
+              "主持人与参会者签名",
+              "首会：审核范围与方法确认",
+              "末会：初步结论通报",
+              "受审核方确认声明"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全事件",
+            "ReportUse": "counter",
+            "ClauseItemRefs": []
+          },
+          {
+            "ItemId": "E5",
+            "Name": "内部审核不合格报告",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "针对每个不合格项单独记录，含事实描述、条款依据、严重程度、责任部门及整改时限；不包含纠正措施验证结果。",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "不合格事实描述",
+              "违反条款号（如8.2.4a）",
+              "不符合类型（体系/实施/保持）",
+              "责任部门",
+              "整改完成时限"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全事件",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E6",
+            "Name": "内部审核报告",
+            "DocClass": "report",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "report_v1",
+            "DocBoundary": "汇总当次审核总体结论、覆盖范围、符合性评价、有效性评价、主要发现及改进建议；不替代不合格报告。",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核目的与依据",
+              "审核范围与准则",
+              "审核组成员",
+              "总体符合性结论（a项）",
+              "总体有效性评价（b项）",
+              "趋势性问题摘要"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全事件",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E7",
+            "Name": "审核员能力与授权记录",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "列明所有内审员姓名、资质证明、培训记录、授权范围及回避声明；不包含单次审核任务指派记录。",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "审核员姓名",
+              "教育/经验背景",
+              "内审培训证书编号",
+              "授权审核范围（过程/条款）",
+              "无审核自身工作声明"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全部门",
+            "ReportUse": "support",
+            "ClauseItemRefs": []
+          }
+        ],
+        "Dependencies": [
+          "E1 → E2, E3, E4, E5, E6, E7",
+          "E2 → E3, E4, E5, E6",
+          "E7 → E3, E4, E5"
+        ],
+        "CrossChecks": [
+          "E5与E6中不合格项数量及条款引用一致性",
+          "E4末会记录与E5/E6中问题通报一致性",
+          "E7中授权范围与E3检查表覆盖过程匹配性"
+        ],
+        "Gaps": []
+      },
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "8.2.4为可独立验证的叶子条款，具备完整证据链要求，无需合并至父条款报告。",
+        "ReportUse": [
+          "counter",
+          "coverage",
+          "combination"
+        ]
+      }
+    }
+  },
+  {
+    "_meta": {
+      "clause": "8.3.2",
+      "title": "交付前发现不合格品的响应措施",
+      "status": "JSON_OK"
+    },
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.3.2",
+        "ClauseTitle": "交付前发现不合格品的响应措施",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款规范组织在产品交付前（含进货、过程、成品检验阶段）识别出不合格品后，必须采取的三种法定处置路径及其管控要求；不覆盖交付后发现的不合格（由8.3.3管辖），也不规定不合格判定准则（由8.2.6及7.x相关条款规定）。",
+        "ParentClause": "8.3",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "disposition_path",
+            "Text": "采取措施以消除已发现的不合格",
+            "EvidenceHint": "对应返工/返修活动的实施与验证记录"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "disposition_path",
+            "Text": "采取措施以防止其原预期的使用或应用",
+            "EvidenceHint": "对应隔离、报废、降级转用等物理/状态控制记录"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "disposition_path",
+            "Text": "授权让步使用、放行或接收",
+            "EvidenceHint": "对应让步接收的书面审批、法规符合性声明及授权人身份记录"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "测量、分析和改进",
+        "ChapterIntent": "验证质量管理体系与产品是否符合要求，处置不合格，分析数据并持续改进",
+        "ChapterEvidenceFocus": [
+          "内审包（计划/签到/检查表/不合格报告/报告）",
+          "产品检验与放行记录",
+          "不合格品处置记录",
+          "数据分析记录",
+          "纠正与预防措施记录"
+        ],
+        "ClauseRoleInChapter": "作为‘不合格品控制’子过程的核心执行条款，承接8.3.1总则要求，将不合格处置从原则性规定落地为交付前场景下的可操作路径，并为8.5纠正措施提供输入来源；其记录输出直接支撑8.4数据分析和8.5改进决策。",
+        "ChapterGap": [
+          "缺少对交付前不合格趋势分析的强制要求（需结合8.4补充）",
+          "未明确不合格品处置结果对设计开发更改（7.3.9）或采购控制（7.4.1）的触发机制"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "4.2.5",
+          "Title": "记录控制",
+          "RelationType": "record_rule",
+          "Influence": "规定让步接收记录的标识、贮存、保护、检索、保存期限和处置控制要求，且明确保存期限不得少于产品寿命期（至少2年）",
+          "AppliedTo": [
+            "让步接收审批记录",
+            "授权让步人员身份记录"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "C",
+          "A"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "返工/返修记录",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录针对交付前不合格品所实施的返工或返修活动、验证结果及放行决定；不包含设计更改或工艺参数调整的批准文件。",
+            "EvidenceRole": "implementation",
+            "Required": false,
+            "Condition": "选择a)路径时",
+            "ExpectedFields": [
+              "不合格品批次号",
+              "不合格描述",
+              "返工/返修方法依据",
+              "执行人与日期",
+              "验证方法与结果",
+              "批准放行人与日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全批次",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "a"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "报废/隔离/转用记录",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录交付前不合格品的物理处置方式（如报废、隔离、降级转用）、处置依据、责任人及状态变更时间；不包含库存台账更新日志。",
+            "EvidenceRole": "implementation",
+            "Required": false,
+            "Condition": "选择b)路径时",
+            "ExpectedFields": [
+              "不合格品批次号",
+              "不合格描述",
+              "处置方式（报废/隔离/转用）",
+              "处置依据（如程序条款）",
+              "处置执行人与日期",
+              "状态确认人与日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全批次",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "让步接收审批记录",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录交付前不合格品让步使用的书面审批信息，包括不合格详情、让步理由、法规符合性声明、批准权限说明及最终批准结论；不包含原始检验数据。",
+            "EvidenceRole": "implementation",
+            "Required": false,
+            "Condition": "选择c)路径时",
+            "ExpectedFields": [
+              "不合格品批次号",
+              "不合格描述",
+              "让步使用理由",
+              "适用法规条款引用",
+              "授权让步人员姓名与职务",
+              "批准日期",
+              "让步有效期（如适用）"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全批次",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "不合格品处置程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "规定交付前不合格品的识别、评审、处置路径选择、审批权限、记录要求及让步接收控制流程；不包含具体检验标准或抽样方案。",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "处置路径定义（a/b/c）",
+              "让步接收审批层级",
+              "法规符合性审查要求",
+              "记录保存要求",
+              "职责分配"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": []
+          },
+          {
+            "ItemId": "E5",
+            "Name": "让步接收授权人员清单",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "列明经组织正式授权、具备让步接收审批资格的人员姓名、职务、授权范围及有效期；不包含培训记录或能力评估证据。",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "授权人员姓名",
+              "职务",
+              "授权权限（产品类别/不合格类型）",
+              "授权生效日期",
+              "授权失效日期",
+              "签发部门"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全系统",
+            "ReportUse": "support",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E6",
+            "Name": "交付前检验规程",
+            "DocClass": "work_instruction",
+            "DocScope": "process",
+            "ExtractionDepth": "criteria",
+            "DocProfileKey": "work_instruction_v1",
+            "DocBoundary": "规定进货、过程、成品各阶段交付前检验的项目、方法、接收准则及不合格判定规则；不包含设备校准或环境监控要求。",
+            "EvidenceRole": "criteria",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "检验阶段（进货/过程/成品）",
+              "检验项目",
+              "抽样方案",
+              "接收准则",
+              "不合格判定依据",
+              "记录要求"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全工序",
+            "ReportUse": "criteria",
+            "ClauseItemRefs": []
+          }
+        ],
+        "Dependencies": [
+          "E4 → E1/E2/E3/E5",
+          "E6 → E1/E2/E3"
+        ],
+        "CrossChecks": [
+          "E3与E5中授权人员信息应一致",
+          "E1/E2/E3中批次号应与E6覆盖的检验批次可追溯"
+        ],
+        "Gaps": [
+          "未要求记录不合格原因分析（需结合8.5.2）",
+          "未强制要求对让步接收产品进行特殊标识（需结合7.5.8）"
+        ]
+      },
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "8.3.2是独立可检查的叶子条款，规定交付前不合格品处置的三类法定路径及让步接收的强管控条件，具备完整检查逻辑闭环。",
+        "ReportUse": [
+          "counter",
+          "criteria",
+          "support"
+        ]
+      }
+    }
+  }
+]

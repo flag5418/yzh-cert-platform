@@ -1,0 +1,2088 @@
+[
+  {
+    "clause": "7.2",
+    "file_code": "28159ee58dac4874ade2295992abd424",
+    "file_name": "09人力资源控制程序.doc",
+    "path": "/tmp/cert9001_md2/28159ee58dac4874ade2295992abd424.md",
+    "chars": 4245,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "",
+      "KeyFields": [],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 3314,
+      "completion_tokens": 44,
+      "prompt_tokens": 3270,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.2",
+    "file_code": "7e7b7221fde146c1b49158f3b3f743bd",
+    "file_name": "01-年度培训计划表.docx",
+    "path": "/tmp/cert9001_md2/7e7b7221fde146c1b49158f3b3f743bd.md",
+    "chars": 1038,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "plan",
+      "CoreRole": "",
+      "KeyFields": [
+        "培训内容",
+        "培训对象",
+        "计划时间",
+        "责任部门",
+        "培训教师",
+        "培训方式",
+        "考核方法"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "培训内容": "ISO基础知识、GB/T19001-2016标准",
+            "培训对象": "全员",
+            "计划时间": "2026年6月",
+            "责任部门": "管理者代表",
+            "培训教师": "顾问师",
+            "培训方式": "授课",
+            "考核方法": "问答"
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "培训内容": "管理手册、程序文件",
+            "培训对象": "管理人员",
+            "计划时间": "2026年7月",
+            "责任部门": "管理者代表",
+            "培训教师": "顾问师",
+            "培训方式": "授课",
+            "考核方法": "问答"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "培训内容": "内审员培训",
+            "培训对象": "管理人员",
+            "计划时间": "2026年8月",
+            "责任部门": "管理者代表",
+            "培训教师": "顾问师",
+            "培训方式": "授课",
+            "考核方法": "口头提问"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 1534,
+      "completion_tokens": 255,
+      "prompt_tokens": 1279,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.2",
+    "file_code": "a739a0860e2b4d8bb868b31200826ec7",
+    "file_name": "03特殊岗位人员名单.docx",
+    "path": "/tmp/cert9001_md2/a739a0860e2b4d8bb868b31200826ec7.md",
+    "chars": 886,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "list",
+      "CoreRole": "",
+      "KeyFields": [
+        "序号",
+        "姓名",
+        "性别",
+        "所在部门",
+        "岗位名称",
+        "资格领域",
+        "证书级别",
+        "证书编号",
+        "发证时间",
+        "期限",
+        "备注"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 1155,
+      "completion_tokens": 85,
+      "prompt_tokens": 1070,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.2",
+    "file_code": "5cd2c06b1612435c9d620006b4db56e1",
+    "file_name": "04员工岗位能力评价表.docx",
+    "path": "/tmp/cert9001_md2/5cd2c06b1612435c9d620006b4db56e1.md",
+    "chars": 3246,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "姓名",
+        "业务知识",
+        "管理能力",
+        "责任意识",
+        "考核结论",
+        "考核人",
+        "考核时间"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "序号": "",
+            "姓名": "许小琴",
+            "业务知识": "■强，能够胜任<br>□需要培训",
+            "管理能力": "■强，满足需要<br>□需要锻炼",
+            "责任意识": "■强，有责任感<br>□需要加强",
+            "考核结论": "■能够胜任该岗位<br>□不能胜任，需要培训（）另聘（）",
+            "考核人": "潘明海",
+            "考核时间": "2026.6.10"
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "序号": "",
+            "姓名": "潘烨",
+            "业务知识": "■强，能够胜任<br>□需要培训",
+            "管理能力": "■强，满足需要<br>□需要锻炼",
+            "责任意识": "■强，有责任感<br>□需要加强",
+            "考核结论": "■能够胜任该岗位<br>□不能胜任，需要培训（）另聘（）",
+            "考核人": "潘明海",
+            "考核时间": "2026.6.10"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "序号": "",
+            "姓名": "张丹",
+            "业务知识": "■强，能够胜任<br>□需要培训",
+            "管理能力": "■强，满足需要<br>□需要锻炼",
+            "责任意识": "■强，有责任感<br>□需要加强",
+            "考核结论": "■能够胜任该岗位<br>□不能胜任，需要培训（）另聘（）",
+            "考核人": "潘明海",
+            "考核时间": "2026.6.10"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 3197,
+      "completion_tokens": 481,
+      "prompt_tokens": 2716,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.2",
+    "file_code": "03a520f747e7480791eae65da9948efe",
+    "file_name": "05员工三级安全教育培训记录表.docx",
+    "path": "/tmp/cert9001_md2/03a520f747e7480791eae65da9948efe.md",
+    "chars": 870,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "姓名",
+        "性别",
+        "所在部门",
+        "培训级别",
+        "教育内容",
+        "授课人<br>授课时间",
+        "考核成绩",
+        "接受教育人签名"
+      ],
+      "FillStatus": "partial",
+      "SampleRows": [
+        {
+          "RowRef": "I级",
+          "Values": {
+            "姓名": "马啸天",
+            "性别": "男",
+            "所在部门": "生产部",
+            "培训级别": "I级",
+            "教育内容": "1、企业概况、各部门之间生产关系，行业生产特点；2、安全生产方针、政策、法规、本企业安全生产、劳保方面的规章制度；3、以《安全生产法》和《工业企业通用安全知识》为重点讲解；4、讲解企业内外典型安全案例教训；5、事故急救防护知识。",
+            "授课人<br>授课时间": "胥加娟2026-07-22",
+            "考核成绩": "95",
+            "接受教育人签名": "马啸天"
+          }
+        },
+        {
+          "RowRef": "II级",
+          "Values": {
+            "姓名": "马啸天",
+            "性别": "男",
+            "所在部门": "生产部",
+            "培训级别": "II级",
+            "教育内容": "1、本部门简要工作流程、工作特点；2、本部门生产中的主要危险因素、安全生产方面要注意的事项；3、具体讲解本部门有关安全生产的规章制度；4、可能发生的安全事故及预防措施。",
+            "授课人<br>授课时间": "黄勇2026-07-21",
+            "考核成绩": "93",
+            "接受教育人签名": "马啸天"
+          }
+        },
+        {
+          "RowRef": "III级",
+          "Values": {
+            "姓名": "马啸天",
+            "性别": "男",
+            "所在部门": "生产部",
+            "培训级别": "III级",
+            "教育内容": "1、根据具体岗位进行安全操作规程和正确使用劳动保护用品教育；2、现场讲解岗位机械（工具）结构、性能、操作要领、安全附件的作用；3、可能出现的不正常情况的判断和处理，发生事故的应急措施和正确处理方法；4、本岗位或同类岗位曾发生事故的教训。",
+            "授课人<br>授课时间": "黄勇2026-07-20",
+            "考核成绩": "96",
+            "接受教育人签名": "马啸天"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 1732,
+      "completion_tokens": 581,
+      "prompt_tokens": 1151,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.2",
+    "file_code": "9e70f12e80ef44af9c6bf0d875896141",
+    "file_name": "培训记录.docx",
+    "path": "/tmp/cert9001_md2/9e70f12e80ef44af9c6bf0d875896141.md",
+    "chars": 7502,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "培训课程",
+        "培训对象",
+        "培训时间",
+        "培训地点",
+        "姓名",
+        "部门",
+        "职位",
+        "签到",
+        "考核方式",
+        "成绩",
+        "有效性评价",
+        "评价人",
+        "评价日期"
+      ],
+      "FillStatus": "partial",
+      "SampleRows": [
+        {
+          "RowRef": "ISO基础知识、GB/T19001-2016标准 培训行第1行",
+          "Values": {
+            "序号": "1",
+            "姓名": "潘明海",
+            "部门": "管理层",
+            "职位": "总经理",
+            "签到": "",
+            "考核方式": "口试",
+            "成绩": "合格"
+          }
+        },
+        {
+          "RowRef": "管理手册、程序文件 培训行第4行",
+          "Values": {
+            "序号": "4",
+            "姓名": "胥加娟",
+            "部门": "采购部",
+            "职位": "经理",
+            "签到": "",
+            "考核方式": "口试",
+            "成绩": "合格"
+          }
+        },
+        {
+          "RowRef": "生产作业指导书 培训行第1.1行",
+          "Values": {
+            "序号": "1. 1",
+            "姓名": "",
+            "部门": "生产部",
+            "职位": "员工",
+            "签到": "",
+            "考核方式": "口试",
+            "成绩": "合格"
+          }
+        }
+      ],
+      "Coverage": "抽样"
+    },
+    "usage": {
+      "total_tokens": 5765,
+      "completion_tokens": 328,
+      "prompt_tokens": 5437,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "file_code": "3b7a85e9ebf7470fb7fe791c70357a70",
+    "file_name": "11文件化信息控制程序.doc",
+    "path": "/tmp/cert9001_md2/3b7a85e9ebf7470fb7fe791c70357a70.md",
+    "chars": 4290,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件发布日期",
+        "文件实施日期",
+        "文件编号",
+        "版本",
+        "受控状态",
+        "编制",
+        "审核",
+        "批准",
+        "修订记录",
+        "目的",
+        "范围",
+        "职责",
+        "程序内容"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 3557,
+      "completion_tokens": 91,
+      "prompt_tokens": 3466,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "file_code": "af7533c12cb24e2f9efc08343cb66424",
+    "file_name": "01受控文件清单.doc",
+    "path": "/tmp/cert9001_md2/af7533c12cb24e2f9efc08343cb66424.md",
+    "chars": 2772,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "list",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "文件名称",
+        "文件分类",
+        "版本",
+        "发布日期",
+        "数量",
+        "保存期限"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "文件编号": "KSY-QMS-M-01",
+            "文件名称": "质量手册",
+            "文件分类": "一阶",
+            "版本": "A/0",
+            "发布日期": "2026.6.10",
+            "数量": "1",
+            "保存期限": "长期"
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "文件编号": "KSY-QMS-P-01",
+            "文件名称": "组织环境相关方需求期望控制程序",
+            "文件分类": "二阶",
+            "版本": "A/0",
+            "发布日期": "2026.6.10",
+            "数量": "1",
+            "保存期限": "长期"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "文件编号": "KSY-QMS-P-02",
+            "文件名称": "质量目标管理程序",
+            "文件分类": "二阶",
+            "版本": "A/0",
+            "发布日期": "2026.6.10",
+            "数量": "1",
+            "保存期限": "长期"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2821,
+      "completion_tokens": 355,
+      "prompt_tokens": 2466,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "file_code": "1eff83f1650b4b0a9cf3e9b2d019f019",
+    "file_name": "02-1文件发放回收一览表.docx",
+    "path": "/tmp/cert9001_md2/1eff83f1650b4b0a9cf3e9b2d019f019.md",
+    "chars": 1397,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "list",
+      "CoreRole": "",
+      "KeyFields": [
+        "序号",
+        "文件名称",
+        "文件编号",
+        "分发号",
+        "版本",
+        "部门",
+        "签收",
+        "日期",
+        "回收记录",
+        "备注"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "序号": "1",
+            "文件名称": "管理手册\n程序文件汇编\n三级文件汇编",
+            "文件编号": "KSY-QMS-M-01\nKSY-QMS-P-01--KSY-QMS-P-25\nKSY-QMS-WI-01--KSY-QMS-WI-13",
+            "分发号": "01",
+            "版本": "A/0",
+            "部门": "总经理",
+            "签收": "潘明海",
+            "日期": "2026.6.10",
+            "回收记录": "",
+            "备注": "电子版"
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "序号": "2",
+            "文件名称": "管理手册\n程序文件汇编\n三级文件汇编",
+            "文件编号": "KSY-QMS-M-01\nKSY-QMS-P-01--KSY-QMS-P-25\nKSY-QMS-WI-01--KSY-QMS-WI-13",
+            "分发号": "02",
+            "版本": "A/0",
+            "部门": "管理者代表",
+            "签收": "胥加娟",
+            "日期": "2026.6.10",
+            "回收记录": "",
+            "备注": "电子版"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "序号": "3",
+            "文件名称": "管理手册\n程序文件汇编\n三级文件汇编",
+            "文件编号": "KSY-QMS-M-01\nKSY-QMS-P-01--KSY-QMS-P-25\nKSY-QMS-WI-01--KSY-QMS-WI-13",
+            "分发号": "03",
+            "版本": "A/0",
+            "部门": "综合部",
+            "签收": "张丹",
+            "日期": "2026.6.10",
+            "回收记录": "",
+            "备注": "电子版"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2090,
+      "completion_tokens": 575,
+      "prompt_tokens": 1515,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "file_code": "b9002d5bbe804758810bf9a8ce0d3428",
+    "file_name": "03文件借阅复制记录表.doc",
+    "path": "/tmp/cert9001_md2/b9002d5bbe804758810bf9a8ce0d3428.md",
+    "chars": 446,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "序号",
+        "文件名称",
+        "借阅日期",
+        "复制份数",
+        "借阅复制人",
+        "领导签字",
+        "归还日期",
+        "备注"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "序号": "1",
+            "文件名称": "管理手册",
+            "借阅日期": "2026-07-15",
+            "复制份数": "1",
+            "借阅复制人": "胥加娟",
+            "领导签字": "潘明海",
+            "归还日期": "2026-07-19",
+            "备注": "业务用"
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "序号": "2",
+            "文件名称": "程序文件",
+            "借阅日期": "2026-07-15",
+            "复制份数": "1",
+            "借阅复制人": "胥加娟",
+            "领导签字": "潘明海",
+            "归还日期": "2026-07-19",
+            "备注": "业务用"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "序号": "3",
+            "文件名称": "营业执照",
+            "借阅日期": "2026-07-15",
+            "复制份数": "1",
+            "借阅复制人": "胥加娟",
+            "领导签字": "潘明海",
+            "归还日期": "2026-07-19",
+            "备注": "业务用"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 1275,
+      "completion_tokens": 413,
+      "prompt_tokens": 862,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "file_code": "a9bc004e1e564cbabeb7797e50815509",
+    "file_name": "04文件更改申请通知单.doc",
+    "path": "/tmp/cert9001_md2/a9bc004e1e564cbabeb7797e50815509.md",
+    "chars": 237,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "文件名称",
+        "更改申报部门",
+        "更改时间",
+        "更改部分",
+        "更改原因",
+        "批准人",
+        "审核人",
+        "申请人"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 803,
+      "completion_tokens": 80,
+      "prompt_tokens": 723,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "file_code": "a3dacd1e5ded48f6a2eb7052ed44c3ec",
+    "file_name": "05文件记录销毁清单.doc",
+    "path": "/tmp/cert9001_md2/a3dacd1e5ded48f6a2eb7052ed44c3ec.md",
+    "chars": 694,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "list",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件记录编号",
+        "文件记录名称",
+        "销毁日期",
+        "数量",
+        "记录时段",
+        "申请人",
+        "批准人",
+        "执行人",
+        "备注"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 1105,
+      "completion_tokens": 79,
+      "prompt_tokens": 1026,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "file_code": "8778c1d7e94547279ba8623d1b6aa7e4",
+    "file_name": "06外来文件清单.docx",
+    "path": "/tmp/cert9001_md2/8778c1d7e94547279ba8623d1b6aa7e4.md",
+    "chars": 5906,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "list",
+      "CoreRole": "",
+      "KeyFields": [
+        "序号",
+        "类别/发文单位",
+        "文件编号",
+        "文件名称",
+        "状态"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "序号": "1",
+            "类别/发文单位": "基本法",
+            "文件编号": "第十三届全国人民代表大会常务委员会第七次会议通过",
+            "文件名称": "中华人民共和国产品质量法",
+            "状态": "现行有效"
+          }
+        },
+        {
+          "RowRef": "11",
+          "Values": {
+            "序号": "11",
+            "类别/发文单位": "纲领性法规",
+            "文件编号": "",
+            "文件名称": "2017.10.31 总局办公厅公开征求《〈医疗器械监督管理条例〉修正案（草案征求意见稿）》意见",
+            "状态": "现行有效"
+          }
+        },
+        {
+          "RowRef": "70",
+          "Values": {
+            "序号": "70",
+            "类别/发文单位": "纲领性法规",
+            "文件编号": "国务院令第752号",
+            "文件名称": "中华人民共和国医疗器械监督管理条例（2021版）",
+            "状态": "现行有效"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 4809,
+      "completion_tokens": 277,
+      "prompt_tokens": 4532,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "file_code": "4ec0f3ceaf7c4cfb914e197cc096df3b",
+    "file_name": "07记录清单.docx",
+    "path": "/tmp/cert9001_md2/4ec0f3ceaf7c4cfb914e197cc096df3b.md",
+    "chars": 2401,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "list",
+      "CoreRole": "",
+      "KeyFields": [
+        "记录编号",
+        "记录名称",
+        "保存期限",
+        "备注"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "2",
+          "Values": {
+            "序号": "",
+            "记录编号": "KSY-QMS-P-01-01",
+            "记录名称": "外部因素识别监视评价总清单",
+            "保存期限": "3年",
+            "备注": ""
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "序号": "",
+            "记录编号": "KSY-QMS-P-01-02",
+            "记录名称": "内部因素识别监视评价总清单",
+            "保存期限": "3年",
+            "备注": ""
+          }
+        },
+        {
+          "RowRef": "4",
+          "Values": {
+            "序号": "",
+            "记录编号": "KSY-QMS-P-01-03",
+            "记录名称": "相关方的需求及期望识别及评审表",
+            "保存期限": "3年",
+            "备注": ""
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2365,
+      "completion_tokens": 206,
+      "prompt_tokens": 2159,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.2.2",
+    "file_code": "9ba224b1c6db4e6ab2fc3567c64fa024",
+    "file_name": "14产品或服务要求控制程序.doc",
+    "path": "/tmp/cert9001_md2/9ba224b1c6db4e6ab2fc3567c64fa024.md",
+    "chars": 3136,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "受控状态",
+        "编制",
+        "审核",
+        "批准",
+        "目的",
+        "范围",
+        "职责",
+        "工作程序"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2617,
+      "completion_tokens": 77,
+      "prompt_tokens": 2540,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.2.2",
+    "file_code": "d9aced0ed67c4c0989b0468373539340",
+    "file_name": "01合同评审记录表.doc",
+    "path": "/tmp/cert9001_md2/d9aced0ed67c4c0989b0468373539340.md",
+    "chars": 2429,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "顾客名称",
+        "合同编号",
+        "合同要求内容摘要",
+        "评审意见",
+        "评审结论",
+        "评审人",
+        "评审日期"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "顾客名称": "常州摇旗精密磨具有限公司",
+            "合同编号": "",
+            "合同要求内容摘要": "乙方提供的内容包括：\n本合同所涉及的皮缝钉的规格、数量、价格、技术标准和交付日期等相关约定见附件；有关的技术指标、价格、提供方式等相关约定见附件。",
+            "评审意见": [
+              "合同内容全面，明确，包括交付及服务要求",
+              "未有含糊，已达成一致之处",
+              "符合",
+              "安全要求明确，公司有能力达到",
+              "具备能力完成合同"
+            ],
+            "评审结论": "公司完全可以完成该项目，可以签订此合同，本项目保质保量完成。",
+            "评审人": "潘明海、黄勇 、胥加娟、曲天骄",
+            "评审日期": "2026.3. 16"
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "顾客名称": "江苏孜航精密五金有限公司",
+            "合同编号": "",
+            "合同要求内容摘要": "乙方提供的内容包括：\n本合同所涉及的钛钉的规格、数量、价格、技术标准和交付日期等相关约定见附件；有关的技术指标、价格、提供方式等相关约定见附件。",
+            "评审意见": [
+              "合同内容全面，明确，包括交付及服务要求",
+              "未有含糊，已达成一致之处",
+              "符合",
+              "安全要求明确，公司有能力达到",
+              "具备能力完成合同"
+            ],
+            "评审结论": "公司完全可以完成该项目，可以签订此合同，本项目保质保量完成。",
+            "评审人": "潘明海、黄勇 、胥加娟、曲天骄",
+            "评审日期": "2026.4.19"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "顾客名称": "常州爱唯康精密机械科技有限公司",
+            "合同编号": "",
+            "合同要求内容摘要": "乙方提供的内容包括：\n本合同所涉及的吻合钉的规格、数量、价格、技术标准和交付日期等相关约定见附件；有关的技术指标、价格、提供方式等相关约定见附件。",
+            "评审意见": [
+              "合同内容全面，明确，包括交付及服务要求",
+              "未有含糊，已达成一致之处",
+              "符合",
+              "安全要求明确，公司有能力达到",
+              "具备能力完成合同"
+            ],
+            "评审结论": "公司完全可以完成该项目，可以签订此合同，本项目保质保量完成。",
+            "评审人": "潘明海、黄勇 、胥加娟、曲天骄",
+            "评审日期": "2026.5.11"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2616,
+      "completion_tokens": 679,
+      "prompt_tokens": 1937,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.5.2",
+    "file_code": "72adc203708845f0b0933c6f20e7fe62",
+    "file_name": "20产品标识和可追溯性控制程序.doc",
+    "path": "/tmp/cert9001_md2/72adc203708845f0b0933c6f20e7fe62.md",
+    "chars": 1866,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "文件发布日期",
+        "文件实施日期",
+        "受控状态",
+        "编制",
+        "审核",
+        "批准",
+        "目的",
+        "范围",
+        "职责",
+        "程序内容",
+        "质量记录"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 1898,
+      "completion_tokens": 91,
+      "prompt_tokens": 1807,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.5.2",
+    "file_code": "aebb1dc588834513bafbabc925fa61d0",
+    "file_name": "01 送货单.xls",
+    "path": "/tmp/cert9001_md2/aebb1dc588834513bafbabc925fa61d0.md",
+    "chars": 647,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "客户名称",
+        "日期",
+        "序号",
+        "订单编号",
+        "物料名称规格",
+        "单位",
+        "送货数量",
+        "单价",
+        "金额",
+        "备注",
+        "合计金额（大写）",
+        "￥",
+        "制表人",
+        "送货人",
+        "收货人"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 1061,
+      "completion_tokens": 105,
+      "prompt_tokens": 956,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.5.2",
+    "file_code": "e5e5dd87dea0462fb881d4e3da947854",
+    "file_name": "02入库单.xls",
+    "path": "/tmp/cert9001_md2/e5e5dd87dea0462fb881d4e3da947854.md",
+    "chars": 648,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "入库单位",
+        "日期",
+        "序号",
+        "订单编号",
+        "物料名称规格",
+        "单位",
+        "入库数量",
+        "单价",
+        "金额",
+        "备注",
+        "合计金额（大写）",
+        "￥：",
+        "制表人",
+        "送货人",
+        "入库人"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 1061,
+      "completion_tokens": 105,
+      "prompt_tokens": 956,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.5.2",
+    "file_code": "bd6c6f27be984713a9d4e3a79063f33f",
+    "file_name": "03发货单.doc",
+    "path": "/tmp/cert9001_md2/bd6c6f27be984713a9d4e3a79063f33f.md",
+    "chars": 579,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "收货单位",
+        "发货日期",
+        "收货地址",
+        "收货人",
+        "电话",
+        "邮编",
+        "订单号码",
+        "品名",
+        "规格",
+        "数量（箱）",
+        "重量（吨）",
+        "备注",
+        "承运单位",
+        "车号",
+        "发货人",
+        "审核",
+        "收货单位签收（盖章）"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 1005,
+      "completion_tokens": 123,
+      "prompt_tokens": 882,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.5.2",
+    "file_code": "4bfc34cfa0df45ec9eaefc35e385d2a2",
+    "file_name": "04领料单.xls",
+    "path": "/tmp/cert9001_md2/4bfc34cfa0df45ec9eaefc35e385d2a2.md",
+    "chars": 644,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "领料部门",
+        "日期",
+        "订单编号",
+        "物料名称规格",
+        "单位",
+        "领料数量",
+        "单价",
+        "金额",
+        "备注",
+        "合计金额（大写）",
+        "￥",
+        "制表人",
+        "仓库",
+        "审核"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 1057,
+      "completion_tokens": 100,
+      "prompt_tokens": 957,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.5.4",
+    "file_code": "0f98677d5d7b41e2b21c3472009ff2d2",
+    "file_name": "22产品防护控制程序.doc",
+    "path": "/tmp/cert9001_md2/0f98677d5d7b41e2b21c3472009ff2d2.md",
+    "chars": 2968,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "编制",
+        "审核",
+        "批准",
+        "文件发布日期",
+        "文件实施日期",
+        "受控状态",
+        "目的",
+        "适用范围",
+        "职责",
+        "程序内容",
+        "质量记录"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2675,
+      "completion_tokens": 92,
+      "prompt_tokens": 2583,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.5.4",
+    "file_code": "030fbc2027564a589385b701c894c78b",
+    "file_name": "07仓库管理规范.doc",
+    "path": "/tmp/cert9001_md2/030fbc2027564a589385b701c894c78b.md",
+    "chars": 4418,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "work_instruction",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "编制",
+        "审核",
+        "批准",
+        "文件发布日期",
+        "文件实施日期",
+        "受控状态",
+        "修 订 记 录",
+        "日期"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 3714,
+      "completion_tokens": 87,
+      "prompt_tokens": 3627,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.6",
+    "file_code": "dcd4b43db8d5426295c2fd6a3ff84bbc",
+    "file_name": "21产品和服务的放行控制程序.doc",
+    "path": "/tmp/cert9001_md2/dcd4b43db8d5426295c2fd6a3ff84bbc.md",
+    "chars": 2364,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "受控状态",
+        "编制",
+        "审核",
+        "批准",
+        "文件发布日期",
+        "文件实施日期",
+        "目的",
+        "范围",
+        "职责",
+        "工作程序",
+        "相关文件",
+        "质量记录"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2206,
+      "completion_tokens": 95,
+      "prompt_tokens": 2111,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.6",
+    "file_code": "212f9483e6fb419993d785e354fd3e1a",
+    "file_name": "01-1进料检验报告.doc",
+    "path": "/tmp/cert9001_md2/212f9483e6fb419993d785e354fd3e1a.md",
+    "chars": 982,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "report",
+      "CoreRole": "",
+      "KeyFields": [
+        "检验日期",
+        "材料名称",
+        "供应商",
+        "规格/型号",
+        "供销单号",
+        "检验项目",
+        "验收要求",
+        "检验工具",
+        "检验内容描述",
+        "检验结果"
+      ],
+      "FillStatus": "partial",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "检验日期": "2025-06-23",
+            "材料名称": "",
+            "供应商": "",
+            "规格/型号": "",
+            "供销单号": "",
+            "检验项目": "外观",
+            "验收要求": "无变形/明显划伤生锈",
+            "检验工具": "目视",
+            "检验内容描述": "无变形/明显划伤生锈",
+            "检验结果": "合格"
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "检验日期": "2025-06-23",
+            "材料名称": "",
+            "供应商": "",
+            "规格/型号": "",
+            "供销单号": "",
+            "检验项目": "包装要求",
+            "验收要求": "要求外包装有保护膜无严重破损现象",
+            "检验工具": "目视",
+            "检验内容描述": "保护膜无严重破损现象",
+            "检验结果": "合格"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "检验日期": "2025-03-19",
+            "材料名称": "",
+            "供应商": "",
+            "规格/型号": "",
+            "供销单号": "",
+            "检验项目": "外观",
+            "验收要求": "无变形/明显划伤生锈",
+            "检验工具": "目视",
+            "检验内容描述": "无变形/明显划伤生锈",
+            "检验结果": "合格"
+          }
+        }
+      ],
+      "Coverage": "抽样"
+    },
+    "usage": {
+      "total_tokens": 1604,
+      "completion_tokens": 400,
+      "prompt_tokens": 1204,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.6",
+    "file_code": "27d7356233844ae28341ef7b787496ed",
+    "file_name": "02产品出厂检验报告.doc",
+    "path": "/tmp/cert9001_md2/27d7356233844ae28341ef7b787496ed.md",
+    "chars": 1098,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "report",
+      "CoreRole": "",
+      "KeyFields": [
+        "产品名称",
+        "规格型号",
+        "出货数量",
+        "抽查数量",
+        "检验项目",
+        "情况描述",
+        "检查结果",
+        "结果",
+        "检验员",
+        "日期",
+        "审核"
+      ],
+      "FillStatus": "partial",
+      "SampleRows": [
+        {
+          "RowRef": "产品名称行",
+          "Values": {
+            "产品名称": "",
+            "规格型号": "",
+            "出货数量": "",
+            "抽查数量": "100"
+          }
+        },
+        {
+          "RowRef": "箱体行",
+          "Values": {
+            "检验项目": "箱 体",
+            "情况描述": "箱体是否完整，是否符合客户要求，摆放整齐；",
+            "检查结果": "合格"
+          }
+        },
+        {
+          "RowRef": "结果行",
+          "Values": {
+            "结果": "☑合格                □不合格              □让步接受"
+          }
+        }
+      ],
+      "Coverage": "抽样"
+    },
+    "usage": {
+      "total_tokens": 1516,
+      "completion_tokens": 217,
+      "prompt_tokens": 1299,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.6",
+    "file_code": "7a2959f66afe42648f078f60f9e84476",
+    "file_name": "03-首件报告.doc",
+    "path": "/tmp/cert9001_md2/7a2959f66afe42648f078f60f9e84476.md",
+    "chars": 670,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "report",
+      "CoreRole": "",
+      "KeyFields": [
+        "客户",
+        "产品名称",
+        "订单号码",
+        "订单数量",
+        "首检数量",
+        "检验日期",
+        "项次",
+        "检查内容",
+        "判定",
+        "检验问题描述",
+        "检验结果判定",
+        "检查员",
+        "审核",
+        "日期"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 1118,
+      "completion_tokens": 99,
+      "prompt_tokens": 1019,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.6",
+    "file_code": "fce2e8e76412451c9eb9af84dc5ee7fc",
+    "file_name": "04制程巡检报告.doc",
+    "path": "/tmp/cert9001_md2/fce2e8e76412451c9eb9af84dc5ee7fc.md",
+    "chars": 1807,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "品名",
+        "规格",
+        "材质",
+        "重量",
+        "结果时间",
+        "检测项目",
+        "处理结果"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 1839,
+      "completion_tokens": 69,
+      "prompt_tokens": 1770,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "8.6",
+    "file_code": "1f76c9e6b1174516b99faf8673cfd217",
+    "file_name": "05质检日报表.doc",
+    "path": "/tmp/cert9001_md2/1f76c9e6b1174516b99faf8673cfd217.md",
+    "chars": 225,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "产品名称及规格",
+        "抽检数",
+        "合格数",
+        "不合格数",
+        "质量问题",
+        "责任者",
+        "处理结果",
+        "再检情况",
+        "编写",
+        "日期",
+        "审核"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 773,
+      "completion_tokens": 87,
+      "prompt_tokens": 686,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "9.1.2",
+    "file_code": "797de91c63594a5c999eb60fb316b3aa",
+    "file_name": "13顾客满意监测程序.doc",
+    "path": "/tmp/cert9001_md2/797de91c63594a5c999eb60fb316b3aa.md",
+    "chars": 2173,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "销售部",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "文件发布日期",
+        "文件实施日期",
+        "受控状态",
+        "修订记录",
+        "目的",
+        "范围",
+        "职责",
+        "程序内容",
+        "相关文件化信息"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2089,
+      "completion_tokens": 91,
+      "prompt_tokens": 1998,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "9.1.2",
+    "file_code": "ae333c25892a40f8ac912d5508f6babf",
+    "file_name": "01顾客满意度调查表.doc",
+    "path": "/tmp/cert9001_md2/ae333c25892a40f8ac912d5508f6babf.md",
+    "chars": 2172,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "顾客名称",
+        "调查日期",
+        "调查项目",
+        "权数",
+        "非常满意(100)",
+        "比较满意(80)",
+        "一般(50)",
+        "不太满意(20)",
+        "很不满意(0)",
+        "得分",
+        "改善建议",
+        "客户代表",
+        "日期"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "顾客名称": "常州摇旗精密磨具有限公司",
+            "调查日期": "2026-08-15",
+            "调查项目": [
+              "服务质量",
+              "价格",
+              "服务进度",
+              "服务",
+              "总评"
+            ],
+            "权数": [
+              "40",
+              "15",
+              "25",
+              "20",
+              "100"
+            ],
+            "非常满意(100)": [
+              "√",
+              "√",
+              "",
+              "",
+              ""
+            ],
+            "比较满意(80)": [
+              "",
+              "",
+              "√",
+              "",
+              ""
+            ],
+            "一般(50)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "不太满意(20)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "很不满意(0)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "得分": [
+              "40",
+              "15",
+              "20",
+              "20",
+              "95"
+            ],
+            "改善建议": "交货期请按合同准期进行。",
+            "客户代表": "王先生",
+            "日期": "2026-08-15"
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "顾客名称": "江苏孜航精密五金有限公司",
+            "调查日期": "2026-08-15",
+            "调查项目": [
+              "服务质量",
+              "价格",
+              "服务进度",
+              "服务",
+              "总评"
+            ],
+            "权数": [
+              "40",
+              "15",
+              "25",
+              "20",
+              "100"
+            ],
+            "非常满意(100)": [
+              "√",
+              "√",
+              "√",
+              "√",
+              ""
+            ],
+            "比较满意(80)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "一般(50)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "不太满意(20)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "很不满意(0)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "得分": [
+              "40",
+              "15",
+              "25",
+              "20",
+              "100"
+            ],
+            "改善建议": "交货期请按合同准期进行。",
+            "客户代表": "汤小姐",
+            "日期": "2026-08-15"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "顾客名称": "常州爱唯康精密机械科技有限公司",
+            "调查日期": "2026-08-15",
+            "调查项目": [
+              "服务质量",
+              "价格",
+              "服务进度",
+              "服务",
+              "总评"
+            ],
+            "权数": [
+              "40",
+              "15",
+              "25",
+              "20",
+              "100"
+            ],
+            "非常满意(100)": [
+              "√",
+              "√",
+              "",
+              "",
+              ""
+            ],
+            "比较满意(80)": [
+              "",
+              "",
+              "√",
+              "",
+              ""
+            ],
+            "一般(50)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "不太满意(20)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "很不满意(0)": [
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            "得分": [
+              "40",
+              "15",
+              "20",
+              "20",
+              "95"
+            ],
+            "改善建议": "交货期请按合同准期进行。",
+            "客户代表": "刘总",
+            "日期": "2026-08-15"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2683,
+      "completion_tokens": 838,
+      "prompt_tokens": 1845,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "9.1.2",
+    "file_code": "d47a6e0c600a47debda84f07c94b53a6",
+    "file_name": "02顾客满意度分析报告.doc",
+    "path": "/tmp/cert9001_md2/d47a6e0c600a47debda84f07c94b53a6.md",
+    "chars": 538,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "report",
+      "CoreRole": "",
+      "KeyFields": [
+        "顾客名称",
+        "产品或服务的质量",
+        "价格",
+        "产品交货期或服务进度",
+        "服务人员态度",
+        "总分",
+        "平均分",
+        "回复率",
+        "调查日期",
+        "总结人",
+        "总结日期"
+      ],
+      "FillStatus": "partial",
+      "SampleRows": [
+        {
+          "RowRef": "2",
+          "Values": {
+            "顾客名称": "常州摇旗精密磨具有限公司",
+            "产品或服务的质量": "40",
+            "价格": "15",
+            "产品交货期或服务进度": "20",
+            "服务人员态度": "20",
+            "总分": "95"
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "顾客名称": "江苏孜航精密五金有限公司",
+            "产品或服务的质量": "40",
+            "价格": "15",
+            "产品交货期或服务进度": "25",
+            "服务人员态度": "20",
+            "总分": "100"
+          }
+        },
+        {
+          "RowRef": "4",
+          "Values": {
+            "顾客名称": "常州爱唯康精密机械科技有限公司",
+            "产品或服务的质量": "40",
+            "价格": "15",
+            "产品交货期或服务进度": "20",
+            "服务人员态度": "20",
+            "总分": "95"
+          }
+        }
+      ],
+      "Coverage": "抽样"
+    },
+    "usage": {
+      "total_tokens": 1179,
+      "completion_tokens": 264,
+      "prompt_tokens": 915,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "9.3.2",
+    "file_code": "33ce4fe2a78a48ae85081c620f2a9cd0",
+    "file_name": "24管理评审控制程序.doc",
+    "path": "/tmp/cert9001_md2/33ce4fe2a78a48ae85081c620f2a9cd0.md",
+    "chars": 3318,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "编制",
+        "审核",
+        "批准",
+        "文件发布日期",
+        "文件实施日期",
+        "受控状态",
+        "目的",
+        "范围",
+        "职责",
+        "管理评审的输入",
+        "管理评审输出",
+        "评审记录保存期限"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2784,
+      "completion_tokens": 100,
+      "prompt_tokens": 2684,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "9.3.2",
+    "file_code": "63760b6c790440998c09026dde19e6e5",
+    "file_name": "管理评审记录.doc",
+    "path": "/tmp/cert9001_md2/63760b6c790440998c09026dde19e6e5.md",
+    "chars": 8459,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "评审时间",
+        "评审地点",
+        "评审人员",
+        "评审目的",
+        "评审内容",
+        "管理评审报告",
+        "改进措施",
+        "验证情况",
+        "签到表",
+        "培训记录"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "管理评审会议签到表",
+          "Values": {
+            "姓名": "潘明海",
+            "部门/职位": "管理层/总经理"
+          }
+        },
+        {
+          "RowRef": "管理评审报告",
+          "Values": {
+            "主持人": "总经理：潘明海",
+            "评审目的": "公司最高管理层通过对公司质量管理体系进行评审（包括管理体系改进的机会和变更的需要），以确保体系的持续适宜性、充分性和有效性。",
+            "评审结论": "本公司的质量体系文件符合GB/T19001-2016标准的要求，覆盖了本公司所有场所，且都适应市场的要求及客户的需求，公司管理体系是适宜的、充分的、有效的，方针和目标是适宜的和有效的。"
+          }
+        },
+        {
+          "RowRef": "管理评审改进措施计划及验证表",
+          "Values": {
+            "部门": "采购部",
+            "负责人": "胥加娟",
+            "改进项目名称": "管理评审改进项培训",
+            "预计完成日期": "2026年9月底之前",
+            "改进措施实施及自检完成情况": "经过培训，现场提问员工均能流畅回答，达到了培训目的，改进措施合理且有效。",
+            "验证与评价": "本次培训达到了培训的预期目的。"
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 5893,
+      "completion_tokens": 366,
+      "prompt_tokens": 5527,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "10.2.1",
+    "file_code": "28c5dba5739440cc902aee31568a193f",
+    "file_name": "18不符合、纠正预防措施控制程序.doc",
+    "path": "/tmp/cert9001_md2/28c5dba5739440cc902aee31568a193f.md",
+    "chars": 2994,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "文件发布日期",
+        "文件实施日期",
+        "受控状态",
+        "修订记录",
+        "目的",
+        "范围",
+        "职责",
+        "程序内容"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2560,
+      "completion_tokens": 82,
+      "prompt_tokens": 2478,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "10.2.1",
+    "file_code": "f2ed5f456fe14df295c8f151782b7ec2",
+    "file_name": "01纠正预防措施处理单.doc",
+    "path": "/tmp/cert9001_md2/f2ed5f456fe14df295c8f151782b7ec2.md",
+    "chars": 356,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "不符合/潜在不符合事实陈述",
+        "原因分析",
+        "纠正措施实施计划",
+        "纠正措施评审",
+        "措施跟踪实施情况",
+        "措施效果评价及验证"
+      ],
+      "FillStatus": "template_only",
+      "SampleRows": [],
+      "Coverage": "无实例"
+    },
+    "usage": {
+      "total_tokens": 823,
+      "completion_tokens": 80,
+      "prompt_tokens": 743,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.1.6",
+    "file_code": "d9ca14442a9c4dde8e93cc7e58569489",
+    "file_name": "08组织知识管理程序.doc",
+    "path": "/tmp/cert9001_md2/d9ca14442a9c4dde8e93cc7e58569489.md",
+    "chars": 3058,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "procedure",
+      "CoreRole": "综合部",
+      "KeyFields": [
+        "文件编号",
+        "版本",
+        "编制",
+        "审核",
+        "批准",
+        "知识搜集提交",
+        "知识的评定",
+        "知识开发",
+        "知识的使用和更新",
+        "激励"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 2620,
+      "completion_tokens": 86,
+      "prompt_tokens": 2534,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  },
+  {
+    "clause": "7.1.6",
+    "file_code": "01c1b5ec2429465f90659b99d59e56e9",
+    "file_name": "01-知识分析评价确认表.docx",
+    "path": "/tmp/cert9001_md2/01c1b5ec2429465f90659b99d59e56e9.md",
+    "chars": 1251,
+    "status": "JSON_OK",
+    "result": {
+      "DocClass": "record",
+      "CoreRole": "",
+      "KeyFields": [
+        "知识分类",
+        "知识代码",
+        "相关说明",
+        "评价",
+        "备注"
+      ],
+      "FillStatus": "filled",
+      "SampleRows": [
+        {
+          "RowRef": "1",
+          "Values": {
+            "知识分类": "政策法规",
+            "知识代码": "1",
+            "相关说明": "与公司经营相关的国家、地方、当地的政策和法律法规",
+            "评价": "已收集了国家、地方、当地的政策和法律法规",
+            "备注": ""
+          }
+        },
+        {
+          "RowRef": "2",
+          "Values": {
+            "知识分类": "企业标准",
+            "知识代码": "2",
+            "相关说明": "企业标准是组织知识的重要组成部分，分为外来标准和企业内部标准，包括技术标准、管理标准和工作标准",
+            "评价": "收集了外来标准。",
+            "备注": ""
+          }
+        },
+        {
+          "RowRef": "3",
+          "Values": {
+            "知识分类": "比较信息资料",
+            "知识代码": "3",
+            "相关说明": "比较信息资料包括考察调研报告、产品研究报告、同行业资料、专业会议、学术交流、竞争对手、行业标杆和其他相关方的研究资料",
+            "评价": "已收集了同行业资料并进行分析",
+            "备注": ""
+          }
+        }
+      ],
+      "Coverage": "全量"
+    },
+    "usage": {
+      "total_tokens": 1524,
+      "completion_tokens": 249,
+      "prompt_tokens": 1275,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  }
+]

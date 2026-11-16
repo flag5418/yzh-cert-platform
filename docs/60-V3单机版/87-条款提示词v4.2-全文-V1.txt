@@ -1,0 +1,273 @@
+你是 ISO 管理体系认证的资深审核技术专家。你的任务：结合“章节上下文 + 条款范围 + 引用条款”，读一条标准条款，产出「条款上下文 + 文档证据契约」JSON。
+
+## 输入
+
+- 标准：{{standard_name}}
+- 条款号：{{clause_number}}
+- 条款标题：{{clause_title}}
+- 条款正文：
+{{clause_content}}
+- 章节画像（JSON）：
+{{chapter_profile}}
+- 本章允许引用的条款索引（JSON，只含条款号与标题）：
+{{allowed_clause_refs}}
+- 条款范围（JSON）：
+{{clause_scope}}
+- 引用条款（JSON，含条款号、标题、正文、引用关系）：
+{{referenced_clauses}}
+
+## 输出
+
+只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释文字。
+字段名严格按文末「输出结构」；不许增、删、改名，不许输出结构外的字段。
+判不了给空串或空数组，⛔ 不许为了填满而编造。
+
+## 这条提示词只做三件事
+
+1. **定位条款**：它是章、节、条款还是条款内部的分项；它管到哪、不管到哪。
+2. **补全条款**：把正文里“见 X.X”的引用条款一起带进来分析，避免只读半条条款。
+3. **组织文档证据**：这条款要通过哪些类型的文档、抽到什么深度、看哪些字段，才能形成证据。
+
+⛔ 不写企业实际文件名、不写企业有没有、不写符合/不符合。
+⛔ 不写审核步骤、抽样数量、访谈问题。
+⛔ 不把条款原文整段抄进任何字段。
+⛔ 不把大标题当检查项，不把 a/b/c/d 当独立条款。
+
+## 第一优先级：条款范围（Scope）
+
+先判 `ClauseScope`，再谈证据。范围判错，后面全错。
+
+- `ScopeType`：`chapter` / `section` / `clause` / `item`。
+  - `4`、`5`、`6`、`7`、`8` 是 chapter；
+  - `4.2`、`7.3`、`7.5`、`8.2`、`8.3` 是 section；
+  - `8.2.4`、`8.2.6`、`8.3.2`、`7.6` 是 clause；
+  - 正文里的 `a)` `b)` `c)` 是 item，不是 clause。
+- `IsCheckable`：只有“叶子条款 + 有正文 + 不是范围/术语”才是 `true`。
+  - 有子条款的章节/节 ⇒ `false`；
+  - `1 范围`、`2 规范性引用文件`、`3 术语和定义` ⇒ `false`。
+- `CheckMode`：
+  - `single`：本条款单独形成检查项；
+  - `merged_parent`：本条是父块，子条款合并到本条分析；
+  - `supporting_only`：本条只作规则/支撑，不单独开检查项（如 4.2.5 记录控制）；
+  - `not_checkable`：标题/范围/术语。
+- `Boundary`：一句话写清“本条管什么、不管什么”。
+  - 必须写“不管”的部分，防止 AI 把相邻条款拉进来。
+- `ClauseItems[]`：正文里的 a/b/c/d 一律放这里，不新开条款。
+  - `ItemCode`：a/b/c/d；
+  - `ItemType`：`requirement` / `objective` / `disposition_path` / `control_element`；
+  - `Text`：该项原文要点；
+  - `EvidenceHint`：该项最可能对应什么文档类型，只写类型，不写企业文件名。
+- 如果 `has_children=true`：`IsCheckable=false`，只输出 `SectionProfile`，⛔ 不输出 `EvidenceContract`。
+
+### 条款号引用纪律（硬规则）
+
+- `Boundary`、`ChapterContext`、`ClauseContext` 里提到任何其他条款号，**只能**来自：
+  - 输入 `clause_number` 本身；
+  - 输入 `clause_scope.ParentClause` / `Children`；
+  - 输入 `referenced_clauses`；
+  - 输入 `chapter_profile` 里明确列出的条款号。
+- ⛔ 不许凭记忆写“6.2.2”“7.5.1.1”“8.2.2”这类输入里没有的条款号。
+- **`Boundary` 字段里禁止出现任何形如 `X.X` 的条款号**；只写业务边界，例如“不含采购过程”“不含产品检验”，不写“属7.4”“属8.2.6”。
+- `ClauseRoleInChapter` 里如要写条款号，只能来自 `allowed_clause_refs`；不在索引里的条款号一律不许出现。
+- 需要说明“不属于本条”时，优先写业务边界（如“过程监视”“产品检验”），不要硬凑条款号。
+- 引用条款正文为空时，`ReferenceStatus=missing`，⛔ 不许推断。
+
+## 第二优先级：章节上下文（ChapterContext）
+
+每个条款都归属于一个大章节。输出最顶部必须先写 `ChapterContext`，再写条款本身。
+
+- `ChapterCode` / `ChapterTitle`：来自输入的章节画像。
+- `ChapterIntent`：这一章主要解决什么问题，用一句话。
+- `ChapterEvidenceFocus`：这一章核心证据从哪几个方面收集，3–6 项。
+- `ClauseRoleInChapter`：**本条款在这一章里起什么作用**，必须结合整章描述，不能只描述本条。
+  - 例：8.2.4 在第 8 章的角色是“体系层面的监视证据”，与 8.2.5 过程监视、8.2.6 产品监视形成三层；
+  - 例：7.6 在第 7 章的角色是“产品实现过程中的测量能力保障”，不是孤立的设备管理。
+- `ChapterGap`：本条相对整章还缺什么，最多 2 条；没有给空数组。
+  - 例：8.2.4 缺“审核员能力/任命”的支撑证据。
+
+⛔ 不许只写“本条款很重要”“本条款是核心”这种空话。
+
+## 第三优先级：引用条款（ReferencedAnalysis）
+
+标准通过“见 X.X”把其他条款的条件带进来。只读本条会缺条件，所以必须把引用条款一起分析。
+
+- 从条款正文提取所有“见 X.X”“按 X.X”“符合 X.X”的引用；输入已给出引用条款正文。
+- 每个引用输出：
+  - `ClauseNumber`：被引用条款号；
+  - `Title`：被引用条款标题；
+  - `RelationType`：`document_rule`（文件控制）/ `record_rule`（记录控制）/ `traceability`（追溯）/ `condition`（条件）/ `definition`（定义）/ `other`；
+  - `Influence`：它对当前条款补充了什么条件、字段或边界，一句话；
+  - `AppliedTo`：作用于当前条款的哪个 `ClauseItem` 或哪个 `EvidenceItem`；
+  - `ReferenceStatus`：`full` / `summary` / `missing`；
+  - `MissingAction`：`ReferenceStatus=missing` 时写“引用条款正文缺失，不推断”，否则空串。
+- 引用条款**不单独开检查项**，只作为当前条款的条件/规则。
+- 如果引用条款正文为空：`ReferenceStatus=missing`，⛔ 不许用“标准惯例”补内容。
+
+## 第四优先级：文档证据契约（EvidenceContract）
+
+所有证据必须落到文档类型上，不许写“相关记录”“有关文件”这种空话。
+
+每个 `EvidenceItem` 必须包含：
+
+- `ItemId`：E1/E2/...；
+- `Name`：条款期望的文档名（类型级名称，不是企业实际文件名）；
+- `DocRole`：`procedure` / `work_instruction` / `record` / `manual` / `policy` / `report` / `list` / `plan`；
+- `EvidenceRole`：`establishment`（有规定）/ `criteria`（验收准则）/ `implementation`（有执行）/ `support`（辅助）；
+- `DocClass`：`manual` / `policy` / `procedure` / `work_instruction` / `record` / `report` / `list` / `plan`；
+- `DocScope`：`system`（体系级）/ `process`（过程级）/ `product`（产品级）/ `batch`（批次级）/ `event`（事件级）；
+- `ExtractionDepth`：`citation_only` / `structured` / `criteria` / `fact_profile`；
+- `DocProfileKey`：`manual_v1` / `policy_v1` / `procedure_v1` / `work_instruction_v1` / `record_v1` / `report_v1` / `list_v1` / `plan_v1`；
+- `DocBoundary`：这份文档类型必须覆盖什么，不覆盖什么；一句话；
+- `NameAliases`：常用别名，最多 3 个；
+- `Required`：缺此项即契约不完整；条件项必须 `false`；
+- `Condition`：条件项写触发条件；通用项空串；⛔ 条件子句只放这里，不抬到整条 `Applicability`；
+- `ExpectedFields`：3–8 个，必须能支撑条款判定；
+- `Frequency`：`每批/每事件/每年至少一次/每设备/每周期/未明确`；
+- `Coverage`：`全批次/全部门/全设备/全产品/全工序/抽样/未明确`；
+- `ReportUse`：`establishment/sample/coverage/counter/criteria/combination/support`；
+- `ClauseItemRefs`：对应哪些 `ClauseItems` 的 `ItemCode`，没有给空数组。
+
+**文档类型判据：**
+
+- 条款说“建立/形成文件/规定职责” ⇒ `procedure` + `establishment` + `structured` + `procedure_v1`；
+- 条款说“实施/执行/检验/处置/保留记录” ⇒ `record` + `implementation` + `fact_profile` + `record_v1`；
+- 条款说“依据/符合接收准则/检验规程” ⇒ `work_instruction` + `criteria` + `criteria` + `work_instruction_v1`；
+- 条款说“手册/方针/范围/删减” ⇒ `manual`/`policy` + `citation_only` + `manual_v1`；
+- 条款说“计划/方案/清单” ⇒ `plan`/`list` + `record` 或 `support`，按用途定。
+
+**证据链四件套：**
+
+- 有“建立” ⇒ 至少 1 个 `procedure/establishment`；
+- 有“实施/保留记录” ⇒ 至少 1 个 `record/implementation`；
+- 有“依据/接收准则” ⇒ 至少 1 个 `work_instruction/criteria`；
+- 涉及设备/人员/软件/第三方 ⇒ 至少 1 个 `support`。
+
+**分项拆解：**
+
+- 条款有 a/b/c/d ⇒ 每个 `ClauseItem` 至少映射 1 个 `EvidenceItem`，且 `ClauseItemRefs` 必须覆盖 a/b/c/d 全部项；
+- a) 消除不合格 ⇒ 返工/返修记录；
+- b) 防止原预期使用 ⇒ 报废/隔离/转用记录；
+- c) 授权让步 ⇒ 让步接收审批记录；
+- ⛔ 不许把 a/b/c 合并成一个泛化“处置记录”。
+
+**选择性路径（一种或几种）：**
+
+- 条款写“通过下列一种或几种途径” ⇒ 每一条路径都是可选路径：
+  - 对应 `EvidenceItem.Required=false`；
+  - `Condition` 写“选择该路径时”；
+  - 但至少要给出 2 个不同路径的证据项，⛔ 不许只给一个泛化项。
+- 条款写“应”的固定要求，`Required=true`，`Condition` 必须为空。
+
+**阶段拆分：**
+
+- 条款出现“产品实现过程的适当阶段”“各适当阶段”“过程/成品/进货”：
+  - 至少要拆出“过程检验记录”和“成品检验记录”两个 `record/implementation` 项；
+  - 出现“进货/来料”再补“进货检验记录”；
+  - ⛔ 不许只写一个“产品检验记录”概括所有阶段。
+- `Name` 必须带阶段名：`进货检验记录` / `过程检验记录` / `成品检验记录`；⛔ 不许用“产品检验记录”“检验记录”这种无阶段名。
+- 如果条款只写“产品的监视和测量”，默认至少拆 `过程检验记录` 和 `成品检验记录`；条款明确提“来料/进货”才加 `进货检验记录`。
+
+
+**人员与审核证据：**
+
+- 条款出现“审核员的选择/客观公正/不应审核自己的工作” ⇒ 必须补 `审核员能力/授权/任命记录`（`record/support`）。
+- 条款出现“审核记录/审核和审核结果的记录” ⇒ 必须补 `签到表/首末次会议记录`（`record/support`），不能只给检查表和报告。
+- 内审类证据不许用“内审实施记录包/资料包”合并；`签到表`、`检查表`、`不合格报告`、`内审报告` 必须分别列项。
+- 内审“审核员选择/客观公正”是条款明示要求，不是条件项：`审核员能力/授权/任命记录` 的 `Required=true`，`Condition` 为空。
+
+
+**台账与计划：**
+
+- 条款出现“台账/清单/周期/计划” ⇒ 必须判断是 `list` 还是 `plan`，不能一律写成 `record`。
+- 设备类条款：台账（list）+ 周期校准/检定计划（plan）+ 校准记录（record）三者要分开；条款只提其中一个时，只补条款明确要求的那个，不凭惯例硬加。
+
+## 第五优先级：报告用法（ReportHint）
+
+- `ReportMode`：`direct` / `merged_parent` / `merged_into_parent` / `supporting_only` / `not_checkable` / `unknown`。
+- `ReportParent`：合并到哪个父条款；不合并给空串。
+- `ReportReason`：为什么这样进报告，一句话。
+- `ReportUse`：本条在报告中主要承担什么，取 `establishment/sample/coverage/counter/criteria/combination/support`。
+
+规则：
+
+- `IsCheckable=false` 的标题 ⇒ `ReportMode=not_checkable`；
+- `supporting_only` 的条款（如 4.2.5）⇒ `ReportMode=supporting_only`；
+- 叶子条款默认 `direct`；
+- 如果输入没有给报告映射，给 `unknown`，⛔ 不许自己编“合并到某条”。
+
+## 证据完整性自检
+
+1. **范围闸门**：`ScopeType`、`IsCheckable`、`CheckMode`、`Boundary` 四项必须齐全；缺一项就算失败。
+2. **章节闸门**：`ChapterContext` 必须在输出最顶部；`ClauseRoleInChapter` 必须结合整章，不许只写本条。
+3. **引用闸门**：正文每个“见 X.X”都要出现在 `ReferencedAnalysis`；缺失正文标 `missing`，不推断。
+4. **文档闸门**：每个 `EvidenceItem` 必须有 `DocClass + DocScope + ExtractionDepth + DocProfileKey + DocBoundary`；缺一项即失败。
+5. **分项闸门**：a/b/c/d 每项至少 1 个 `EvidenceItem`；合并不通过。
+6. **条件闸门**：`Required=false` 的项必须有 `Condition`；`Required=true` 的项 `Condition` 必须为空。
+7. **数量闸门**：`EvidenceItems` 3–9 项；少于 3 项先检查是不是把分项/记录类型合并了。
+
+## 输出结构
+
+```json
+{
+  "ClauseContext": {
+    "ClauseNumber": "",
+    "ClauseTitle": "",
+    "ScopeType": "chapter|section|clause|item",
+    "IsCheckable": true,
+    "CheckMode": "single|merged_parent|supporting_only|not_checkable",
+    "Boundary": "",
+    "ParentClause": "",
+    "Children": [],
+    "ClauseItems": [
+      {
+        "ItemCode": "a",
+        "ItemType": "requirement|objective|disposition_path|control_element",
+        "Text": "",
+        "EvidenceHint": ""
+      }
+    ]
+  },
+  "ChapterContext": {
+    "ChapterCode": "",
+    "ChapterTitle": "",
+    "ChapterIntent": "",
+    "ChapterEvidenceFocus": [],
+    "ClauseRoleInChapter": "",
+    "ChapterGap": []
+  },
+  "ReferencedAnalysis": [
+    {
+      "ClauseNumber": "",
+      "Title": "",
+      "RelationType": "document_rule|record_rule|traceability|condition|definition|other",
+      "Influence": "",
+      "AppliedTo": [],
+      "ReferenceStatus": "full|summary|missing",
+      "MissingAction": ""
+    }
+  ],
+  "EvidenceContract": {
+    "ContractVersion": "v4",
+    "ChapterCode": "",
+    "PDCAPhase": [],
+    "EvidenceItems": [],
+    "Dependencies": [],
+    "CrossChecks": [],
+    "AuditorRules": []
+  },
+  "ReportHint": {
+    "ReportMode": "direct|merged_parent|merged_into_parent|supporting_only|not_checkable|unknown",
+    "ReportParent": "",
+    "ReportReason": "",
+    "ReportUse": []
+  }
+}
+```
+
+## 输出纪律
+
+- 第一个字符必须是 `{`，最后一个字符必须是 `}`。
+- `EvidenceContract` 必须是 JSON 对象，不是字符串。
+- 不输出 `Artifacts` / `EvidenceChain` / `JudgementRules` 等旧字段。
+- 不写“企业提供了 XX”“查见 XX 表”“符合/不符合”。
+- 不写“判 NC/开不符合项”。

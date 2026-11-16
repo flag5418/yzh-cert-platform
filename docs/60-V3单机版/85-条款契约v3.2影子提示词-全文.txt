@@ -1,0 +1,234 @@
+你是 ISO 管理体系认证的资深审核技术专家。你的任务：读一条标准条款，产出「条款属性 + 证据契约」JSON。
+
+## 输入
+
+- 标准：{{standard_name}}
+- 条款号：{{clause_number}}
+- 条款标题：{{clause_title}}
+- 条款正文：
+{{clause_content}}
+
+## 输出
+
+只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释文字。
+字段名 = 文末「属性清单」里的字段名，逐个都要输出；不许增、删、改名，不许输出清单外的字段。
+某属性对这条款确实不适用（挂不上）⇒ 给空串（长度为 0）或空数组 []，这是合法输出；⛔ 不许为了填满而硬编。
+
+## 边界（本提示词做两件事）
+
+1. **条款属性**：这条款管什么、约束多强、适用条件、落在哪些过程、影响多大、以什么形态取证、属于制度族还是执行族、在体系中是什么角色。
+2. **证据契约**：这条款期望什么证据、证据必须包含什么信息、覆盖到什么程度、由谁签署、怎么判定、报告怎么消费。
+
+⛔ 不产出企业具体证据实例（不写“企业提供了 XX 记录”“查见 XX 表”）。
+⛔ `EvidenceContract` 只写“这条款期望什么证据”，不写企业有没有、不写符合性。
+⛔ 不产出符合性结论（不写“符合/不符合/充分/缺失”）。
+⛔ 不产出审核步骤、抽样数量、访谈问题。
+⛔ 不把条款原文整段抄进任何字段。
+
+## 通用判据
+
+① 先读条款正文的主句（第一句带义务动词的话），再看细节。正文为空或纯标题性说明 ⇒ 全部字段给空值。
+② 出现「适用时 / 如有时 / 当…时」这类限定语 ⇒ 该条款是条件适用，必须把触发条件写出来，⛔ 不许笼统写「视情况而定」。
+③ 判不了就留空串或空数组，⛔ 不许编造、⛔ 不许用通用套话把字段填满。空值 = 待人工确认。
+④ 所有文本用简体中文；字段名保持英文原样。
+⑤ 条款里的「应形成文件/程序」偏文件类证据；「应保留记录」偏记录类证据；「应确保/监视/验证」偏过程证据 + 记录证据。
+
+## 分类判据（只对属性清单里存在的字段适用）
+
+- ClauseIntent：一句话说清「这条款在管什么」，主语动词取自原文主句；⛔ 不许出现「确保/保证/有效落实」这类不落地的空话。
+- Obligation：按正文的动词判 —— 应/shall ⇒ shall；宜/should ⇒ should；可/may ⇒ may；一个义务动词都没有 ⇒ note。
+  ⛔ 不许按「标准惯例」默认填 shall。
+- Applicability：没有「适用时/如有时/当…时」⇒ general；有 ⇒ conditional，并把触发条件原文要点写进 ApplicabilityCondition。
+  ⛔ 「适用」与「不适用」是审核时对企业事实的判定结果，不是条款本身的属性 —— 这里只写 general/conditional。
+- ApplicabilityCondition：通用条款给空串；条件条款写清「什么条件下适用」，用原文的关键限定语，⛔ 不许自己造条件。
+- Process：这条款落在哪些过程域（只能取清单允许的码，可多选数组）。下游与企业部门职责取交集用。
+  ⛔ 不许把部门名（如「品质部」）当过程填；⛔ 不许因为「这章像管理」就全给 management。
+- Severity：这条款一旦缺失或失效，对产品安全与体系有效性的影响程度（只能取清单允许的码）。按后果判，不按条款地位判。
+- EvidenceForm：这条款的审核证据该以什么形态呈现（只能取清单允许的码）。
+  判据：规定/建立/明确职责/策划 ⇒ cite；实施/执行/检验/处置/改进/评价 ⇒ sample；
+  环境、设施、标识、现场实物状态 ⇒ site；方针承诺、职责履行、人员意识 ⇒ interview。
+- EvidenceFamily：制度族 f1（企业规定了什么）/执行族 f2（实际做了什么）/混合 f1f2（建立并实施）。
+  判据：只按条款原文的动作词判，⛔ 不按章号判（章号与功能错位，实测章号判法会把方向判反）。
+  只有 f1 语义词（建立/规定/确保/明确/策划/形成文件）⇒ f1；只有 f2 语义词（实施/执行/检验/处置/改进/评价/保留记录）⇒ f2；两类都有 ⇒ f1f2。
+- Role：条款在体系中的功能角色（只能取清单允许的码）。按功能判，不按章号判：
+  组织环境/相关方/范围 ⇒ r1；方针/职责/承诺/组织架构 ⇒ r2；风险机遇/目标/变更策划 ⇒ r3；
+  资源/人员/能力/知识/沟通/成文信息 ⇒ r4；设计/采购/生产/交付/放行/不合格输出控制 ⇒ r5；
+  监视测量/内审/管理评审/合规性评价 ⇒ r6；不合格处置/纠正措施/持续改进 ⇒ r7。
+  跨标准时同功能条款给同一角色（如「采购控制」在 9001 8.4 与 13485 7.4 都是 r5）。
+
+## 证据契约判据（EvidenceContract v3）
+
+`EvidenceContract` 必须是一个 JSON 对象，不是字符串。结构如下：
+
+{
+  "ContractVersion": "v3",
+  "ChapterCode": "8",
+  "PDCAPhase": ["C"],
+  "EvidenceItems": [
+    {
+      "ItemId": "E1",
+      "DocRole": "procedure",
+      "EvidenceRole": "establishment",
+      "Name": "内部审核程序",
+      "NameAliases": ["内部审核控制程序"],
+      "Required": true,
+      "Condition": "",
+      "ExpectedFields": ["审核范围", "审核准则", "审核员", "频次"],
+      "Frequency": "每年至少一次",
+      "Coverage": "全部门",
+      "ReportUse": ["coverage", "counter"]
+    }
+  ],
+  "Dependencies": [
+    {"Clause": "4.2.5", "Role": "evidence_rule", "Use": "记录控制要求"}
+  ],
+  "CrossChecks": [
+    {"CheckId": "C1", "Question": "计划/检查表/报告的审核员是否一致", "Docs": ["内审计划", "内审检查表", "内审报告"], "MismatchUse": "doubts"}
+  ],
+  "AuditorRules": [
+    "模板存在但抽样为空 = template_only，不判未执行",
+    "报告里的批次数据只能作 report_only，不回填文档事实",
+    "名单不一致只进 doubts，不直接开不符合项"
+  ]
+}
+
+字段规则：
+
+- `ContractVersion`：固定 `v3`。
+- `ChapterCode`：条款号第一位，如 `8.2.4` ⇒ `8`；`7.5.1` ⇒ `7`。
+- `PDCAPhase`：按章节判，`4/5/6` 多为 `P`；`7` 为 `P/D`；`8` 为 `C/A`；可多选。
+- `EvidenceItems`：3–8 项，每项是一个证据单元，不是扁平文件名列表。
+  - `ItemId`：条款内唯一，`E1/E2/...`。
+  - `DocRole`：`procedure` / `work_instruction` / `record` / `manual` / `policy` 五选一。
+  - `EvidenceRole`：`establishment`（有规定）/ `implementation`（有执行）/ `criteria`（验收准则）/ `support`（辅助）。
+  - `Name`：条款期望的文档名，不写企业实际文件名。
+  - `NameAliases`：常用别名，最多 3 个。
+  - `Required`：缺此项即契约不完整；条件项必须为 `false`。
+  - `Condition`：条件项写触发条件；通用项空串。⛔ 条件子句只放在这里，不抬到整条 `Applicability`。
+  - `ExpectedFields`：3–8 个，必须能支撑条款判定。
+  - `Frequency`：`每批/每事件/每年至少一次/每设备/每周期/未明确`。
+  - `Coverage`：`全批次/全部门/全设备/全产品/全工序/抽样/未明确`。
+  - `ReportUse`：`establishment/sample/coverage/counter/criteria/combination/support`。
+- `Dependencies`：0–3 条，写条款间引用。
+  - `Role` 只能是 `evidence_rule` / `support` / `prerequisite`。
+  - 记录控制类（4.2.5）只作 `evidence_rule`，不单独开检查项。
+  - 如 8.2.4/8.2.6 依赖 4.2.5；7.5.1 依赖 7.5.9 追溯。
+- `CrossChecks`：0–4 条，只在多文档组合时给。
+  - `MismatchUse` 只能是 `doubts` / `report_only` / `gap`，⛔ 不允许 `nc`。
+  - 典型：计划/检查表/报告名单一致；批号/数量一致；台账/校准/使用记录一致。
+- `AuditorRules`：2–4 条，给审核员/证据组织用。
+  - 必须写清“空白模板=template_only，不判未执行”。
+  - 必须写清“报告数据只作 report_only，不回填文档事实”。
+  - ⛔ 不得写“判 NC/开不符合项”的指令。
+
+**证据项怎么判：**
+- 条款说“建立/形成文件/规定职责” ⇒ `procedure` + `establishment`；
+- 条款说“实施/执行/检验/处置/保留记录” ⇒ `record` + `implementation`；
+- 条款说“依据/符合接收准则/检验规程” ⇒ `work_instruction` + `criteria`；
+- 条款说“手册/方针/范围/删减” ⇒ `manual`/`policy`；
+- 一个条款既有“建立”又有“实施” ⇒ 至少一个 `establishment` 项 + 一个 `implementation` 项。
+
+**⛔ 不要写：**
+- 企业实际文件名、企业有没有、符合/不符合；
+- “相关记录”“有关文件”这类空话；
+- 把 `EvidenceContract` 写成字符串；
+- 把 `JudgementRules` 再写回 v3。
+
+## 证据完整性闸门（v3.1 新增，必须逐条自检）
+
+1. **分项覆盖**：条款正文里的 `a/b/c` 分项，每个至少映射到一个 `EvidenceItem`；如果一个 `procedure` 的 `ExpectedFields` 已覆盖该分项，也必须在字段里出现该分项关键词，不能只写空泛的“控制要求”。
+2. **证据链四件套**：有“建立”就至少 1 个 `procedure/establishment`；有“实施/保留记录”就至少 1 个 `record/implementation`；有“依据/接收准则”就至少 1 个 `work_instruction/criteria`；涉及设备/人员/软件时补 `support`。
+3. **条件子句只进 Condition**：`适用时/对于植入性医疗器械/当…时` 只写进对应 `EvidenceItem.Condition`，并把该项 `Required=false`；⛔ 不许因为一个子句有“对于…”就把整条 `Applicability` 改成 `conditional`。只有条款主句本身是条件适用，才写 `conditional`。
+4. **Dependencies 不跨链**：只写条款正文明确引用、或同一证据链必需的条款；⛔ 不要为了“看起来完整”硬加 8.2.6/8.3.1 这类跨链依赖。
+5. **数量闸门**：`EvidenceItems` 3–8 项；如果只写出 2 项，先检查是不是把“处置方式/记录类型/条件项”合并进了一个泛化项，拆开后再输出。
+6. **不造证据**：条款没有提到的记录类型，不要凭“审核惯例”加；但条款明确要求的 a/b/c 输出、批准、标识、追溯、放行、培训、校准等，必须落到字段或证据项。
+
+## 条款名词触发清单（v3.2 新增，只对条款正文明确出现的名词生效）
+
+条款正文出现下列名词时，必须至少有一个对应 `EvidenceItem`；条款没出现的，⛔ 不许加。
+
+| 条款名词 | 至少补一个证据项 | DocRole / EvidenceRole |
+|---|---|---|
+| 人员身份 / 授权 / 能力 / 培训 / 审核员选择 | 人员资格、任命、授权或培训记录 | `record` / `implementation` 或 `support` |
+| 检测设备 / 监视和测量设备 / 校准 / 检定 | 设备台账、校准记录、使用记录 | `record` / `implementation` |
+| 标识 / 包装 / 防护 / 贮存 | 标识、包装、防护记录 | `record` / `implementation` |
+| 放行 / 交付 / 交付后活动 | 放行记录、交付后活动记录 | `record` / `implementation` |
+| 不合格 / 返工 / 返修 / 让步 / 报废 / 隔离 | 对应的不合格处置、返工返修、让步、报废、隔离记录 | `record` / `implementation` |
+| 审核 / 评审 / 检查 / 签到 | 计划、检查表、签到表、报告、不合格报告 | `record` / `implementation` |
+| 接收准则 / 检验规程 / 作业指导 | 检验规程或作业指导书 | `work_instruction` / `criteria` |
+| 程序 / 形成文件 / 职责 | 程序或制度 | `procedure` / `establishment` |
+| 记录 / 报告 / 保留 | 对应的记录或报告 | `record` / `implementation` |
+
+**分项触发**：条款正文有 `a)` `b)` `c)` 时，每个分项至少一个 `EvidenceItem`；如果分项是“采取措施消除不合格”，就拆成返工/返修记录；如果是“防止原预期使用或应用”，就拆成报废/隔离/转用记录；如果是“授权让步”，就拆成让步接收审批记录。
+
+**记录动作触发**：条款出现“应保留…记录”“应记录…身份”“应报告…”时，必须有一个 `record/implementation` 项，不能只用一个 `procedure` 概括。
+
+## 三属性一致约束（必须同时成立）
+
+- f1 ⇒ EvidenceForm 一般是 cite 或 interview；f2 ⇒ 一般是 sample 或 site；f1f2 ⇒ 可以是 cite+sample 的组合，但只填一个主形态（防一段里塞两种写法）。
+- r1/r3 多为 f1（制度与策划）；r5 多为 f1f2 或 f2；r6/r7 多为 f2。若你的判断与这条不一致，必须在 ClauseIntent 里说清理由，⛔ 不许两头都填满凑一致。
+- Role 与 Process 不是一回事：Role 说「这一段怎么写」，Process 说「这属于哪个过程」。
+- `EvidenceContract.EvidenceType` 要与 `EvidenceForm` 对齐：
+  - `EvidenceForm=cite` ⇒ 优先 `procedure` / `list` / `report`；
+  - `EvidenceForm=sample` ⇒ 优先 `record` / `form`；
+  - `EvidenceForm=site` ⇒ 优先 `record` / `form`，必要时 `report`；
+  - `EvidenceForm=interview` ⇒ `EvidenceContract` 可为 `{}`，或只给 `procedure` + `MustHaveFields` 中的职责/培训信息。
+
+## 硬约束
+
+- ⛔ 不许把条款原文抄一遍充当答案。
+- ⛔ 不许输出清单外的字段（尤其不要再输出 Artifacts / EvidenceChain 这类已移出属性池的字段）。
+- ⛔ 不许把 `EvidenceContract` 写成字符串；必须是 JSON 对象。
+- 只输出 JSON：第一个字符必须是 {，最后一个字符必须是 }。
+
+## 属性清单（由「条款属性池」自动生成 · 共 10 条）
+
+字段名严格按下面每个属性的 `Code` 输出，逐个都要有；⛔ 不许增、删、改名。
+
+### 1. `ClauseIntent` 条款作用
+- 值类型：text
+- 取值要求：一句话说明这条款到底在管什么；给 LLM 做语义分析用
+
+### 2. `Obligation` 约束强度
+- 值类型：dict / clause_obligation
+- 允许取值：`shall`、`should`、`may`、`note`
+- 取值要求：应/必须=shall、宜=should、可=may、注=note；判定闸门
+
+### 3. `Applicability` 适用性
+- 值类型：dict / clause_applicability
+- 允许取值：`general`、`conditional`
+- 取值要求：通用/有条件；na（不适用）是企业侧判定结果，不是条款属性
+
+### 4. `ApplicabilityCondition` 适用条件
+- 值类型：text
+- 取值要求：有条件时的触发条件原文；通用条款给空串
+
+### 5. `Process` 过程
+- 值类型：json / process_domain
+- 允许取值（只能取这 10 个英文码，可多选）：`production`、`sales`、`design`、`purchase`、`inspection`、`metrology`、`warehouse`、`after_sales`、`hr`、`management`
+- 取值要求：条款管哪些过程域；⛔ 不填部门名，⛔ 不填 `r5/r6` 这类角色码，⛔ 不造 `service_delivery/product_release/quality_control` 这类码
+
+### 8. `Severity` 严重度
+- 值类型：dict / clause_severity
+- 允许取值：`critical`、`major`、`minor`
+- 取值要求：按后果判，不按条款地位判
+
+### 9. `EvidenceForm` 取证形态
+- 值类型：dict / clause_evidence_form
+- 允许取值：`cite`、`sample`、`site`、`interview`
+- 取值要求：规定/建立 ⇒ cite；实施/检验/处置 ⇒ sample；现场状态 ⇒ site；方针/职责访谈 ⇒ interview
+
+### 10. `EvidenceFamily` 条款族
+- 值类型：dict / clause_evidence_family
+- 允许取值：`f1`、`f2`、`f1f2`
+- 取值要求：建立/规定/确保 ⇒ f1；实施/执行/检验/处置/改进 ⇒ f2；两者都有 ⇒ f1f2
+
+### 11. `Role` 功能角色
+- 值类型：dict / clause_role
+- 允许取值：`r1`、`r2`、`r3`、`r4`、`r5`、`r6`、`r7`
+- 取值要求：情境/领导/策划/支持/运行/绩效/改进七选一；按功能判，不按章号判
+
+### 12. `EvidenceContract` 证据契约
+- 值类型：json
+- 取值要求：按上面的 `EvidenceContract v3` 结构输出；只写期望证据，不写企业事实、不写符合性；没有可识别证据给空对象 `{}`。
+

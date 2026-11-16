@@ -1,0 +1,591 @@
+{
+  "summary": {
+    "clauses": 10,
+    "findings": 43,
+    "doubts": 33,
+    "assemblies": 21,
+    "docfacts": 38,
+    "issues": 55,
+    "counts_by_rule": {
+      "QuoteValidator": 24,
+      "DoubtTypeValidator": 15,
+      "AssemblyValidator": 2,
+      "ClauseItemValidator": 13,
+      "DocFactValidator": 1
+    },
+    "counts_by_severity": {
+      "P1": 37,
+      "P0": 15,
+      "P2": 3
+    }
+  },
+  "by_clause": {
+    "10.2.1": {
+      "DoubtTypeValidator": 1
+    },
+    "7.1.6": {
+      "ClauseItemValidator": 2,
+      "DoubtTypeValidator": 2
+    },
+    "7.2": {
+      "QuoteValidator": 5
+    },
+    "7.5.3.2": {
+      "QuoteValidator": 2,
+      "DoubtTypeValidator": 2,
+      "DocFactValidator": 1
+    },
+    "8.2.2": {
+      "QuoteValidator": 2,
+      "DoubtTypeValidator": 2,
+      "AssemblyValidator": 1
+    },
+    "8.5.2": {
+      "ClauseItemValidator": 5,
+      "QuoteValidator": 4
+    },
+    "8.5.4": {
+      "ClauseItemValidator": 3,
+      "QuoteValidator": 4,
+      "DoubtTypeValidator": 2,
+      "AssemblyValidator": 1
+    },
+    "8.6": {
+      "DoubtTypeValidator": 2
+    },
+    "9.1.2": {
+      "ClauseItemValidator": 3,
+      "QuoteValidator": 3,
+      "DoubtTypeValidator": 1
+    },
+    "9.3.2": {
+      "QuoteValidator": 4,
+      "DoubtTypeValidator": 3
+    }
+  },
+  "issues": [
+    {
+      "clause": "7.2",
+      "object_type": "finding",
+      "object_id": "F4",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "| 序号 | 姓名 | 性别 | 所在部门 | 岗位名称 | 资格领域 | 证书级别 | 证书编号 | 发证时间 | 期 限 | 备 注 |"
+    },
+    {
+      "clause": "7.2",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 含省略号，不是连续原文",
+      "evidence": "| 培训课程 |  | ISO基础知识、GB/T19001-2016标准 |  |  |  |  |  |  | 讲师 |  | 周老师 |  |  |  | "
+    },
+    {
+      "clause": "7.2",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "| 培训课程 |  | ISO基础知识、GB/T19001-2016标准 |  |  |  |  |  |  | 讲师 |  | 周老师 |  |  |  | "
+    },
+    {
+      "clause": "7.2",
+      "object_type": "finding",
+      "object_id": "F6",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 含省略号，不是连续原文",
+      "evidence": "| I级 | 公司级安全教育 | 1、企业概况、各部门之间生产关系，行业生产特点；2、安全生产方针、政策、法规、本企业安全生产、劳保方面的规章制度；... | "
+    },
+    {
+      "clause": "7.2",
+      "object_type": "finding",
+      "object_id": "F6",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "| I级 | 公司级安全教育 | 1、企业概况、各部门之间生产关系，行业生产特点；2、安全生产方针、政策、法规、本企业安全生产、劳保方面的规章制度；... | "
+    },
+    {
+      "clause": "7.5.3.2",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "常州科斯亚自动化科技有限公司\nQMS程序文件\n文件化信息控制程序\n# 1 目的\n本标准规定了文件化信息控制的要求，以确保与标准相关的文件信息都得到有效控制。"
+    },
+    {
+      "clause": "7.5.3.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "| 1 | 管理手册\\n程序文件汇编\\n三级文件汇编 | KSY-QMS-M-01\\nKSY-QMS-P-01--KSY-QMS-P-25\\nKSY-QMS-W"
+    },
+    {
+      "clause": "7.5.3.2",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "report_only 但关联 finding 不是 report 类",
+      "evidence": "report_only"
+    },
+    {
+      "clause": "7.5.3.2",
+      "object_type": "doubt",
+      "object_id": "D4",
+      "rule": "DoubtTypeValidator",
+      "severity": "P2",
+      "message": "inconsistent_person 需人工确认是否为不同角色/职责，而不是人员矛盾",
+      "evidence": "inconsistent_person"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 少于 10 字，信息量不足",
+      "evidence": "符合"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 少于 10 字，信息量不足",
+      "evidence": "具备能力完成合同"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "doubt",
+      "object_id": "D1",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "blank_template 但关联 finding 不是 template_only",
+      "evidence": "blank_template"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "doubt",
+      "object_id": "D2",
+      "rule": "DoubtTypeValidator",
+      "severity": "P2",
+      "message": "inconsistent_person 需人工确认是否为不同角色/职责，而不是人员矛盾",
+      "evidence": "inconsistent_person"
+    },
+    {
+      "clause": "8.2.2",
+      "object_type": "assembly",
+      "object_id": "A2",
+      "rule": "AssemblyValidator",
+      "severity": "P0",
+      "message": "CanFormEvidence=true 但无 filled 的 record/report 实施记录",
+      "evidence": "true"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['a', 'b', 'c']；允许 ['main']",
+      "evidence": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 引用声明/版权/受控标识等样板文字，不能支撑正文结论",
+      "evidence": "常州科斯亚自动化科技有限公司对本文件资料享受著作权及其它专属权利，未经书面许可，不得将该等文件资料（其全部或任何部分）披露予任何第三方，或进行修改后使用。"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['c']；允许 ['main']",
+      "evidence": [
+        "c"
+      ]
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "客户名称： | 日期： | 订单编号 | 物料名称规格 | 送货数量 | 备注"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['c']；允许 ['main']",
+      "evidence": [
+        "c"
+      ]
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "入库单位： | 日期： | 订单编号 | 物料名称规格 | 入库数量 | 备注"
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F4",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['c']；允许 ['main']",
+      "evidence": [
+        "c"
+      ]
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['b']；允许 ['main']",
+      "evidence": [
+        "b"
+      ]
+    },
+    {
+      "clause": "8.5.2",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "领料部门： | 日期： | 订单编号 | 物料名称规格 | 领料数量 | 备注"
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 为空；无编号条款应填 ['main']",
+      "evidence": []
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 为空；无编号条款应填 ['main']",
+      "evidence": []
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 含省略号，不是连续原文",
+      "evidence": "所有货物均必须按仓区、库位分类别、品种、规格型号摆放整齐...不得将物料、产品直接放置于地面。仓库必须按规定设置消防器材...做好防盗、防锈、防水、防潮、防虫、"
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "所有货物均必须按仓区、库位分类别、品种、规格型号摆放整齐...不得将物料、产品直接放置于地面。仓库必须按规定设置消防器材...做好防盗、防锈、防水、防潮、防虫、"
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 为空；无编号条款应填 ['main']",
+      "evidence": []
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 含省略号，不是连续原文",
+      "evidence": "6.4.1 所有物品的使用和存放应在适宜的环境下，以免物品受潮、污染及包装受损。6.4.2 针对易燃易爆的物品，应保存于单独的生产部，区域内严禁烟火，并进行必要"
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "6.4.1 所有物品的使用和存放应在适宜的环境下，以免物品受潮、污染及包装受损。6.4.2 针对易燃易爆的物品，应保存于单独的生产部，区域内严禁烟火，并进行必要"
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "doubt",
+      "object_id": "D1",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "blank_template 但关联 finding 不是 template_only",
+      "evidence": "blank_template"
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "report_only 但关联 finding 不是 report 类",
+      "evidence": "report_only"
+    },
+    {
+      "clause": "8.5.4",
+      "object_type": "assembly",
+      "object_id": "A1",
+      "rule": "AssemblyValidator",
+      "severity": "P0",
+      "message": "CanFormEvidence=true 但无 filled 的 record/report 实施记录",
+      "evidence": "true"
+    },
+    {
+      "clause": "8.6",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "Doubt 无有效 RelatedFindings",
+      "evidence": "report_only"
+    },
+    {
+      "clause": "8.6",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "report_only 无关联 finding",
+      "evidence": "report_only"
+    },
+    {
+      "clause": "9.1.2",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['b']；允许 ['main']",
+      "evidence": [
+        "b"
+      ]
+    },
+    {
+      "clause": "9.1.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['a', 'b']；允许 ['main']",
+      "evidence": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "clause": "9.1.2",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "顾客名称：常州摇旗精密磨具有限公司，调查日期：2026-08-15，调查项目：服务质量，权数：40，非常满意(100)：√，得分：40，改善建议：交货期请按合同"
+    },
+    {
+      "clause": "9.1.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['a', 'b']；允许 ['main']",
+      "evidence": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "clause": "9.1.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 含省略号，不是连续原文",
+      "evidence": "本公司2026-08-15 组织对3家顾客进行了满意度调查，回复了1家，回复率  100%   。……综上所述：本公司顾客满意度在各项均为满意。"
+    },
+    {
+      "clause": "9.1.2",
+      "object_type": "finding",
+      "object_id": "F3",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "本公司2026-08-15 组织对3家顾客进行了满意度调查，回复了1家，回复率  100%   。……综上所述：本公司顾客满意度在各项均为满意。"
+    },
+    {
+      "clause": "9.1.2",
+      "object_type": "doubt",
+      "object_id": "D2",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "date_conflict 少于两个不同日期",
+      "evidence": "date_conflict"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "finding",
+      "object_id": "F4",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 含省略号，不是连续原文",
+      "evidence": "一、我公司向顾客提供的产品\n吻合钉\n二、为达到本公司质量目标，各部门主要做了如下工作：\n1、加强了采购过程的控制\n本年度采购人员依据GB/T19001-2016"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "finding",
+      "object_id": "F4",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "一、我公司向顾客提供的产品\n吻合钉\n二、为达到本公司质量目标，各部门主要做了如下工作：\n1、加强了采购过程的控制\n本年度采购人员依据GB/T19001-2016"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 含省略号，不是连续原文",
+      "evidence": "公司根据所处的环境和相关方的需求及期望，识别了当前的风险和机遇，并根据识别情况进行评估，将风险通过一系列管控措施进行有效降低和消除..."
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "finding",
+      "object_id": "F5",
+      "rule": "QuoteValidator",
+      "severity": "P1",
+      "message": "OriginalQuote 在原文中无法连续命中（表格重排/跨段拼接）",
+      "evidence": "公司根据所处的环境和相关方的需求及期望，识别了当前的风险和机遇，并根据识别情况进行评估，将风险通过一系列管控措施进行有效降低和消除..."
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "doubt",
+      "object_id": "D1",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "report_only 但关联 finding 不是 report 类",
+      "evidence": "report_only"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "doubt",
+      "object_id": "D2",
+      "rule": "DoubtTypeValidator",
+      "severity": "P2",
+      "message": "inconsistent_person 需人工确认是否为不同角色/职责，而不是人员矛盾",
+      "evidence": "inconsistent_person"
+    },
+    {
+      "clause": "9.3.2",
+      "object_type": "doubt",
+      "object_id": "D3",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "date_conflict 日期方向与描述相反（说晚于，实际更早）",
+      "evidence": "date_conflict"
+    },
+    {
+      "clause": "10.2.1",
+      "object_type": "doubt",
+      "object_id": "D2",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "missing_signature 但关联文档整体是空白模板；应判 blank_template",
+      "evidence": "missing_signature"
+    },
+    {
+      "clause": "7.1.6",
+      "object_type": "finding",
+      "object_id": "F1",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['a', 'b', 'c']；允许 ['main']",
+      "evidence": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "clause": "7.1.6",
+      "object_type": "finding",
+      "object_id": "F2",
+      "rule": "ClauseItemValidator",
+      "severity": "P1",
+      "message": "ClauseItemRef 含条款不允许的条目 ['a', 'b', 'c']；允许 ['main']",
+      "evidence": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "clause": "7.1.6",
+      "object_type": "doubt",
+      "object_id": "D1",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "blank_template 但关联 finding 不是 template_only",
+      "evidence": "blank_template"
+    },
+    {
+      "clause": "7.1.6",
+      "object_type": "doubt",
+      "object_id": "D2",
+      "rule": "DoubtTypeValidator",
+      "severity": "P0",
+      "message": "date_conflict 少于两个不同日期",
+      "evidence": "date_conflict"
+    },
+    {
+      "clause": "7.5.3.2",
+      "object_type": "docfact",
+      "object_id": "07记录清单.docx",
+      "rule": "DocFactValidator",
+      "severity": "P0",
+      "message": "template_only 但表格数据行已有业务值（序号列空不等于整表空）",
+      "evidence": "template_only"
+    }
+  ]
+}

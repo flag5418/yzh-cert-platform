@@ -1,0 +1,3483 @@
+[
+  {
+    "clause": "7.2",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "7.2",
+        "ClauseTitle": "能力",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款聚焦于组织如何系统性识别、获取、验证和保留其控制下人员的能力证据，仅限影响质量管理体系绩效和有效性的岗位；不涉及员工福利、薪酬结构、劳动关系合法性或非质量相关技能（如IT运维基础操作）。",
+        "ParentClause": "7",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "确定在其控制下工作的人员所需具备的能力，这些人员从事的工作影响质量管理体系绩效和有效性",
+            "EvidenceHint": ""
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "基于适当的教育、培训或经验，确保这些人员是胜任的",
+            "EvidenceHint": ""
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "requirement",
+            "Text": "适用时，采取措施以获得所需的能力，并评价措施的有效性",
+            "EvidenceHint": ""
+          },
+          {
+            "ItemCode": "d",
+            "ItemType": "requirement",
+            "Text": "保留适当的成文信息，作为人员能力的证据",
+            "EvidenceHint": ""
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "7",
+        "ChapterTitle": "支持",
+        "ChapterIntent": "提供质量管理体系运行所需的人员、基础设施、过程环境、监视测量资源、组织知识和成文信息。",
+        "ChapterEvidenceFocus": [
+          "人员能力与培训",
+          "基础设施与过程环境",
+          "监视测量资源",
+          "组织知识",
+          "成文信息控制"
+        ],
+        "ClauseRoleInChapter": "人员能力是支持过程运行的基础，支撑7.1.5.2测量、8.5.1生产、8.6放行等条款的人员胜任要求。",
+        "ChapterGap": [
+          "未明确要求对能力需求进行动态评审（如工艺变更、标准更新后的能力再确认）",
+          "未覆盖外包人员能力管理的责任接口"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "7.1.5.2",
+          "Title": "测量溯源",
+          "RelationType": "condition",
+          "Influence": "检验人员能力需满足7.1.5.2对测量设备操作者的要求，但7.2本身不规定具体技术能力细节",
+          "AppliedTo": [
+            "a",
+            "b",
+            "c"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "7",
+        "PDCAPhase": [
+          "PLAN",
+          "DO",
+          "CHECK"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "人力资源控制程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖能力需求识别、获取、评价及记录保存全过程；不覆盖具体岗位能力矩阵或能力等级定义",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "目的",
+              "范围",
+              "职责",
+              "程序内容（含a/b/c/d对应条款）",
+              "相关文件化信息"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "年度培训计划表",
+            "DocClass": "plan",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "plan_v1",
+            "DocBoundary": "覆盖年度内所有计划开展的培训活动；不覆盖临时性、突发性能力补救措施",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "培训内容",
+              "培训对象",
+              "计划时间",
+              "责任部门",
+              "培训教师",
+              "培训方式",
+              "考核方法"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全系统",
+            "ReportUse": "support",
+            "ClauseItemRefs": [
+              "a",
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "员工岗位能力评价表",
+            "DocClass": "record",
+            "DocScope": "system",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖在岗人员能力现状评价结果；不覆盖评价依据（如岗位说明书）、评价标准来源或历史趋势分析",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "姓名",
+              "业务知识",
+              "管理能力",
+              "责任意识",
+              "考核结论",
+              "考核人",
+              "考核时间"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全系统",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "特殊岗位人员名单",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "覆盖持有法定/强制资质要求的岗位人员台账；不覆盖内部认定的关键岗位（如内审员、合同评审员）",
+            "EvidenceRole": "support",
+            "Required": false,
+            "Condition": "当存在法律法规或客户要求的特殊岗位时",
+            "ExpectedFields": [
+              "姓名",
+              "所在部门",
+              "岗位名称",
+              "资格领域",
+              "证书编号",
+              "发证时间",
+              "期限"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全系统",
+            "ReportUse": "coverage",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E5",
+            "Name": "培训记录",
+            "DocClass": "record",
+            "DocScope": "system",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖已实施培训的签到、考核及有效性评价；不覆盖培训效果长期跟踪（如3个月后工作行为改变）",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "培训课程",
+              "培训对象",
+              "培训时间",
+              "讲师",
+              "考核方式",
+              "姓名",
+              "部门",
+              "职位",
+              "成绩",
+              "有效性评价",
+              "评价人",
+              "评价日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "抽样",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "b",
+              "c",
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E6",
+            "Name": "员工三级安全教育培训记录表",
+            "DocClass": "record",
+            "DocScope": "system",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖新员工入职安全能力基础培训；不覆盖质量体系相关能力（如标准理解、过程审核）",
+            "EvidenceRole": "implementation",
+            "Required": false,
+            "Condition": "当安全培训内容与质量管理体系能力要求存在重叠时（如风险意识、不符合后果）",
+            "ExpectedFields": [
+              "姓名",
+              "所在部门",
+              "培训级别",
+              "教育内容",
+              "授课人<br>授课时间",
+              "考核成绩",
+              "接受教育人签名"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全系统",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "b",
+              "c"
+            ]
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [],
+        "Gaps": [
+          "无岗位能力矩阵（即未将条款a中‘所需能力’转化为可验证的岗位-能力映射表）",
+          "无能力评价标准文件（如业务知识合格阈值、管理能力分级定义）"
+        ]
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "procedure",
+          "DocName": "09人力资源控制程序.doc",
+          "DocLocation": "全文",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "公司应：a) 确定对组织质量绩效有影响或可能有影响的员工所需的能力；b) 基于适当的教育、入职引导、培训或经历，确保员工能够胜任工作；c) 适当时，采取措施以获得所必需的能力，并评价所采取措施的有效性；1. 保留适当的文件化信息作为能力的证据。",
+          "WhatItProves": "程序文件明示了7.2全部四款要求的执行路径，且与GB/T 19001-2016条款原文保持术语一致。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "a",
+            "c"
+          ],
+          "DocClass": "plan",
+          "DocName": "01-年度培训计划表.docx",
+          "DocLocation": "表格主体",
+          "FindingType": "record_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "| 序号 | 培训内容 | 培训对象 | 计划时间 | 责任部门 | 培训教师 | 培训方式 | 考核方法 |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n|  | ISO基础知识、GB/T19001-2016标准 | 全员 | 2026年6月 | 管理者代表 | 顾问师 | 授课 | 问答 |",
+          "WhatItProves": "计划表列出了针对全员、管理人员、作业人员等不同对象的培训安排，体现对能力需求的识别（a）及获取措施规划（c）。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "record",
+          "DocName": "04员工岗位能力评价表.docx",
+          "DocLocation": "表格主体",
+          "FindingType": "record_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "| 序号 | 姓名 | 业务知识 | 管理能力 | 责任意识 | 考核结论 | 考核人 | 考核时间 |\n|  | 许小琴 | ■强，能够胜任<br>□需要培训 | ■强，满足需要<br>□需要锻炼 | ■强，有责任感<br>□需要加强 | ■能够胜任该岗位<br>□不能胜任，需要培训（）另聘（） | 潘明海 | 2026.6.10 |",
+          "WhatItProves": "评价表提供了26名员工的能力现状判断，包含多维能力项及明确结论，直接支撑a/b/c/d四款要求。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F4",
+          "ClauseItemRef": [
+            "a",
+            "b"
+          ],
+          "DocClass": "list",
+          "DocName": "03特殊岗位人员名单.docx",
+          "DocLocation": "表格主体",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "| 序号 | 姓名 | 性别 | 所在部门 | 岗位名称 | 资格领域 | 证书级别 | 证书编号 | 发证时间 | 期 限 | 备 注 |",
+          "WhatItProves": "表单结构完整，字段设计覆盖特殊岗位能力证据关键要素，但无实际填写内容。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F5",
+          "ClauseItemRef": [
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "record",
+          "DocName": "培训记录.docx",
+          "DocLocation": "ISO基础知识培训页",
+          "FindingType": "record_exists",
+          "FillStatus": "partial",
+          "OriginalQuote": "| 培训课程 |  | ISO基础知识、GB/T19001-2016标准 |  |  |  |  |  |  | 讲师 |  | 周老师 |  |  |  |  |  |  |\n| ... |\n| 序号 | 姓名 | 部门 | 职位 | 签到 | 考核方式 |  |  | 成绩 |\n| 1 | 潘明海 | 管理层 | 总经理 |  | √ |  |  | 合格 |",
+          "WhatItProves": "记录显示总经理等7名管理层人员参加了ISO标准培训并考核合格，体现能力获取（b）、措施有效性评价（c）及成文信息保留（d）。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F6",
+          "ClauseItemRef": [
+            "b",
+            "c"
+          ],
+          "DocClass": "record",
+          "DocName": "05员工三级安全教育培训记录表.docx",
+          "DocLocation": "I级行",
+          "FindingType": "record_exists",
+          "FillStatus": "partial",
+          "OriginalQuote": "| I级 | 公司级安全教育 | 1、企业概况、各部门之间生产关系，行业生产特点；2、安全生产方针、政策、法规、本企业安全生产、劳保方面的规章制度；... |  |  |  | 胥加娟2026-07-22 | 95 | 马啸天 |",
+          "WhatItProves": "记录显示马啸天完成公司级安全教育并考核合格，证明其具备基础岗位安全能力，属教育/培训获取能力的实例。",
+          "RiskLevel": "low"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "blank_template",
+          "Description": "特殊岗位人员名单为模板格式，无任何人员信息填写。",
+          "RelatedFindings": [
+            "F4"
+          ],
+          "WhyItMatters": "若存在检验员、内审员等法定/关键岗位，空白名单无法证明其能力符合性，需确认是否遗漏或尚未启用。",
+          "SuggestedCheck": "核查检验员任命书、内审员证书原件及授权记录",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "scope_mismatch",
+          "Description": "年度培训计划表中‘ISO基础知识’培训对象为‘全员’，但培训记录仅覆盖7名管理层，未见作业人员参与记录。",
+          "RelatedFindings": [
+            "F2",
+            "F5"
+          ],
+          "WhyItMatters": "计划与执行脱节可能导致部分岗位能力未被覆盖，影响条款a中‘所需能力’的全面识别。",
+          "SuggestedCheck": "抽查生产部作业人员2026年6月培训签到及考核记录",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "no_traceability",
+          "Description": "员工岗位能力评价表中所有人员考核结论均为‘能够胜任’，但未关联到具体培训记录、证书或经验佐证。",
+          "RelatedFindings": [
+            "F3"
+          ],
+          "WhyItMatters": "缺乏能力评价依据的追溯路径，无法验证评价结论是否真实反映b/c款要求的‘胜任’与‘措施有效性’。",
+          "SuggestedCheck": "抽取3名被评人员，核对其近一年培训记录、证书、岗位实操表现记录",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D4",
+          "DoubtType": "date_conflict",
+          "Description": "三级安全教育记录中III级培训时间为2026-07-20，II级为2026-07-21，I级为2026-07-22，时间顺序倒置。",
+          "RelatedFindings": [
+            "F6"
+          ],
+          "WhyItMatters": "培训层级逻辑错误可能表明记录失真或执行混乱，削弱其作为能力证据的可信度。",
+          "SuggestedCheck": "访谈马啸天及授课人黄勇，核实实际培训日期与顺序",
+          "Confidence": "medium"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "plan"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序文件规定能力识别方法 + 年度培训计划表体现按岗位/对象识别的需求",
+          "CanFormEvidence": "partial",
+          "Gap": "缺少岗位能力矩阵（即未将‘所需能力’转化为具体岗位-能力项清单）"
+        },
+        {
+          "AssemblyId": "A2",
+          "ClauseItemRef": [
+            "b",
+            "c"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "plan",
+            "record"
+          ],
+          "MinDocs": 3,
+          "CombineRule": "程序文件规定胜任判定依据 + 计划表明确培训内容与对象 + 培训记录证明实施与考核结果",
+          "CanFormEvidence": "true",
+          "Gap": ""
+        },
+        {
+          "AssemblyId": "A3",
+          "ClauseItemRef": [
+            "d"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序文件规定保留成文信息要求 + 员工岗位能力评价表、培训记录等实际留存记录",
+          "CanFormEvidence": "true",
+          "Gap": ""
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "7.2为独立可检查条款，证据链完整且可单独验证",
+        "ReportUse": [
+          "establishment",
+          "sample",
+          "coverage"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "7.5.3.2",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "7.5.3.2",
+        "ClauseTitle": "成文信息的控制",
+        "ScopeType": "item",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款规定对组织内部生成及外部获取的成文信息实施具体控制活动，包括分发访问、存储防护、更改控制、保留处置；特别强调对外来文件的识别与控制，以及对作为符合性证据的成文信息的防非预期更改保护。不涉及成文信息的创建、更新或总体架构设计（属7.5.1/7.5.2），也不规定具体技术手段（如电子系统权限逻辑）。",
+        "ParentClause": "7.5.3",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "control_element",
+            "Text": "分发、访问、检索和使用",
+            "EvidenceHint": "需证明受控文件已按需发放至使用者，并支持有效访问与使用"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "control_element",
+            "Text": "存储和防护，包括保持可读性",
+            "EvidenceHint": "需证明文件在物理或电子环境中被妥善保存，防止损坏、丢失、不可读"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "control_element",
+            "Text": "更改控制（如版本控制）",
+            "EvidenceHint": "需证明文件变更过程受控，含申请、审批、标识、换版等机制"
+          },
+          {
+            "ItemCode": "d",
+            "ItemType": "control_element",
+            "Text": "保留和处置",
+            "EvidenceHint": "需证明文件按期限保留，作废/过期文件被识别、标识、回收并按规处置"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "7",
+        "ChapterTitle": "支持",
+        "ChapterIntent": "提供质量管理体系运行所需的人员、基础设施、过程环境、监视测量资源、组织知识和成文信息。",
+        "ChapterEvidenceFocus": [
+          "人员能力与培训",
+          "基础设施与过程环境",
+          "监视测量资源",
+          "组织知识",
+          "成文信息控制"
+        ],
+        "ClauseRoleInChapter": "7.5.3.2是成文信息控制的执行活动，承接7.5.1/7.5.2的创建更新要求，落到分发、访问、存储、更改、保留和处置。",
+        "ChapterGap": [
+          "未见对电子文件访问权限配置记录（如账号分级、日志审计）",
+          "未见对长期保存电子文件可读性验证（如格式迁移、介质刷新）的具体安排"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "7.5",
+          "Title": "成文信息",
+          "RelationType": "document_rule",
+          "Influence": "本条款是7.5条款下‘控制’层面的操作细化，其所有活动须在7.5整体框架内实施",
+          "AppliedTo": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "ReferenceStatus": "full"
+        },
+        {
+          "ClauseNumber": "7.5.1",
+          "Title": "总则",
+          "RelationType": "condition",
+          "Influence": "7.5.1确立成文信息的必要性与范围，7.5.3.2的控制活动仅适用于7.5.1所确定的成文信息",
+          "AppliedTo": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "ReferenceStatus": "full"
+        },
+        {
+          "ClauseNumber": "7.5.2",
+          "Title": "创建和更新",
+          "RelationType": "condition",
+          "Influence": "7.5.2规定成文信息的编制、评审、批准，7.5.3.2的更改控制（c）必须与7.5.2的批准权限衔接",
+          "AppliedTo": [
+            "c"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "7",
+        "PDCAPhase": [
+          "DO"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "文件化信息控制程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖全部成文信息类型（管理类、技术类、外来文件、记录）的控制流程，明确分发、存储、更改、保留、处置各环节职责与方法；不包含具体文件内容或单次执行记录。",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "职责分工",
+              "编号规则",
+              "发放与回收流程",
+              "更改控制方式",
+              "作废与销毁规定",
+              "外来文件识别与登记要求",
+              "记录保存期限依据"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "受控文件清单",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "列示所有现行受控文件（含编号、名称、版本、发布日期、保存期限）；用于支撑分发（a）、存储期限（b）、版本状态（c）、保留期限（d）；不包含发放记录或借阅行为。",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "文件编号",
+              "文件名称",
+              "文件分类",
+              "版本",
+              "发布日期",
+              "保存期限"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "support",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "文件发放回收一览表",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "记录每份受控文件的发放对象（部门/岗位）、分发号、版本、签收信息及回收状态；直接证明分发（a）与回收（d）执行；不体现访问权限或检索路径。",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "文件名称",
+              "文件编号",
+              "分发号",
+              "版本",
+              "部门",
+              "签收",
+              "日期",
+              "回收状态"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全部门",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "文件借阅复制记录表",
+            "DocClass": "record",
+            "DocScope": "system",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "记录员工对受控文件的借阅、复制行为，含借阅人、日期、份数、归还日期；支撑访问与使用（a）及防非预期更改（因借阅后文件脱离主控环境）；不覆盖电子版在线访问行为。",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "文件名称",
+              "借阅日期",
+              "复制份数",
+              "借阅复制人",
+              "领导签字",
+              "归还日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全部门",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E5",
+            "Name": "文件更改申请通知单",
+            "DocClass": "record",
+            "DocScope": "system",
+            "ExtractionDepth": "criteria",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "用于启动和记录文件更改过程，含更改原因、部分、申报部门、审批链；支撑更改控制（c）；模板存在即满足‘有机制’要求，但需有实例证明实际执行。",
+            "EvidenceRole": "implementation",
+            "Required": false,
+            "Condition": "当发生文件更改时触发",
+            "ExpectedFields": [
+              "文件编号",
+              "文件名称",
+              "更改部分",
+              "更改原因",
+              "批准人",
+              "审核人",
+              "申请人"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "抽样",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E6",
+            "Name": "文件记录销毁清单",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "记录作废/过期文件的销毁行为，含销毁日期、数量、批准人、执行人；支撑保留和处置（d）；模板存在即表明处置机制建立，但需实例证明执行。",
+            "EvidenceRole": "implementation",
+            "Required": false,
+            "Condition": "当执行文件销毁时触发",
+            "ExpectedFields": [
+              "文件记录编号",
+              "文件记录名称",
+              "销毁日期",
+              "数量",
+              "批准人",
+              "执行人"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "抽样",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E7",
+            "Name": "外来文件清单",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "识别并登记所有适用的外来文件（法规、标准、顾客文件等），含状态（现行有效）；支撑对外来文件的识别与控制（条款正文第二句）；不包含外来文件本身或其使用记录。",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "序号",
+              "类别/发文单位",
+              "文件编号",
+              "文件名称",
+              "状态"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "support",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ]
+          },
+          {
+            "ItemId": "E8",
+            "Name": "记录清单",
+            "DocClass": "list",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "统一规定各类质量记录的编号、名称、保存期限；为‘作为符合性证据的成文信息’提供保留期限依据，支撑保留和处置（d）及防非预期更改（因明确保存期即隐含保护要求）；不覆盖记录填写内容本身。",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "序号",
+              "记录编号",
+              "记录名称",
+              "保存期限",
+              "备注"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "support",
+            "ClauseItemRefs": [
+              "d"
+            ]
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [],
+        "Gaps": []
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "procedure",
+          "DocName": "11文件化信息控制程序.doc",
+          "DocLocation": "全文",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "常州科斯亚自动化科技有限公司\nQMS程序文件\n文件化信息控制程序\n# 1 目的\n本标准规定了文件化信息控制的要求，以确保与标准相关的文件信息都得到有效控制。",
+          "WhatItProves": "组织建立了覆盖分发、存储、更改、保留、处置及外来文件控制的成文信息控制程序。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "list",
+          "DocName": "01受控文件清单.doc",
+          "DocLocation": "表格",
+          "FindingType": "record_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "| **文件编号** | **文件名称** | **文件分类** | **版本** | **发布日期** | **数量** | **保存期限** |\n| KSY-QMS-M-01 | 质量手册 | 一阶 | A/0 | **2026.6.10** | 1 | 长期 |",
+          "WhatItProves": "组织维护了现行有效的受控文件清单，含编号、名称、版本、发布日期、保存期限等关键字段。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [
+            "a",
+            "d"
+          ],
+          "DocClass": "list",
+          "DocName": "02-1文件发放回收一览表.docx",
+          "DocLocation": "表格",
+          "FindingType": "record_exists",
+          "FillStatus": "partial",
+          "OriginalQuote": "| 1 | 管理手册\\n程序文件汇编\\n三级文件汇编 | KSY-QMS-M-01\\nKSY-QMS-P-01--KSY-QMS-P-25\\nKSY-QMS-WI-01--KSY-QMS-WI-13 | 01 | A/0 | 总经理 | 潘明海 | 2026.6.10 |  |  | 电子版 |",
+          "WhatItProves": "组织保留了文件发放记录，含文件名称、编号、分发号、版本、部门、签收人、日期及备注（电子版）。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F4",
+          "ClauseItemRef": [
+            "a",
+            "b"
+          ],
+          "DocClass": "record",
+          "DocName": "03文件借阅复制记录表.doc",
+          "DocLocation": "表格",
+          "FindingType": "record_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "| **1** | **管理手册** | 2026-07-15 | **1** | 胥加娟 | 潘明海 | 2026-07-19 | **业务用** |",
+          "WhatItProves": "组织保留了文件借阅复制记录，含文件名称、借阅日期、复制份数、借阅人、领导签字、归还日期。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F5",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "DocClass": "record",
+          "DocName": "04文件更改申请通知单.doc",
+          "DocLocation": "全文",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "文件更改申请/通知单\n编号：KSY-QMS-P-11-04\n|  |  |  |  |  |  |\n| --- | --- | --- | --- | --- | --- |\n| 文件编号 |  |  | 更改申报部门 |  |  |\n| 文件名称 |  |  | 更改时间 |  |  |\n| 更改部分 |  |  |  |  |  |\n| 更<br>改<br>原<br>因 |  |  |  |  |  |\n| 批准人 |  | 审核人 |  | 申请人 |  |",
+          "WhatItProves": "组织建立了文件更改申请机制的表单模板，但无实际填写实例。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F6",
+          "ClauseItemRef": [
+            "d"
+          ],
+          "DocClass": "list",
+          "DocName": "05文件记录销毁清单.doc",
+          "DocLocation": "表格",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "文件记录销毁清单\n编号：KSY-QMS-P-11-05\n| 序号 | 文件记录编号 | 文件记录名称 | 销毁日期 | 数量 | 记录时段 | 申请人 | 批准人 | 执行人 | 备注 |\n| 1 |  |  |  |  |  |  |  |  |  |",
+          "WhatItProves": "组织建立了文件记录销毁机制的表单模板，但无实际填写实例。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F7",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "list",
+          "DocName": "06外来文件清单.docx",
+          "DocLocation": "表格",
+          "FindingType": "record_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "| **序号** | **类别/发文单位** | **文件编号** | **文件名称** | **状态** |\n| 1 | 基本法 | 第十三届全国人民代表大会常务委员会第七次会议通过 | 中华人民共和国产品质量法 | 现行有效 |",
+          "WhatItProves": "组织维护了外来文件清单，含序号、类别/发文单位、文件编号、文件名称、状态（现行有效）。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F8",
+          "ClauseItemRef": [
+            "d"
+          ],
+          "DocClass": "list",
+          "DocName": "07记录清单.docx",
+          "DocLocation": "表格",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "| 序号 | 记录编号 | 记录名称 | 保存期限 | 备注 |\n|  | KSY-QMS-P-01-01 | 外部因素识别监视评价总清单 | 3年 |  |",
+          "WhatItProves": "组织建立了记录清单模板，含记录编号、名称、保存期限字段，但表格中无实际记录条目（全为空行）。",
+          "RiskLevel": "high"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "blank_template",
+          "Description": "《文件更改申请通知单》仅有表头，无任何填写实例，无法确认更改控制（c）是否实际运行。",
+          "RelatedFindings": [
+            "F5"
+          ],
+          "WhyItMatters": "条款c要求‘更改控制’，模板存在仅证明机制设计，无实例则无法验证执行有效性。",
+          "SuggestedCheck": "抽查近一年内至少一份文件修订记录（如质量手册A/0→A/1），核查是否履行申请、审批、标识流程。",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "blank_template",
+          "Description": "《文件记录销毁清单》仅有表头，无任何填写实例，无法确认保留和处置（d）中的‘处置’环节是否实际运行。",
+          "RelatedFindings": [
+            "F6"
+          ],
+          "WhyItMatters": "条款d要求‘保留和处置’，销毁是处置核心动作，无实例则无法验证作废文件是否被合规清除。",
+          "SuggestedCheck": "询问文控人员最近一次销毁行为（如2026年6月前作废文件），调取对应销毁审批记录或现场见证。",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "report_only",
+          "Description": "《记录清单》文档中所有行均为空，但《01受控文件清单》和《06外来文件清单》中引用的记录编号（如KSY-QMS-P-11-01）在《07记录清单》中未见对应条目。",
+          "RelatedFindings": [
+            "F8"
+          ],
+          "WhyItMatters": "《记录清单》是规定保存期限的法定依据，若为空则无法追溯‘作为符合性证据的成文信息’的保留期限是否受控。",
+          "SuggestedCheck": "核对《01受控文件清单》中‘保存期限’列与《07记录清单》中同名记录（如‘受控文件清单’）的保存期限是否一致。",
+          "Confidence": "medium"
+        },
+        {
+          "DoubtId": "D4",
+          "DoubtType": "inconsistent_person",
+          "Description": "《02-1文件发放回收一览表》中‘发放人’为张丹，但《01受控文件清单》批准人为潘明海，而《11文件化信息控制程序》规定‘综合部负责发放’，未明确张丹是否获授权。",
+          "RelatedFindings": [
+            "F3"
+          ],
+          "WhyItMatters": "分发（a）需明确职责与授权，人员不一致可能反映职责未落实或授权缺失。",
+          "SuggestedCheck": "查阅综合部岗位说明书或授权书，确认张丹是否被正式授权执行文件发放。",
+          "Confidence": "medium"
+        },
+        {
+          "DoubtId": "D5",
+          "DoubtType": "scope_mismatch",
+          "Description": "《03文件借阅复制记录表》中借阅文件含‘营业执照’，但该文件属于行政证照，未在《01受控文件清单》或《06外来文件清单》中登记，其控制状态不明。",
+          "RelatedFindings": [
+            "F4"
+          ],
+          "WhyItMatters": "条款要求对‘策划和运行质量管理体系所必需的来自外部的成文信息’予以控制，营业执照是否属‘必需’需判定，若属则应纳入外来文件清单。",
+          "SuggestedCheck": "访谈综合部，确认营业执照是否作为质量管理体系运行必需的外部文件，若属则核查其是否纳入《06外来文件清单》。",
+          "Confidence": "medium"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "list",
+            "list",
+            "record"
+          ],
+          "MinDocs": 4,
+          "CombineRule": "《11文件化信息控制程序》规定分发流程 + 《01受控文件清单》列明受控文件范围 + 《02-1文件发放回收一览表》证明发放执行 + 《03文件借阅复制记录表》证明访问使用",
+          "CanFormEvidence": "true",
+          "Gap": ""
+        },
+        {
+          "AssemblyId": "A2",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "list",
+            "record"
+          ],
+          "MinDocs": 3,
+          "CombineRule": "《11文件化信息控制程序》规定存储防护要求 + 《01受控文件清单》明确保存期限 + 《03文件借阅复制记录表》体现借阅归还闭环（隐含防护）",
+          "CanFormEvidence": "partial",
+          "Gap": "缺少物理存储环境记录（如温湿度监控）、电子文件备份日志或可读性验证证据"
+        },
+        {
+          "AssemblyId": "A3",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "《11文件化信息控制程序》规定更改流程 + 《04文件更改申请通知单》模板存在",
+          "CanFormEvidence": "false",
+          "Gap": "《04文件更改申请通知单》为模板仅，无实际填写实例，无法证明更改控制执行"
+        },
+        {
+          "AssemblyId": "A4",
+          "ClauseItemRef": [
+            "d"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "list",
+            "list",
+            "list"
+          ],
+          "MinDocs": 4,
+          "CombineRule": "《11文件化信息控制程序》规定保留处置要求 + 《01受控文件清单》明确保存期限 + 《06外来文件清单》体现外来文件保留 + 《07记录清单》模板（虽空但结构存在）",
+          "CanFormEvidence": "partial",
+          "Gap": "《07记录清单》为空，无法确认记录保存期限是否实际设定；《05文件记录销毁清单》为空，无法确认处置执行"
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "7.5.3.2为独立可检查条款，其4项控制活动（a/b/c/d）均可单独验证，无需合并至父条款。",
+        "ReportUse": [
+          "establishment",
+          "sample",
+          "counter"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "8.2.2",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.2.2",
+        "ClauseTitle": "产品和服务要求的确定",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款聚焦于组织在承诺向顾客提供产品和服务前，对顾客明示/隐含要求、适用法律法规、组织自定必要要求的主动识别与明确规定过程；不涉及评审执行本身（属8.2.3）、不涉及沟通行为（属8.2.1）、不涉及后续变更控制（属8.2.5）。",
+        "ParentClause": "8.2",
+        "Children": []
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "运行",
+        "ChapterIntent": "确保产品和服务的设计、生产、交付和放行全过程受控，稳定满足要求。",
+        "ChapterEvidenceFocus": [
+          "顾客要求与合同评审",
+          "生产过程控制",
+          "标识与可追溯",
+          "防护",
+          "放行",
+          "不合格输出控制"
+        ],
+        "ClauseRoleInChapter": "8.2.2是订单/合同要求确定的前置要求，连接8.2.1顾客沟通和8.2.3要求评审，确保要求和法律法规被规定。",
+        "ChapterGap": [
+          "缺乏对顾客未明示但预期用途所必需要求的系统性识别方法证据",
+          "缺乏组织自行确定的必要要求（如环保、交付响应时效等）的具体来源与决策记录"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "8.2.3",
+          "Title": "产品和服务要求的评审",
+          "RelationType": "condition",
+          "Influence": "8.2.2确定的要求是8.2.3评审的前提输入；若8.2.2未完成，则8.2.3评审失去依据。",
+          "AppliedTo": [
+            "a",
+            "b"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "Plan"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "产品或服务要求控制程序",
+            "DocClass": "procedure",
+            "DocScope": "process",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖所有产品和服务要求的确定、评审、变更及沟通全过程；不覆盖具体合同条款内容、技术标准细节或法规清单。",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "目的",
+              "范围",
+              "职责",
+              "工作程序（含5.2明确要求确定）",
+              "文件化信息"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全量",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "合同评审记录表",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖单次合同/订单事件中对已确定要求的评审活动；不覆盖要求如何被最初识别与规定的过程本身。",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "顾客名称",
+              "合同要求内容摘要",
+              "评审意见（含法规符合性）",
+              "评审结论",
+              "评审人",
+              "评审日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全量",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [],
+        "Gaps": [
+          "无直接证据证明‘组织认为的必要要求’（8.2.2 a)2）已被具体列出并纳入要求确定过程；仅程序提及，记录表未体现其内容",
+          "无证据显示‘适用的法律法规要求’（8.2.2 a)1）在记录表中被逐项引用或确认，仅笼统填写‘符合’"
+        ]
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "DocClass": "procedure",
+          "DocName": "14产品或服务要求控制程序.doc",
+          "DocLocation": "【14产品或服务要求控制程序.doc】→ 5.2 产品和服务要求的确定 → a) 确定产品和服务要求得到确定（适用于法律法规要求、组织认为必要的要求）",
+          "FindingType": "field_present",
+          "FillStatus": "filled",
+          "OriginalQuote": "销售部根据顾客的订货要求，在确定提供给顾客的产品和服务的要求时，包括：a) 确定产品和服务要求得到确定（适用于法律法规要求、组织认为必要的要求）；",
+          "WhatItProves": "程序文件明文规定了需确定法律法规要求及组织认为必要的要求。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "DocClass": "record",
+          "DocName": "01合同评审记录表.doc",
+          "DocLocation": "【01合同评审记录表.doc】→ 第1份记录 → ‘符合法规要求’字段",
+          "FindingType": "field_present",
+          "FillStatus": "partial",
+          "OriginalQuote": "符合",
+          "WhatItProves": "记录表中存在‘符合法规要求’字段且有填写，但未注明具体法规名称或条款。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "DocClass": "record",
+          "DocName": "01合同评审记录表.doc",
+          "DocLocation": "【01合同评审记录表.doc】→ 第1份记录 → ‘公司具备能力完成合同’字段",
+          "FindingType": "field_present",
+          "FillStatus": "partial",
+          "OriginalQuote": "具备能力完成合同",
+          "WhatItProves": "记录表中存在对组织能否满足所声明要求的能力判断字段。",
+          "RiskLevel": "low"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "blank_template",
+          "Description": "合同评审记录表中‘合同编号’字段全部为空，且‘合同要求内容摘要’均指向‘见附件’，但附件未在输入文档中提供。",
+          "RelatedFindings": [
+            "F1",
+            "F2",
+            "F3"
+          ],
+          "WhyItMatters": "无法验证‘要求得到规定’是否真实发生——摘要未列明具体规格、技术标准、交付日期等实质内容，仅依赖未提供的附件。",
+          "SuggestedCheck": "调阅对应合同附件（如皮缝钉/钛钉/吻合钉的技术协议、图纸、验收标准），核实其中是否载明具体要求。",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "inconsistent_person",
+          "Description": "记录表中评审人为‘潘明海、黄勇、胥加娟、曲天骄’，但程序文件3.5规定‘总经理批准《合同评审记录表》’，而记录表中无总经理单独签署栏或明确批准痕迹。",
+          "RelatedFindings": [
+            "F1",
+            "F2",
+            "F3"
+          ],
+          "WhyItMatters": "可能混淆‘评审’与‘批准’职责，影响8.2.2 b)中‘组织能够满足’这一能力确认的权威性。",
+          "SuggestedCheck": "核查该表是否为会签版，确认总经理是否在‘批准’栏签字；或检查是否有独立的《合同审批单》作为补充证据。",
+          "Confidence": "medium"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "scope_mismatch",
+          "Description": "程序文件4.1将‘合同’定义为‘服务协议’，但记录表中三份合同对象均为‘皮缝钉’‘钛钉’‘吻合钉’等实物产品，与定义不符。",
+          "RelatedFindings": [
+            "F1"
+          ],
+          "WhyItMatters": "定义与实际执行脱节，可能导致对‘产品和服务要求’识别范围的理解偏差，影响8.2.2 a)1）中法律法规适用性的判定。",
+          "SuggestedCheck": "确认术语定义是否更新滞后；抽查其他类型合同（如纯技术服务类）是否按此定义执行。",
+          "Confidence": "medium"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序文件（E1）须规定‘法律法规要求’和‘组织认为的必要要求’的识别方法；记录表（E2）须在‘合同要求内容摘要’和‘评审意见’中体现这两类要求的具体内容或确认痕迹。",
+          "CanFormEvidence": "partial",
+          "Gap": "记录表仅笼统写‘符合法规要求’，未列明法规名称/条款；未体现‘组织认为的必要要求’内容。程序虽提及，但无配套清单、模板或培训记录佐证其落地。"
+        },
+        {
+          "AssemblyId": "A2",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "RequiredDocClasses": [
+            "record"
+          ],
+          "MinDocs": 1,
+          "CombineRule": "记录表中‘评审结论’与‘公司具备能力完成合同’字段须共同支撑‘提供产品和服务能够满足所声明的要求’这一能力确认。",
+          "CanFormEvidence": "true",
+          "Gap": ""
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "8.2.2为独立可查条款，其证据链完整且具操作性，无需合并至父条款。",
+        "ReportUse": [
+          "sample",
+          "criteria",
+          "combination"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "8.5.2",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.5.2",
+        "ClauseTitle": "标识和可追溯性",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条管控生产和服务提供全过程中的输出识别、状态标识（合格/不合格/待检等）及有可追溯要求时的唯一性标识与成文信息保留；不涉及设计开发阶段的标识、不覆盖外部供方交付前的标识责任，也不规定具体技术手段（如RFID或条码）。",
+        "ParentClause": "8.5",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "需要时，组织应采用适当的方法识别输出，以确保产品和服务合格。",
+            "EvidenceHint": "需证明识别方法已定义且适配‘需要时’场景（如顾客指定、法规强制、内部质量控制需求），非泛泛而谈。"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "组织应在生产/服务提供的整个过程中按照监视和测量要求识别输出状态。",
+            "EvidenceHint": "状态标识须与8.6放行、8.5.1过程控制、8.7不合格输出控制形成逻辑闭环，体现‘全过程’和‘按监视测量要求’。"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "requirement",
+            "Text": "当有可追溯要求时，组织应控制输出的唯一性标识，并应保留所需的成文信息以实现可追溯。",
+            "EvidenceHint": "唯一性标识+成文信息组合必须能支撑正向（从原料→成品）或反向（从成品→原料/工序）追溯，不限于批次号，但须可验证。"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "运行",
+        "ChapterIntent": "确保产品和服务的设计、生产、交付和放行全过程受控，稳定满足要求。",
+        "ChapterEvidenceFocus": [
+          "顾客要求与合同评审",
+          "生产过程控制",
+          "标识与可追溯",
+          "防护",
+          "放行",
+          "不合格输出控制"
+        ],
+        "ClauseRoleInChapter": "8.5.2是生产服务提供过程中的标识和状态管理，支撑8.6放行和8.7不合格输出控制。",
+        "ChapterGap": [
+          "缺乏对服务类输出（如软件部署、现场调试）的标识与状态管理示例",
+          "未明确8.5.2与8.3设计开发中可追溯性要求（如配置项标识）的接口"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "8.6",
+          "Title": "产品和服务的放行",
+          "RelationType": "traceability",
+          "Influence": "8.5.2的状态标识（特别是‘合格’状态）是8.6放行的前提条件，二者证据需逻辑衔接。",
+          "AppliedTo": [
+            "b"
+          ],
+          "ReferenceStatus": "full"
+        },
+        {
+          "ClauseNumber": "8.7",
+          "Title": "不合格输出的控制",
+          "RelationType": "traceability",
+          "Influence": "8.5.2的不合格状态标识（如挂牌、区域划分）是8.7启动控制措施的触发依据，标识须能区分返工/返修/报废等处置路径。",
+          "AppliedTo": [
+            "b",
+            "c"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "DO"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "产品标识和可追溯性控制程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖所有产品全生命周期标识与追溯作业，含库存、制程、成品三阶段；不含服务过程、外包过程、设计变更追溯。",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "目的",
+              "范围",
+              "职责",
+              "标识方法（标签/挂牌/书写）",
+              "检验状态标示方式",
+              "可追溯性实现路径",
+              "记录类型"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "物料收发记录",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖进料入库、生产领料、成品发货三环节；每笔业务对应唯一订单编号与物料规格，但未强制要求批次号或序列号字段。",
+            "EvidenceRole": "implementation",
+            "Required": false,
+            "Condition": "当存在可追溯要求时（如客户合同约定、法规强制、内部关键工序控制）",
+            "ExpectedFields": [
+              "订单编号",
+              "物料名称规格",
+              "数量",
+              "日期",
+              "操作人",
+              "接收/发出单位",
+              "唯一性标识（如批号/序列号）"
+            ],
+            "Frequency": "每批",
+            "Coverage": "全批次",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "检验状态标示",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖进料、制程、成品各环节检验状态；须体现‘待检’‘合格’‘不合格’‘报废’等状态，且与物理区域/标签一致。",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "产品/物料编号",
+              "检验项目",
+              "判定结果",
+              "检验日期",
+              "检验员",
+              "状态标识方式（区域/标签/记录）"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全工序",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "唯一性标识台账",
+            "DocClass": "list",
+            "DocScope": "product",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "list_v1",
+            "DocBoundary": "仅适用于有可追溯要求的产品；登记唯一性标识（如序列号、批次号）、对应产品型号、生产日期、关键工序参数、检验结果链接。",
+            "EvidenceRole": "support",
+            "Required": false,
+            "Condition": "当有可追溯要求时",
+            "ExpectedFields": [
+              "唯一性标识",
+              "产品型号",
+              "生产日期",
+              "关键工序编号",
+              "首末件检验记录号",
+              "最终检验报告号"
+            ],
+            "Frequency": "每产品",
+            "Coverage": "全产品",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [
+          {
+            "Source": "E1",
+            "Target": "E2",
+            "Rule": "程序中规定的‘物料收发记录’类型须在实际记录中体现，且字段与程序6.4.1所列一致。",
+            "Coverage": "全量"
+          },
+          {
+            "Source": "E1",
+            "Target": "E3",
+            "Rule": "程序6.3中‘待检区’‘合格区’等标示方式须在记录中留痕（如检验记录注明存放区域）或现场照片佐证。",
+            "Coverage": "全量"
+          }
+        ],
+        "Gaps": [
+          "无检验状态标示的实际记录样本（如检验记录表单或现场照片）",
+          "无可追溯性要求的具体触发场景说明（如哪些客户/产品/法规触发唯一性标识）",
+          "无唯一性标识与成文信息的交叉验证实例（如序列号在入库单、领料单、发货单中的一致性）"
+        ]
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c"
+          ],
+          "DocClass": "procedure",
+          "DocName": "20产品标识和可追溯性控制程序.doc",
+          "DocLocation": "全文",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "常州科斯亚自动化科技有限公司对本文件资料享受著作权及其它专属权利，未经书面许可，不得将该等文件资料（其全部或任何部分）披露予任何第三方，或进行修改后使用。",
+          "WhatItProves": "企业已建立标识与可追溯性控制程序，明确了标识方法、状态标示方式及追溯路径。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "DocClass": "record",
+          "DocName": "01 送货单.xls",
+          "DocLocation": "表头字段",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "客户名称： | 日期： | 订单编号 | 物料名称规格 | 送货数量 | 备注",
+          "WhatItProves": "存在送货单模板，字段包含订单编号、物料名称规格、数量，但无唯一性标识（如批号/序列号）字段，亦无实例数据。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "DocClass": "record",
+          "DocName": "02入库单.xls",
+          "DocLocation": "表头字段",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "入库单位： | 日期： | 订单编号 | 物料名称规格 | 入库数量 | 备注",
+          "WhatItProves": "存在入库单模板，字段与送货单一致，缺少唯一性标识字段，无实例数据。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F4",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "DocClass": "record",
+          "DocName": "03发货单.doc",
+          "DocLocation": "表头字段",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "订单号码 | 品名 | 规格 | 数量（箱） | 重量（吨） | 备注",
+          "WhatItProves": "存在发货单模板，字段含订单号码、品名、规格，但无唯一性标识字段，未体现与入库/领料单的字段映射关系。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F5",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "DocClass": "record",
+          "DocName": "04领料单.xls",
+          "DocLocation": "表头字段",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "领料部门： | 日期： | 订单编号 | 物料名称规格 | 领料数量 | 备注",
+          "WhatItProves": "存在领料单模板，字段支持物料流转追踪，但未体现检验状态（如‘合格’‘待检’）字段，亦无实例数据。",
+          "RiskLevel": "medium"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "blank_template",
+          "Description": "所有4份记录模板（送货单、入库单、发货单、领料单）均无实例数据，无法验证是否实际执行并填写。",
+          "RelatedFindings": [
+            "F2",
+            "F3",
+            "F4",
+            "F5"
+          ],
+          "WhyItMatters": "条款8.5.2要求‘保留所需的成文信息以实现可追溯’，空白模板不能证明信息被实际保留。",
+          "SuggestedCheck": "抽样检查近3个月任意1个订单的完整单据链（入库→领料→发货），核对字段一致性与唯一性标识填写情况。",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "no_traceability",
+          "Description": "程序6.4.2称‘需对特定生产工序或工作环节进行追溯时……制订相应的追溯方法’，但未见任何特殊追溯方案或案例。",
+          "RelatedFindings": [
+            "F1"
+          ],
+          "WhyItMatters": "条款‘当有可追溯要求时’为条件性要求，若企业实际无触发场景则无需执行；但需证明已识别触发条件并具备响应能力。",
+          "SuggestedCheck": "访谈生产部负责人，确认是否存在客户合同/行业标准/内部质量风险触发的可追溯要求，查阅相关追溯方案审批记录。",
+          "Confidence": "medium"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "scope_mismatch",
+          "Description": "程序6.2.3要求‘对生产的成品，各部门应采用‘成品状态标’对其进行标示’，但所有记录模板均无‘状态’字段（如合格/待检/不合格）。",
+          "RelatedFindings": [
+            "F2",
+            "F3",
+            "F4",
+            "F5"
+          ],
+          "WhyItMatters": "状态标识是8.5.2(b)核心要求，也是8.6放行和8.7不合格控制的输入，缺失字段意味着状态无法在流转中被识别。",
+          "SuggestedCheck": "现场观察成品区、待检区、不合格区物理标识，核对是否与程序6.3.3描述一致，并抽查检验记录是否注明状态。",
+          "Confidence": "high"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序（E1）定义标识方法与追溯路径 + 至少1类实际填写的记录（如入库单+检验记录）证明状态标识与唯一性标识应用",
+          "CanFormEvidence": "false",
+          "Gap": "无任何已填写的记录实例，无法组合形成实施证据"
+        },
+        {
+          "AssemblyId": "A2",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序6.3中状态标示方式（如待检区/合格区） + 检验记录或现场照片证明状态被实际识别并记录",
+          "CanFormEvidence": "false",
+          "Gap": "无检验记录样本，无现场照片，程序与实施脱节"
+        },
+        {
+          "AssemblyId": "A3",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序6.4.1声明通过收发记录等实现追溯 + 同一订单在入库单、领料单、发货单中唯一性标识（如批号）字段一致且填写完整",
+          "CanFormEvidence": "false",
+          "Gap": "所有记录均为模板，无唯一性标识字段，更无跨单据一致性验证可能"
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "8.5.2为独立可检查条款，证据需直接支撑三项子要求，不合并至其他条款。",
+        "ReportUse": [
+          "establishment",
+          "combination"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "8.5.4",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.5.4",
+        "ClauseTitle": "防护",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款管生产和服务提供期间对输出（含中间品、成品、待交付物）的物理性防护，包括标识、处置、污染控制、包装、储存、传输或运输以及保护；不管设计阶段防护、顾客财产防护（见8.5.3）、交付后活动防护（见8.5.5）或人员安全防护。",
+        "ParentClause": "8.5",
+        "Children": [],
+        "ClauseItems": []
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "运行",
+        "ChapterIntent": "确保产品和服务的设计、生产、交付和放行全过程受控，稳定满足要求。",
+        "ChapterEvidenceFocus": [
+          "顾客要求与合同评审",
+          "生产过程控制",
+          "标识与可追溯",
+          "防护",
+          "放行",
+          "不合格输出控制"
+        ],
+        "ClauseRoleInChapter": "8.5.4是生产服务提供期间对输出的防护，防止损坏、污染、丢失，和8.5.3顾客财产、8.5.5交付后活动衔接。",
+        "ChapterGap": [
+          "缺乏对防护有效性监控/验证的证据要求（如定期检查记录、防护失效案例分析）",
+          "未明确防护要求如何随产品特性（如精密件、化学品、软件介质）差异化设定"
+        ]
+      },
+      "ReferencedAnalysis": [],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "DO"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "产品防护控制程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖所有物料、零配件、机器、成品在搬运、贮存、交付全过程的防护职责、方法及基本控制要求；不覆盖具体产品防护参数（如温湿度阈值）、特殊包装设计图样、运输途中的实时监控数据。",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "目的",
+              "适用范围",
+              "职责",
+              "贮存要求",
+              "搬运要求",
+              "包装要求",
+              "防护环境要求",
+              "交付防护要求"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": []
+          },
+          {
+            "ItemId": "E2",
+            "Name": "仓库管理规范",
+            "DocClass": "work_instruction",
+            "DocScope": "process",
+            "ExtractionDepth": "criteria",
+            "DocProfileKey": "work_instruction_v1",
+            "DocBoundary": "覆盖仓库内物料接收、堆放、标识、安全防护、出入库操作等具体执行标准；不覆盖厂外运输、车间内部流转、产线工位间传递等非仓库环节的防护细节。",
+            "EvidenceRole": "criteria",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "收货验收标准",
+              "货物堆放规则（含高度、分区、离地）",
+              "状态标识要求",
+              "安全防护措施（防火、防潮、防尘、防锈）",
+              "先进先出执行方式",
+              "呆滞/不良品隔离要求"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全仓库",
+            "ReportUse": "criteria",
+            "ClauseItemRefs": []
+          },
+          {
+            "ItemId": "E3",
+            "Name": "防护实施记录",
+            "DocClass": "record",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "应体现具体批次/订单/设备在搬运、储存、交付环节的实际防护行为（如栈板使用照片、温湿度点检表、包装更换记录、运输车辆清洁记录）；不覆盖程序文件本身或通用管理要求。",
+            "EvidenceRole": "implementation",
+            "Required": false,
+            "Condition": "当组织声称存在特定防护风险（如易氧化件、精密光学件、危化品）时必须提供",
+            "ExpectedFields": [
+              "日期",
+              "产品/物料编号",
+              "防护活动类型（如：重新包装、加装防尘罩、更换栈板）",
+              "执行人",
+              "验证方式（如：目视确认、仪器测量）",
+              "异常情况及处置"
+            ],
+            "Frequency": "每批",
+            "Coverage": "抽样",
+            "ReportUse": "sample",
+            "ClauseItemRefs": []
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [],
+        "Gaps": [
+          "无明确证据要求证明防护措施针对不同产品特性（如8.5.1中识别的过程输出特性）进行了差异化设计",
+          "缺少对防护失效事件（如运输破损、库存锈蚀）的追溯与纠正措施记录（关联8.7.2）"
+        ]
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [],
+          "DocClass": "procedure",
+          "DocName": "22产品防护控制程序.doc",
+          "DocLocation": "文件头信息及6.1–6.6章节",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "为规范产品在搬运、贮存及生产过程中的防护方法，确保所需的物料、零配件及机器设备、产品在使用、搬运和交付过程中完好无损，特制订本程序。",
+          "WhatItProves": "企业已建立覆盖搬运、贮存、交付全过程的产品防护程序，明确了目的、适用范围、职责及基本防护活动分类（贮存、搬运、包装、防护、交付、标识追溯）。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [],
+          "DocClass": "work_instruction",
+          "DocName": "07仓库管理规范.doc",
+          "DocLocation": "第7条货物堆放及库房管理、第8条安全防护",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "所有货物均必须按仓区、库位分类别、品种、规格型号摆放整齐...不得将物料、产品直接放置于地面。仓库必须按规定设置消防器材...做好防盗、防锈、防水、防潮、防虫、防尘等工作。",
+          "WhatItProves": "企业针对仓库环节制定了具体防护执行标准，包含堆放规则（离地）、环境控制（防潮防锈防尘）及安全设施要求，构成防护要求的操作依据。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [],
+          "DocClass": "procedure",
+          "DocName": "22产品防护控制程序.doc",
+          "DocLocation": "6.4 防护",
+          "FindingType": "field_present",
+          "FillStatus": "filled",
+          "OriginalQuote": "6.4.1 所有物品的使用和存放应在适宜的环境下，以免物品受潮、污染及包装受损。6.4.2 针对易燃易爆的物品，应保存于单独的生产部，区域内严禁烟火，并进行必要的识别...",
+          "WhatItProves": "程序中明确提出了环境适宜性、危险品隔离及标识等防护要素，响应了条款注中‘标识、污染控制、储存、保护’的要求。",
+          "RiskLevel": "low"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "blank_template",
+          "Description": "《22产品防护控制程序.doc》第7节‘质量记录’明确写‘无’，但条款要求‘确保符合要求’需有实施证据支撑",
+          "RelatedFindings": [
+            "F1"
+          ],
+          "WhyItMatters": "无记录模板或实际记录意味着无法验证防护是否真实执行、是否有效，导致条款要求落空",
+          "SuggestedCheck": "现场抽查近3个月成品入库、发货、仓库巡检等活动，核实是否存在手写点检表、包装更换登记、温湿度监控记录等未归档的原始证据",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "scope_mismatch",
+          "Description": "《22产品防护控制程序.doc》3.1和3.2将防护职责全部赋予‘生产部’，但仓库管理由独立部门执行，与《07仓库管理规范.doc》中‘仓管员’职责存在权责交叉",
+          "RelatedFindings": [
+            "F1",
+            "F2"
+          ],
+          "WhyItMatters": "职责未清晰界定至具体岗位（如仓管员、物流司机、产线班组长），可能导致防护责任真空或推诿",
+          "SuggestedCheck": "访谈生产部、仓库、物流三方负责人，确认各环节防护活动的实际执行主体及交接界面（如成品入库时包装完整性由谁确认、谁签字）",
+          "Confidence": "medium"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "report_only",
+          "Description": "两份文档均未提供任何防护效果验证记录（如库存复检报告、运输破损率统计、客户投诉中防护相关问题分析）",
+          "RelatedFindings": [
+            "F1",
+            "F2"
+          ],
+          "WhyItMatters": "仅有程序和规范不能证明防护有效，需有结果导向的证据表明防护措施确实防止了不符合",
+          "SuggestedCheck": "调阅近半年内审报告、管理评审输入材料、8.7不合格输出统计表，查找涉及防护失效的案例及改进措施",
+          "Confidence": "high"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [],
+          "RequiredDocClasses": [
+            "procedure",
+            "work_instruction"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "《22产品防护控制程序.doc》确立系统级防护框架与职责，《07仓库管理规范.doc》提供仓库环节具体操作准则；二者共同构成‘防护要求被形成文件’的完整证据链",
+          "CanFormEvidence": "true",
+          "Gap": ""
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "8.5.4为独立可查条款，无上级合并要求",
+        "ReportUse": [
+          "establishment",
+          "criteria"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "8.6",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "8.6",
+        "ClauseTitle": "产品和服务的放行",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款管控产品和服务在交付顾客前的最终放行决策环节，聚焦于策划安排的完成验证、授权批准控制、接收准则符合性证据及放行人可追溯性；不覆盖过程检验、首件确认、巡检等中间监控活动（属8.5.1/8.5.2），也不覆盖不合格输出的处置决定（属8.7）。",
+        "ParentClause": "8",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "符合接收准则的证据",
+            "EvidenceHint": ""
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "可追溯到授权放行人员的信息",
+            "EvidenceHint": ""
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "8",
+        "ChapterTitle": "运行",
+        "ChapterIntent": "确保产品和服务的设计、生产、交付和放行全过程受控，稳定满足要求。",
+        "ChapterEvidenceFocus": [
+          "顾客要求与合同评审",
+          "生产过程控制",
+          "标识与可追溯",
+          "防护",
+          "放行",
+          "不合格输出控制"
+        ],
+        "ClauseRoleInChapter": "8.6是运行章节的放行关口，连接8.5生产服务提供和8.7不合格输出控制，必须有接收准则证据和授权放行人信息。",
+        "ChapterGap": [
+          "缺少对服务类交付（如软件部署、现场调试）放行的具体验证方式记录",
+          "未明确顾客批准让步放行的书面证据形式（如邮件、签字单）"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "8.5",
+          "Title": "生产和服务的提供",
+          "RelationType": "condition",
+          "Influence": "8.6放行前提为8.5中所有策划活动（含过程验证、首件确认、巡检等）已完成并合格，故8.5执行状态构成8.6放行的前置条件",
+          "AppliedTo": [
+            "a",
+            "b"
+          ],
+          "ReferenceStatus": "full"
+        },
+        {
+          "ClauseNumber": "8.7",
+          "Title": "不合格输出的控制",
+          "RelationType": "condition",
+          "Influence": "若8.6放行前发现不合格，须按8.7处理；但8.6本身不规定不合格处置动作，仅规定‘未完成策划安排不得放行’",
+          "AppliedTo": [
+            "a",
+            "b"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "8",
+        "PDCAPhase": [
+          "check"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "产品和服务的放行控制程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "规定放行职责、验收准则来源、授权机制、记录要求；不包含具体接收准则内容或某批产品的检验数据",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "目的",
+              "范围",
+              "职责",
+              "测量和监视前的准备",
+              "进货测量和监视",
+              "产品的测量和监视",
+              "监视和测量记录"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "进料检验报告",
+            "DocClass": "report",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "report_v1",
+            "DocBoundary": "覆盖进货批次的验收项目、验收要求、检验结果；不覆盖出厂放行或服务交付",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "检验日期",
+              "材料名称",
+              "规格/型号",
+              "检验项目",
+              "验收要求",
+              "检验工具",
+              "检验内容描述",
+              "检验结果",
+              "编制",
+              "审核",
+              "批准"
+            ],
+            "Frequency": "每批",
+            "Coverage": "抽样",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "产品出厂检验报告",
+            "DocClass": "report",
+            "DocScope": "batch",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "report_v1",
+            "DocBoundary": "覆盖出厂批次的检验项目、情况描述、检查结果、最终判定；不包含过程检验或首件确认数据",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "产品名称",
+              "规格型号",
+              "出货数量",
+              "抽查数量",
+              "检验项目",
+              "情况描述",
+              "检查结果",
+              "结果",
+              "检验员",
+              "日期",
+              "审核"
+            ],
+            "Frequency": "每批",
+            "Coverage": "抽样",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "检验规程/验收准则",
+            "DocClass": "work_instruction",
+            "DocScope": "process",
+            "ExtractionDepth": "criteria",
+            "DocProfileKey": "work_instruction_v1",
+            "DocBoundary": "提供各阶段（进料、过程、出厂）具体的接收准则文本；不包含执行记录",
+            "EvidenceRole": "criteria",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "适用对象",
+              "检验项目",
+              "验收要求",
+              "检验方法",
+              "抽样方案",
+              "判定规则"
+            ],
+            "Frequency": "每产品/每过程",
+            "Coverage": "未明确",
+            "ReportUse": "criteria",
+            "ClauseItemRefs": [
+              "a"
+            ]
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [],
+        "Gaps": [
+          "无独立文档体现‘服务放行’的接收准则与记录（如调试报告、客户签收单）",
+          "无文件明确‘授权放行人’的任命依据或权限矩阵（如谁有权批准让步放行）"
+        ]
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "a",
+            "b"
+          ],
+          "DocClass": "procedure",
+          "DocName": "21产品和服务的放行控制程序.doc",
+          "DocLocation": "全文",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "4.5.1 在监视和测量记录中应清楚地表明产品是否已按规定标准通过了监视和测量，记录应表明负责合格放行的授权责任者。",
+          "WhatItProves": "程序文件明示了需在记录中体现授权放行人信息，并引用了接收准则概念",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "DocClass": "report",
+          "DocName": "01-1进料检验报告.doc",
+          "DocLocation": "检验记录表",
+          "FindingType": "record_exists",
+          "FillStatus": "partial",
+          "OriginalQuote": "检验项目 | 验收要求 | 检验工具 | 检验内容描述 | 检验结果\n外观 | 无变形/明显划伤生锈 | 目视 | 无变形/明显划伤生锈 | 合格",
+          "WhatItProves": "提供了具体检验项目的验收要求与对应合格结果，构成接收准则符合性证据",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "DocClass": "report",
+          "DocName": "01-1进料检验报告.doc",
+          "DocLocation": "底部签名栏",
+          "FindingType": "field_present",
+          "FillStatus": "partial",
+          "OriginalQuote": "编制：胥加娟       审核：胥加娟             批准：潘明海",
+          "WhatItProves": "报告中存在编制、审核、批准三级签名，其中批准人可视为授权放行人",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F4",
+          "ClauseItemRef": [
+            "a",
+            "b"
+          ],
+          "DocClass": "report",
+          "DocName": "02产品出厂检验报告.doc",
+          "DocLocation": "结果栏及签名栏",
+          "FindingType": "record_exists",
+          "FillStatus": "partial",
+          "OriginalQuote": "结果 | ☑合格                □不合格              □让步接受\n检验员 |  | 日期 |  |  |  | 审核 |  |  | 日期 |",
+          "WhatItProves": "显示最终放行判定（合格勾选）及检验员、审核栏位，但未填写具体姓名与日期",
+          "RiskLevel": "high"
+        },
+        {
+          "FindingId": "F5",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "DocClass": "record",
+          "DocName": "03-首件报告.doc",
+          "DocLocation": "表头及检验项目栏",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "项次 | 检查内容 |  |  |  |  | 判定 |  |  | 检验问题描述 |",
+          "WhatItProves": "存在首件检验模板，但无实际填写内容，无法证明接收准则应用",
+          "RiskLevel": "medium"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "missing_signature",
+          "Description": "02产品出厂检验报告中‘检验员’和‘审核’栏位为空，无签署人姓名与日期",
+          "RelatedFindings": [
+            "F4"
+          ],
+          "WhyItMatters": "条款b要求‘可追溯到授权放行人员’，空签名导致无法识别实际放行人及授权状态",
+          "SuggestedCheck": "查该报告对应批次的实物存档或电子系统留痕，确认是否补签或由其他方式授权",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "scope_mismatch",
+          "Description": "21程序文件第4.4.3条写‘除非顾客批准，否则在所有规定活动完成之前，均不得放行产品’，但未定义‘所有规定活动’具体包含哪些（如是否含8.5.2首件、8.5.3过程巡检）",
+          "RelatedFindings": [
+            "F1"
+          ],
+          "WhyItMatters": "放行前提模糊将导致接收准则覆盖不全，影响条款a证据完整性",
+          "SuggestedCheck": "查8.5相关程序及记录，确认首件、巡检等是否被纳入放行前必完活动清单",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "report_only",
+          "Description": "04制程巡检报告、05质检日报表仅有模板，无任何填写实例",
+          "RelatedFindings": [],
+          "WhyItMatters": "虽不直接属8.6放行证据，但其缺失可能暗示过程监控薄弱，间接影响8.6放行决策可靠性",
+          "SuggestedCheck": "询问品质部是否实际执行巡检及日报，调取近3个月电子系统记录或手写原始记录",
+          "Confidence": "medium"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "report",
+            "work_instruction"
+          ],
+          "MinDocs": 3,
+          "CombineRule": "程序文件（E1）规定需依据验收准则检验 → 检验报告（E2/E3）体现具体验收要求与结果 → 检验规程（E4）提供准则原文支撑",
+          "CanFormEvidence": "partial",
+          "Gap": "缺少独立检验规程文档（E4未在输入中出现），当前仅靠报告内嵌验收要求支撑，准则来源未单独成文"
+        },
+        {
+          "AssemblyId": "A2",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "report"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序文件（E1）要求记录授权放行人 → 出厂报告（E3）含检验员/审核栏位，但F4显示未签署；进料报告（E2）有完整三级签署，可部分佐证授权机制",
+          "CanFormEvidence": "partial",
+          "Gap": "出厂放行环节缺乏有效签署记录，无法形成完整可追溯链"
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "8.6为独立可检查条款，证据链清晰且具操作性，无需合并至父条款",
+        "ReportUse": [
+          "sample",
+          "criteria",
+          "combination"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "9.1.2",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "9.1.2",
+        "ClauseTitle": "顾客满意",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款聚焦于组织如何主动监视顾客对其需求和期望已得到满足的程度的感受，并确定获取、监视和评审该感受信息的方法；不涉及顾客投诉处理流程本身（属8.2.2）、不规定具体满意度阈值，也不覆盖顾客需求识别与确定过程（属8.2.1）。",
+        "ParentClause": "9.1",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "组织应监视顾客对其需求和期望已得到满足的程度的感受。",
+            "EvidenceHint": "需证明存在对‘感受’的主动监视行为，而非仅收集客观交付数据（如交货准时率）或被动接收投诉。"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "组织应确定获取、监视和评审该信息的方法。",
+            "EvidenceHint": "需证明方法已形成文件化规定，且该方法具备可操作性（含频次、对象、工具、职责、分析逻辑）。"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "9",
+        "ChapterTitle": "绩效评价",
+        "ChapterIntent": "通过监视、测量、分析、顾客满意、内部审核和管理评审评价体系绩效。",
+        "ChapterEvidenceFocus": [
+          "顾客满意",
+          "监视测量分析评价",
+          "内部审核",
+          "管理评审"
+        ],
+        "ClauseRoleInChapter": "9.1.2是顾客满意维度的绩效评价输入，支撑9.1.3数据分析和9.3管理评审。",
+        "ChapterGap": [
+          "缺乏对顾客不满意趋势的长期统计分析证据（如三年同比/环比）",
+          "未见将顾客满意结果与市场表现（如份额、复购率）进行关联分析的机制"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "9.1.3",
+          "Title": "分析与评价",
+          "RelationType": "traceability",
+          "Influence": "9.1.2输出的顾客满意信息必须作为9.1.3数据分析的输入之一，但本条款不直接要求执行分析，仅要求确定评审方法。",
+          "AppliedTo": [
+            "b"
+          ],
+          "ReferenceStatus": "full"
+        },
+        {
+          "ClauseNumber": "9.3",
+          "Title": "管理评审",
+          "RelationType": "traceability",
+          "Influence": "9.1.2所确定的监视与评审结果须提交至管理评审（见5.2.7），构成9.3.2输入，但本条款不规定提交形式或内容深度。",
+          "AppliedTo": [
+            "b"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "9",
+        "PDCAPhase": [
+          "CHECK"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "顾客满意监测程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖监视对象（顾客感受）、方法（调查表+座谈+市场占有率等）、频次（每年至少一次）、职责（销售部主导）、评审路径（上报总经理、分发相关部门、递交管理评审）；不覆盖具体打分模型计算逻辑细节。",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "目的",
+              "范围",
+              "职责",
+              "监视方法",
+              "频次",
+              "结果应用路径"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全量",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "顾客满意度调查表",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖单次调查事件中具体顾客名称、调查日期、各维度权数与得分、改善建议、客户代表及签字；不覆盖跨顾客横向对比或趋势分析。",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "顾客名称",
+              "调查日期",
+              "调查项目",
+              "权数",
+              "非常满意(100)",
+              "比较满意(80)",
+              "一般(50)",
+              "不太满意(20)",
+              "很不满意(0)",
+              "得分",
+              "改善建议",
+              "客户代表",
+              "日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "抽样",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "顾客满意度分析报告",
+            "DocClass": "report",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "report_v1",
+            "DocBoundary": "覆盖单次调查事件的汇总分析结果（平均分、回复率、分项得分、总结结论）；不覆盖原因分析、改进措施跟踪或与历史数据对比。",
+            "EvidenceRole": "support",
+            "Required": false,
+            "Condition": "当程序规定需进行统计分析时（见5.1.2、5.1.4），则该报告为必要实施证据。",
+            "ExpectedFields": [
+              "顾客名称",
+              "产品或服务的质量",
+              "价格",
+              "产品交货期或服务进度",
+              "服务人员态度",
+              "总分",
+              "平均分",
+              "回复率",
+              "调查日期",
+              "总结人",
+              "总结日期"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "抽样",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "a",
+              "b"
+            ]
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [],
+        "Gaps": []
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "DocClass": "procedure",
+          "DocName": "13顾客满意监测程序.doc",
+          "DocLocation": "全文，特别是5.1.2、5.1.3、5.1.4、5.2.7",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "5.1.2 销售部通过现场、传真、E-mail或邮寄等方式每年至少一次将《顾客满意度调查表》交顾客填写，并进行统计和分析了解顾客对公司的满意程度，如果回收率＜60%，则需重新进行调查。",
+          "WhatItProves": "程序明文规定了获取（邮寄/现场发放）、监视（填写调查表）、评审（统计和分析）顾客满意信息的方法，且明确了频次（每年至少一次）和回收率阈值（＜60%需重调）。",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "a",
+            "b"
+          ],
+          "DocClass": "record",
+          "DocName": "01顾客满意度调查表.doc",
+          "DocLocation": "表格主体及三份样本行",
+          "FindingType": "record_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "顾客名称：常州摇旗精密磨具有限公司，调查日期：2026-08-15，调查项目：服务质量，权数：40，非常满意(100)：√，得分：40，改善建议：交货期请按合同准期进行。",
+          "WhatItProves": "存在实际执行的顾客满意度调查记录，覆盖三家顾客，包含调查日期、项目、权数、选择项、得分及改善建议，体现对顾客‘感受’的采集。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [
+            "a",
+            "b"
+          ],
+          "DocClass": "report",
+          "DocName": "02顾客满意度分析报告.doc",
+          "DocLocation": "全文，特别是‘平均分得分为96.6分’及分项得分表格",
+          "FindingType": "report_only",
+          "FillStatus": "partial",
+          "OriginalQuote": "本公司2026-08-15 组织对3家顾客进行了满意度调查，回复了1家，回复率  100%   。……综上所述：本公司顾客满意度在各项均为满意。",
+          "WhatItProves": "存在对调查结果的汇总分析行为，生成了含平均分、分项得分、回复率及定性结论的报告，但报告中‘回复了1家’与调查表显示3家填写存在明显矛盾。",
+          "RiskLevel": "high"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "cross_doc_conflict",
+          "Description": "《顾客满意度分析报告》称‘回复了1家’，但《顾客满意度调查表》提供3家完整填写样本。",
+          "RelatedFindings": [
+            "F2",
+            "F3"
+          ],
+          "WhyItMatters": "直接影响对‘监视’真实性的判断——若仅1家回复却呈现3家数据，则分析基础失实，无法验证是否真正获取并评审了顾客感受。",
+          "SuggestedCheck": "核查原始回收凭证（如邮件回执、签收单、系统日志），确认实际有效回收数量及对应顾客清单。",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "date_conflict",
+          "Description": "所有调查表与分析报告的调查日期均为2026-08-15，但程序要求‘每年至少一次’，未见其他年份或更早批次证据。",
+          "RelatedFindings": [
+            "F1",
+            "F2",
+            "F3"
+          ],
+          "WhyItMatters": "无法验证监视活动是否按程序规定的频次持续开展，存在单次突击调查替代年度例行监视的风险。",
+          "SuggestedCheck": "抽查前一年度（如2025年）的调查表及分析报告，确认是否形成时间序列。",
+          "Confidence": "medium"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "report_only",
+          "Description": "分析报告中‘平均分得分为96.6分’无计算过程展示，且未见其与调查表原始得分的对应关系验证。",
+          "RelatedFindings": [
+            "F3"
+          ],
+          "WhyItMatters": "报告结论缺乏可追溯性，无法确认‘96.6分’是否由3家顾客原始得分准确加权计算得出，影响评审结果可信度。",
+          "SuggestedCheck": "索要该次调查的原始得分汇总计算底稿或电子表格，核验加权逻辑与总分一致性。",
+          "Confidence": "medium"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a",
+            "b"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序（E1）规定方法 → 记录（E2）证明按该方法执行 → 二者共同构成‘监视感受’及‘确定方法’的完整证据链",
+          "CanFormEvidence": "partial",
+          "Gap": "因F3中报告与记录存在数量冲突，且报告计算过程不可验证，导致‘评审该信息’环节证据链断裂；需补充可验证的分析过程证据或澄清回收数量矛盾。"
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "9.1.2为独立可检查条款，其证据要求明确指向监视行为与方法确定，不依赖其他条款合并评价。",
+        "ReportUse": [
+          "sample",
+          "combination"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "9.3.2",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "9.3.2",
+        "ClauseTitle": "管理评审输入",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款规定管理评审必须系统性纳入的13类输入信息，聚焦于‘已发生事实+趋势分析’的证据支撑，不涉及评审如何组织、谁主持、输出形式等过程安排。",
+        "ParentClause": "9.3",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "以往管理评审所采取措施的情况",
+            "EvidenceHint": "需体现闭环验证，非仅列计划"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "与质量管理体系相关的内外部因素的变化",
+            "EvidenceHint": "需具体变化事项（如法规更新、市场收缩、新客户准入要求），非泛泛而谈环境分析"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "requirement",
+            "Text": "下列有关质量管理体系绩效和有效性的信息，包括其趋势：1) 顾客满意和有关相关方的反馈；2) 质量目标的实现程度；3) 过程绩效以及产品和服务的合格情况；4) 不合格及纠正措施；5) 监视和测量结果；6) 审核结果；7) 外部供方的绩效",
+            "EvidenceHint": "每小项均需数据/事实支撑，趋势指至少两个周期对比或趋势描述"
+          },
+          {
+            "ItemCode": "d",
+            "ItemType": "requirement",
+            "Text": "资源的充分性",
+            "EvidenceHint": "需识别资源缺口（人力/设备/技能/时间）并评估影响，非仅声明‘资源充足’"
+          },
+          {
+            "ItemCode": "e",
+            "ItemType": "requirement",
+            "Text": "应对风险和机遇所采取措施的有效性（见 6.1）",
+            "EvidenceHint": "需关联6.1识别的风险/机遇清单，验证措施是否落地及效果"
+          },
+          {
+            "ItemCode": "f",
+            "ItemType": "requirement",
+            "Text": "改进的机会",
+            "EvidenceHint": "需来自数据分析、审核发现、顾客反馈等客观来源，非主观提议"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "9",
+        "ChapterTitle": "绩效评价",
+        "ChapterIntent": "通过监视、测量、分析、顾客满意、内部审核和管理评审评价体系绩效。",
+        "ChapterEvidenceFocus": [
+          "顾客满意",
+          "监视测量分析评价",
+          "内部审核",
+          "管理评审"
+        ],
+        "ClauseRoleInChapter": "9.3.2是管理评审输入清单，汇总9.1监视测量、9.2内审、8.4供方绩效、10.2不合格等结果。",
+        "ChapterGap": [
+          "缺少对9.1.3数据分析结果在管理评审中的直接引用证据",
+          "未明确9.2内审结果如何结构化输入至9.3.2(c)6)"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "6.1",
+          "Title": "应对风险和机遇的措施",
+          "RelationType": "condition",
+          "Influence": "9.3.2(e)有效性验证必须回溯至6.1识别的风险/机遇及对应措施",
+          "AppliedTo": [
+            "e"
+          ],
+          "ReferenceStatus": "full"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "9",
+        "PDCAPhase": [
+          "CHECK"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "管理评审控制程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "规定管理评审输入内容、职责分工、资料准备要求；不包含实际输入数据",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "5.2 管理评审的输入",
+              "输入内容与GB/T 19001-2016 9.3.2条款逐项对应",
+              "各部门输入资料分工",
+              "输入资料的数据化要求",
+              "输入资料提交时限"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e",
+              "f"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "管理评审记录",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖单次管理评审会议的输入呈现、讨论摘要、决策依据；不覆盖跨周期趋势分析",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "评审内容（按9.3.2 a-f分项列出）",
+              "各输入项对应的数据/事实摘要",
+              "趋势描述（如同比/环比）",
+              "输入资料来源部门署名",
+              "管理者代表签字确认"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全事件",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e",
+              "f"
+            ]
+          },
+          {
+            "ItemId": "E3",
+            "Name": "管理评审改进措施实施计划",
+            "DocClass": "plan",
+            "DocScope": "event",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "plan_v1",
+            "DocBoundary": "记录针对9.3.2各输入项暴露问题制定的改进措施；不包含措施执行过程记录",
+            "EvidenceRole": "support",
+            "Required": false,
+            "Condition": "当9.3.2(a)中存在以往措施时触发",
+            "ExpectedFields": [
+              "责任部门",
+              "负责人",
+              "计划时间",
+              "预计完成日期",
+              "改进内容（对应输入项编号）",
+              "验证方式"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全事件",
+            "ReportUse": "counter",
+            "ClauseItemRefs": [
+              "a"
+            ]
+          },
+          {
+            "ItemId": "E4",
+            "Name": "过程业绩及产品符合性报告",
+            "DocClass": "report",
+            "DocScope": "system",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "report_v1",
+            "DocBoundary": "提供9.3.2(c)2/3/4/5所需的过程绩效、合格率、不合格统计、监视测量数据；不覆盖顾客满意或供方绩效",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "质量目标达成率数据",
+              "过程关键指标（如一次交检合格率）",
+              "不合格品数量/批次/原因分类",
+              "监视测量设备校准状态汇总",
+              "趋势图表或文字描述"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全系统",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E5",
+            "Name": "相关方信息及投诉情况报告",
+            "DocClass": "report",
+            "DocScope": "system",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "report_v1",
+            "DocBoundary": "提供9.3.2(c)1所需顾客满意率、投诉处理结果、相关方反馈摘要；不覆盖内部员工满意度",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "顾客满意度调查方法",
+              "满意度得分及目标对比",
+              "投诉数量/类型/处置结果",
+              "相关方主动反馈摘要",
+              "趋势分析"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全系统",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E6",
+            "Name": "应对风险和机遇所采取措施的有效性报告",
+            "DocClass": "report",
+            "DocScope": "system",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "report_v1",
+            "DocBoundary": "提供9.3.2(e)所需的风险/机遇清单、对应措施、验证证据（如措施执行记录、效果数据）；不覆盖6.1初始识别过程",
+            "EvidenceRole": "support",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "风险/机遇编号（可追溯至6.1）",
+              "已采取措施描述",
+              "措施实施证据（如培训记录、流程修订）",
+              "有效性验证数据（如风险发生率下降）",
+              "未关闭风险说明"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全系统",
+            "ReportUse": "combination",
+            "ClauseItemRefs": [
+              "e"
+            ]
+          }
+        ],
+        "Dependencies": [
+          {
+            "Source": "E1",
+            "Target": "E2",
+            "DependencyType": "input_template"
+          },
+          {
+            "Source": "E4",
+            "Target": "E2",
+            "DependencyType": "data_source"
+          },
+          {
+            "Source": "E5",
+            "Target": "E2",
+            "DependencyType": "data_source"
+          },
+          {
+            "Source": "E6",
+            "Target": "E2",
+            "DependencyType": "data_source"
+          }
+        ],
+        "CrossChecks": [
+          {
+            "CheckId": "CC1",
+            "SourceItems": [
+              "E2",
+              "E4"
+            ],
+            "CheckRule": "E2中‘质量目标的实现程度’摘要必须与E4中目标达成率数据一致",
+            "CheckType": "consistency"
+          },
+          {
+            "CheckId": "CC2",
+            "SourceItems": [
+              "E2",
+              "E6"
+            ],
+            "CheckRule": "E2中‘应对风险和机遇所采取措施的有效性’结论必须基于E6的验证数据",
+            "CheckType": "traceability"
+          }
+        ],
+        "Gaps": [
+          "缺少独立的‘外部供方绩效评价报告’（对应9.3.2(c)7），当前仅在采购纪要中零散提及",
+          "缺少‘资源充分性评估专项报告’（对应9.3.2(d)），当前仅在纪要中定性描述"
+        ]
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "DocClass": "record",
+          "DocName": "管理评审记录.doc",
+          "DocLocation": "评审内容：1. 以往管理评审所采取措施的情况 （不适用）",
+          "FindingType": "field_present",
+          "FillStatus": "filled",
+          "OriginalQuote": "1. 以往管理评审所采取措施的情况 （不适用）",
+          "WhatItProves": "企业声明无以往管理评审措施需要跟踪",
+          "RiskLevel": "low"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "b"
+          ],
+          "DocClass": "record",
+          "DocName": "管理评审记录.doc",
+          "DocLocation": "评审内容：2. 与质量管理体系相关的内外部因素的变化;",
+          "FindingType": "field_present",
+          "FillStatus": "filled",
+          "OriginalQuote": "2. 与质量管理体系相关的内外部因素的变化;",
+          "WhatItProves": "企业识别了该输入项，但未在纪要中提供具体变化事实",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "DocClass": "record",
+          "DocName": "管理评审记录.doc",
+          "DocLocation": "评审内容：3. 下列有关质量管理体系绩效和有效性的信息，包括其趋势...13. 改进的机会。",
+          "FindingType": "field_present",
+          "FillStatus": "filled",
+          "OriginalQuote": "3. 下列有关质量管理体系绩效和有效性的信息，包括其趋势<br>4. 顾客满意和有关相关方的反馈<br>5. 质量目标的实现程度;<br>6. 过程绩效以及产品和服务的合格情况;<br>7. 不合格寮及纠正措施;<br>8. 监视和测量结果;<br>9. 审核结果;<br>10. 外部供方的绩效<br>11. 资源的充分性;<br>12. 应对风险和机遇所采取措施的有效性<br>13. 改进的机会。",
+          "WhatItProves": "企业完整列出了9.3.2(c)全部子项，但未在纪要中提供对应数据",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F4",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "DocClass": "record",
+          "DocName": "管理评审记录.doc",
+          "DocLocation": "过程业绩及产品符合性报告 KSY-QMS-P-24-03",
+          "FindingType": "report_only",
+          "FillStatus": "filled",
+          "OriginalQuote": "一、我公司向顾客提供的产品\n吻合钉\n二、为达到本公司质量目标，各部门主要做了如下工作：\n1、加强了采购过程的控制\n本年度采购人员依据GB/T19001-2016标准的要求，加强了对采购过程的控制...",
+          "WhatItProves": "存在过程业绩报告，但未在管理评审纪要中引用其具体数据",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F5",
+          "ClauseItemRef": [
+            "e"
+          ],
+          "DocClass": "record",
+          "DocName": "管理评审记录.doc",
+          "DocLocation": "应对风险和机遇所采取措施的有效性 KSY-QMS-P-24-03",
+          "FindingType": "report_only",
+          "FillStatus": "filled",
+          "OriginalQuote": "公司根据所处的环境和相关方的需求及期望，识别了当前的风险和机遇，并根据识别情况进行评估，将风险通过一系列管控措施进行有效降低和消除...",
+          "WhatItProves": "存在风险机遇有效性报告，但未在管理评审纪要中展示其验证数据",
+          "RiskLevel": "medium"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "report_only",
+          "Description": "管理评审纪要中仅罗列输入项标题，未引用《过程业绩及产品符合性报告》《相关方信息及投诉情况报告》等支撑报告的具体数据",
+          "RelatedFindings": [
+            "F4"
+          ],
+          "WhyItMatters": "9.3.2要求输入‘信息’而非‘文件名’，未引用数据则无法证明输入真实发生",
+          "SuggestedCheck": "核查《过程业绩及产品符合性报告》中质量目标达成率、不合格率等数据是否在纪要中被摘录或引用",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "inconsistent_person",
+          "Description": "《管理评审记录.doc》中‘管理评审会议纪要：行政、销售、采购’署名‘管代：胥加娟’，但胥加娟同时是采购部经理，存在职责冲突嫌疑",
+          "RelatedFindings": [
+            "F1"
+          ],
+          "WhyItMatters": "管理者代表不应兼任可能影响其独立评价的运营部门负责人，影响9.3.2输入的客观性",
+          "SuggestedCheck": "核查管理者代表任命文件及采购部经理岗位说明书，确认职责分离情况",
+          "Confidence": "medium"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "date_conflict",
+          "Description": "《管理评审记录.doc》显示评审时间为2026.9.27，但所有附件报告（如KSY-QMS-P-24-03）日期均为2026.9.26，存在输入资料晚于评审日期的逻辑矛盾",
+          "RelatedFindings": [
+            "F5"
+          ],
+          "WhyItMatters": "输入资料必须在评审前完成，否则无法支撑评审决策，违反9.3.2策划要求",
+          "SuggestedCheck": "核查附件报告实际生成时间戳或审批签字时间",
+          "Confidence": "high"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a"
+          ],
+          "RequiredDocClasses": [
+            "record"
+          ],
+          "MinDocs": 1,
+          "CombineRule": "管理评审记录中需明确说明以往措施状态（已完成/进行中/未启动）及验证结果",
+          "CanFormEvidence": "false",
+          "Gap": "纪要中仅写‘不适用’，无佐证材料"
+        },
+        {
+          "AssemblyId": "A2",
+          "ClauseItemRef": [
+            "c"
+          ],
+          "RequiredDocClasses": [
+            "record",
+            "report"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "管理评审记录需引用过程业绩报告、相关方报告、风险机遇报告中的具体数据，形成输入证据链",
+          "CanFormEvidence": "partial",
+          "Gap": "纪要仅列标题，未引用报告数据"
+        },
+        {
+          "AssemblyId": "A3",
+          "ClauseItemRef": [
+            "e"
+          ],
+          "RequiredDocClasses": [
+            "record",
+            "report"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "管理评审记录中‘应对风险和机遇所采取措施的有效性’结论必须与风险机遇报告中的验证数据一致",
+          "CanFormEvidence": "partial",
+          "Gap": "纪要未展示验证数据，仅转述报告结论"
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "9.3.2是独立检查条款，输入完整性与证据支撑性需单独评价",
+        "ReportUse": [
+          "combination"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "10.2.1",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "10.2.1",
+        "ClauseTitle": "不合格和纠正措施",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条款规范组织对已发生的不合格（含投诉）所开展的响应、原因分析、纠正措施实施及有效性评审全过程；不覆盖预防措施（属10.2.2）、不覆盖改进总则（10.1）或持续改进（10.3），亦不规定具体统计工具或根本原因分析方法的选择。",
+        "ParentClause": "10.2",
+        "Children": [],
+        "ClauseItems": [
+          {
+            "ItemCode": "a",
+            "ItemType": "requirement",
+            "Text": "对不合格做出应对，并在适用时：1) 采取措施以控制和纠正不合格；2) 处置后果。",
+            "EvidenceHint": "需证明存在即时响应动作（如隔离、返工、让步接收等）及后果处置（如赔偿、道歉、召回等）"
+          },
+          {
+            "ItemCode": "b",
+            "ItemType": "requirement",
+            "Text": "通过下列活动，评价是否需要采取措施，以消除产生不合格的原因，避免其再次发生或者在其他场合发生：1) 评审和分析不合格；2) 确定不合格的原因；3) 确定是否存在或可能发生类似的不合格。",
+            "EvidenceHint": "需证明开展了系统性原因分析（非表面归因）及横向排查（同类过程/产品/供方/时段）"
+          },
+          {
+            "ItemCode": "c",
+            "ItemType": "requirement",
+            "Text": "实施所需的措施。",
+            "EvidenceHint": "需证明纠正措施已按计划实际执行，而非仅停留在纸面计划"
+          },
+          {
+            "ItemCode": "d",
+            "ItemType": "requirement",
+            "Text": "评审所采取的纠正措施的有效性。",
+            "EvidenceHint": "需证明有效性验证基于可观察结果（如重复发生率下降、客户投诉关闭、检验合格率提升等），而非主观判断"
+          },
+          {
+            "ItemCode": "e",
+            "ItemType": "requirement",
+            "Text": "需要时，更新在策划期间确定的风险和机遇。",
+            "EvidenceHint": "仅当不合格揭示原有风险识别遗漏或变化时触发，属条件性要求"
+          },
+          {
+            "ItemCode": "f",
+            "ItemType": "requirement",
+            "Text": "需要时，变更质量管理体系。",
+            "EvidenceHint": "仅当纠正措施涉及文件、职责、流程等体系要素调整时触发，属条件性要求"
+          }
+        ]
+      },
+      "ChapterContext": {
+        "ChapterCode": "10",
+        "ChapterTitle": "改进",
+        "ChapterIntent": "通过系统性处理不合格和持续优化，提升质量管理体系的适宜性、充分性和有效性。",
+        "ChapterEvidenceFocus": [
+          "改进总则",
+          "不合格和纠正措施",
+          "持续改进"
+        ],
+        "ClauseRoleInChapter": "10.2.1是纠正措施的执行要求，连接8.7不合格输出、9.2内审不合格和投诉，强调原因分析和措施有效性评审。",
+        "ChapterGap": [
+          "缺乏对‘类似不合格’横向排查的具体操作指引（如跨部门/跨产品线/跨时间周期的比对机制）",
+          "未明确纠正措施有效性评审的时间窗口与再发验证周期"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "8.7",
+          "Title": "不合格输出的控制",
+          "RelationType": "condition",
+          "Influence": "触发10.2.1 a)项响应的前提之一：当8.7中识别出不合格输出时，必须启动10.2.1流程",
+          "AppliedTo": [
+            "a"
+          ],
+          "ReferenceStatus": "missing"
+        },
+        {
+          "ClauseNumber": "9.2",
+          "Title": "内部审核",
+          "RelationType": "condition",
+          "Influence": "触发10.2.1 b)项原因分析的输入来源之一：内审发现的不合格须纳入10.2.1评审范围",
+          "AppliedTo": [
+            "b"
+          ],
+          "ReferenceStatus": "missing"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "10",
+        "PDCAPhase": [
+          "check",
+          "act"
+        ],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "不符合、纠正预防措施控制程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖不合格识别来源、责任分工、原因分析路径、措施制定与验证职责；不覆盖具体某次不合格的处置细节或数据记录。",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "目的",
+              "范围",
+              "职责",
+              "程序内容（含4.2.2不合格识别情形、4.2.3原因分析与措施制定流程、4.2.4有效性评审要求）",
+              "相关文件",
+              "记录"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e",
+              "f"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "纠正预防措施处理单",
+            "DocClass": "record",
+            "DocScope": "event",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "用于单次不合格事件的全过程记录，覆盖事实陈述、原因分析、措施计划、评审、跟踪、效果验证；不覆盖多事件趋势分析或体系级更新。",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "当发生不合格时",
+            "ExpectedFields": [
+              "不符合/潜在不符合事实陈述",
+              "原因分析",
+              "纠正措施实施计划",
+              "纠正措施评审",
+              "措施跟踪实施情况",
+              "措施效果评价及验证"
+            ],
+            "Frequency": "每事件",
+            "Coverage": "全事件",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ]
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [],
+        "Gaps": [
+          "无证据要求支撑条款e)‘更新风险和机遇’的触发判定依据与记录方式",
+          "无证据要求支撑条款f)‘变更质量管理体系’的决策痕迹与版本控制关联"
+        ]
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "procedure",
+          "DocName": "18不符合、纠正预防措施控制程序.doc",
+          "DocLocation": "全文",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "4.2.2 识别不合格与质量、环境、安全不符合、事故事件和质量管理体系各过程输出的信息进行识别：a 生产过程、质量出现重大问题和顾客投诉时；b 不合格品处理报告；c 管理评审评审出的不符合；d 内审发现不合格；e 供方产品或服务出现严重不合格；f）其他不符合质量方针、目标或质量管理体系文件要求的情况。",
+          "WhatItProves": "程序明确定义了不合格识别的六类触发情形，覆盖投诉、内审、管理评审等标准要求来源。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "procedure",
+          "DocName": "18不符合、纠正预防措施控制程序.doc",
+          "DocLocation": "4.2.3.1-4.2.3.4",
+          "FindingType": "field_present",
+          "FillStatus": "filled",
+          "OriginalQuote": "4.2.3.1 对情况a）、b）、c）由发现部门填写《纠正预防措施处理单》中“不合格事实”栏，确定责任部门；由责任部门填写“原因分析”栏，制定纠正措施并由品质部等部门评价措施可行后实施，跟踪验证实施效果。",
+          "WhatItProves": "程序规定了不同不合格来源对应的责任分工与流程路径，体现对a)响应、b)原因分析、c)措施实施、d)效果验证的结构化安排。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F3",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "DocClass": "record",
+          "DocName": "01纠正预防措施处理单.doc",
+          "DocLocation": "表头及字段结构",
+          "FindingType": "template_only",
+          "FillStatus": "template_only",
+          "OriginalQuote": "纠正/预防措施处理单\n不符合/潜在不符合事实陈述：\n原因分析：\n经理责任人签字：              日期：\n纠正措施实施计划：\n经理责任人签字：                日期：\n纠正措施评审:\n评审人签字：                 日期：\n措施跟踪实施情况：\n跟踪人签字：                日期：\n措施效果评价及验证：\n验证人签字：               日期：",
+          "WhatItProves": "表单模板完整包含条款a)至d)要求的全部核心字段：事实陈述、原因分析、措施计划、评审、跟踪、效果验证。",
+          "RiskLevel": "high"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "blank_template",
+          "Description": "《纠正预防措施处理单》仅有模板结构，无任何填写实例，无法确认是否实际运行。",
+          "RelatedFindings": [
+            "F3"
+          ],
+          "WhyItMatters": "条款要求‘当出现不合格时’必须执行，模板存在不等于过程受控；审核需抽样验证真实执行痕迹。",
+          "SuggestedCheck": "抽查近6个月顾客投诉、内审不合格、生产不合格品报告，追踪是否生成对应处理单及闭环记录。",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "missing_signature",
+          "Description": "《纠正预防措施处理单》模板中‘原因分析’‘纠正措施评审’‘措施效果评价及验证’等关键字段仅有签字栏，无签名示例或签署角色说明。",
+          "RelatedFindings": [
+            "F3"
+          ],
+          "WhyItMatters": "条款b)2)要求‘确定不合格的原因’、d)要求‘评审有效性’，签字缺失将导致责任追溯失效，影响证据可信度。",
+          "SuggestedCheck": "核查已填写的处理单（如有），确认各环节签字是否齐全、签署人是否具备相应职责权限。",
+          "Confidence": "medium"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "scope_mismatch",
+          "Description": "程序文件4.2.2列出的不合格识别情形包含‘环境、安全不符合、事故事件’，超出GB/T 19001-2016质量管理体系范围。",
+          "RelatedFindings": [
+            "F1"
+          ],
+          "WhyItMatters": "条款10.2.1明确限定于‘不合格’（质量语境），混入环境/安全内容可能稀释质量焦点或造成职责混淆。",
+          "SuggestedCheck": "确认该程序是否为多体系整合文件；若是，则需验证质量相关条款执行是否独立可识别。",
+          "Confidence": "medium"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c",
+            "d"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序文件（E1）提供流程框架与职责定义；处理单（E2）提供单次不合格的执行证据。二者组合可证明从制度到落地的闭环。",
+          "CanFormEvidence": "partial",
+          "Gap": "缺少已填写的处理单实例，无法验证程序是否实际执行；缺少对‘类似不合格’横向排查（b)3)）的操作证据"
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "10.2.1为独立可检查条款，所有子项均需单独验证。",
+        "ReportUse": [
+          "sample",
+          "combination"
+        ]
+      }
+    }
+  },
+  {
+    "clause": "7.1.6",
+    "status": "JSON_OK",
+    "result": {
+      "ClauseContext": {
+        "ClauseNumber": "7.1.6",
+        "ClauseTitle": "组织的知识",
+        "ScopeType": "clause",
+        "IsCheckable": true,
+        "CheckMode": "single",
+        "Boundary": "本条聚焦于组织为运行过程并获得合格产品和服务所必需的知识的识别、保持、可获取性，以及对知识更新需求的审视；不涉及知识内容的技术有效性、知识应用的具体绩效结果或人员能力评价本身。",
+        "ParentClause": "7.1",
+        "Children": []
+      },
+      "ChapterContext": {
+        "ChapterCode": "7",
+        "ChapterTitle": "支持",
+        "ChapterIntent": "提供质量管理体系运行所需的人员、基础设施、过程环境、监视测量资源、组织知识和成文信息。",
+        "ChapterEvidenceFocus": [
+          "人员能力与培训",
+          "基础设施与过程环境",
+          "监视测量资源",
+          "组织知识",
+          "成文信息控制"
+        ],
+        "ClauseRoleInChapter": "组织知识是支持过程运行和获得合格输出的隐性资源，与7.2人员能力、7.5成文信息互补；本条关注知识识别、保持、获取和更新。",
+        "ChapterGap": [
+          "未明确要求将知识管理与7.2人员能力发展形成闭环（如知识缺口驱动培训）",
+          "未强制要求知识更新活动与4.1理解组织及其环境、4.2理解相关方需求变化建立直接追溯"
+        ]
+      },
+      "ReferencedAnalysis": [
+        {
+          "ClauseNumber": "",
+          "Title": "",
+          "RelationType": "other",
+          "Influence": "本条款独立存在，无正向引用其他条款；其实施依赖7.5成文信息控制以确保知识载体受控，但7.5未被明示引用",
+          "AppliedTo": [],
+          "ReferenceStatus": "missing"
+        }
+      ],
+      "EvidenceContract": {
+        "ContractVersion": "v5.2",
+        "ChapterCode": "7",
+        "PDCAPhase": [],
+        "EvidenceItems": [
+          {
+            "ItemId": "E1",
+            "Name": "组织知识管理程序",
+            "DocClass": "procedure",
+            "DocScope": "system",
+            "ExtractionDepth": "structured",
+            "DocProfileKey": "procedure_v1",
+            "DocBoundary": "覆盖知识识别、评定、开发、使用、更新全流程职责与方法；不覆盖具体知识内容的有效性验证或知识应用效果评估",
+            "EvidenceRole": "establishment",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "目的",
+              "范围",
+              "职责",
+              "知识识别输入来源",
+              "知识评审频次",
+              "知识更新机制",
+              "知识库管理方式"
+            ],
+            "Frequency": "未明确",
+            "Coverage": "全系统",
+            "ReportUse": "establishment",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c"
+            ]
+          },
+          {
+            "ItemId": "E2",
+            "Name": "知识分析评价确认表",
+            "DocClass": "record",
+            "DocScope": "system",
+            "ExtractionDepth": "fact_profile",
+            "DocProfileKey": "record_v1",
+            "DocBoundary": "覆盖政策法规、企业标准、比较信息等11类知识的识别状态与评价结论；不覆盖知识更新行动记录或知识失效判定依据",
+            "EvidenceRole": "implementation",
+            "Required": true,
+            "Condition": "",
+            "ExpectedFields": [
+              "知识分类",
+              "知识代码",
+              "相关说明",
+              "评价",
+              "备注",
+              "日期",
+              "编制/审核/批准"
+            ],
+            "Frequency": "每年至少一次",
+            "Coverage": "全部门",
+            "ReportUse": "sample",
+            "ClauseItemRefs": [
+              "a",
+              "b",
+              "c"
+            ]
+          }
+        ],
+        "Dependencies": [],
+        "CrossChecks": [],
+        "Gaps": [
+          "缺少证据证明‘审视现有知识以确定如何获取或接触更多必要知识’的具体活动记录（如知识缺口分析报告、外部知识获取计划）",
+          "缺少证据表明知识更新已实际发生（如知识库版本变更日志、知识修订审批记录）"
+        ]
+      },
+      "EvidenceFindings": [
+        {
+          "FindingId": "F1",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c"
+          ],
+          "DocClass": "procedure",
+          "DocName": "08组织知识管理程序.doc",
+          "DocLocation": "文件头元数据及第4章工作流程",
+          "FindingType": "document_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "4.3 过程控制程序方法：知识管理程序、收集与整理识别、评审、确定、获取、项目归档建库（经验库、数据库、知识库）、使用、更新，知识管理欠缺风险应对。",
+          "WhatItProves": "组织建立了知识管理程序，明确了知识识别、评审、获取、建库、使用和更新的流程框架。",
+          "RiskLevel": "medium"
+        },
+        {
+          "FindingId": "F2",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c"
+          ],
+          "DocClass": "record",
+          "DocName": "01-知识分析评价确认表.docx",
+          "DocLocation": "表格主体行1–11",
+          "FindingType": "record_exists",
+          "FillStatus": "filled",
+          "OriginalQuote": "| 政策法规 | 1 | 与公司经营相关的国家、地方、当地的政策和法律法规 | 已收集了国家、地方、当地的政策和法律法规 |  |",
+          "WhatItProves": "组织对11类知识进行了分类识别，并在‘评价’栏中声明了部分知识的收集状态。",
+          "RiskLevel": "medium"
+        }
+      ],
+      "Doubts": [
+        {
+          "DoubtId": "D1",
+          "DoubtType": "blank_template",
+          "Description": "《知识分析评价确认表》中‘评价’栏均为概括性陈述（如‘已收集了’‘进行了分析’），无具体证据指向（如文件编号、版本号、存储路径、分析结论摘要）",
+          "RelatedFindings": [
+            "F2"
+          ],
+          "WhyItMatters": "无法验证知识是否真实存在、是否处于受控状态、是否满足‘能在所需范围内得到’的要求",
+          "SuggestedCheck": "抽查3类知识（如政策法规、改进成果、经验资料），核实其对应电子文档是否存在于知识库、是否可检索、权限设置是否合理",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D2",
+          "DoubtType": "date_conflict",
+          "Description": "《08组织知识管理程序.doc》发布与实施日期均为2026.6.10，但《01-知识分析评价确认表.docx》日期亦为2026.6.10，且无历史版本痕迹，无法判断该表是首次建立还是年度评审结果",
+          "RelatedFindings": [
+            "F1",
+            "F2"
+          ],
+          "WhyItMatters": "条款要求‘审视现有知识’并‘确定如何获取或接触更多必要知识’，需体现时间维度上的动态性，单一时点记录无法证明持续审视机制",
+          "SuggestedCheck": "查阅知识评审会议纪要、知识库访问日志或知识更新审批记录，确认最近一次知识评审活动的时间与输出",
+          "Confidence": "high"
+        },
+        {
+          "DoubtId": "D3",
+          "DoubtType": "scope_mismatch",
+          "Description": "程序文件4.4.1将知识基本类型划分为‘人事、市场、服务、运营’五类，但《知识分析评价确认表》中知识分类为11项（含‘客户知识’‘供方知识’等），二者分类逻辑不一致且未说明映射关系",
+          "RelatedFindings": [
+            "F1",
+            "F2"
+          ],
+          "WhyItMatters": "影响知识识别的系统性和完整性判断，可能遗漏关键过程所需知识类型",
+          "SuggestedCheck": "访谈综合部，确认知识分类体系的实际应用方式，核查是否存在跨分类知识重复或缺失",
+          "Confidence": "medium"
+        }
+      ],
+      "EvidenceAssembly": [
+        {
+          "AssemblyId": "A1",
+          "ClauseItemRef": [
+            "a",
+            "b",
+            "c"
+          ],
+          "RequiredDocClasses": [
+            "procedure",
+            "record"
+          ],
+          "MinDocs": 2,
+          "CombineRule": "程序文件（E1）规定知识识别与评审机制 + 记录表（E2）提供当期知识识别与评价结果，二者组合可初步证明知识识别与保持活动存在",
+          "CanFormEvidence": "partial",
+          "Gap": "缺少知识更新行动证据（如知识修订审批、新知识入库记录）及知识可获取性验证证据（如知识库访问测试记录、权限分配清单）"
+        }
+      ],
+      "ReportHint": {
+        "ReportMode": "direct",
+        "ReportParent": "",
+        "ReportReason": "7.1.6为独立可检查条款，无合并要求",
+        "ReportUse": [
+          "establishment",
+          "sample"
+        ]
+      }
+    }
+  }
+]

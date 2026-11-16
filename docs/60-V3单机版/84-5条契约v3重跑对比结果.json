@@ -1,0 +1,217 @@
+{
+  "Version": "v3.2",
+  "Date": "2026-11-15",
+  "Prompt": "/tmp/clause_attr_prompt_v3_2.txt",
+  "PromptBytes": 16072,
+  "Rows": [
+    {
+      "ClauseNumber": "7.5.1",
+      "OracleCount": 5,
+      "GenCount": 7,
+      "OracleNames": [
+        "生产和服务提供控制程序",
+        "装配作业指导书",
+        "生产记录",
+        "产品放行记录",
+        "交付后活动记录"
+      ],
+      "GenNames": [
+        "生产和服务提供控制程序",
+        "生产记录（含每台/每批医疗器械）",
+        "基础设施鉴定记录",
+        "过程参数和产品特性监视与测量记录",
+        "监视和测量设备使用与校准记录",
+        "标记和包装操作记录",
+        "产品放行、交付及交付后活动记录"
+      ],
+      "Process": [
+        "production",
+        "inspection",
+        "metrology",
+        "warehouse",
+        "after_sales"
+      ],
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Dependencies": [
+        [
+          "4.2.4",
+          "prerequisite"
+        ],
+        [
+          "4.2.5",
+          "evidence_rule"
+        ],
+        [
+          "7.5.9",
+          "prerequisite"
+        ]
+      ],
+      "CrossChecks": 3,
+      "DirectMatch": null,
+      "Note": ""
+    },
+    {
+      "ClauseNumber": "8.2.4",
+      "OracleCount": 7,
+      "GenCount": 5,
+      "OracleNames": [
+        "内部审核程序",
+        "内部审核计划",
+        "内审签到表",
+        "内审检查表",
+        "内审不合格报告",
+        "内部质量审核报告",
+        "审核员任命/能力记录"
+      ],
+      "GenNames": [
+        "内部审核程序",
+        "内部审核计划",
+        "内部审核检查表",
+        "内部审核报告",
+        "不符合项报告及纠正措施记录"
+      ],
+      "Process": [
+        "management",
+        "inspection"
+      ],
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Dependencies": [
+        [
+          "4.2.5",
+          "evidence_rule"
+        ]
+      ],
+      "CrossChecks": 2,
+      "DirectMatch": null,
+      "Note": ""
+    },
+    {
+      "ClauseNumber": "8.2.6",
+      "OracleCount": 8,
+      "GenCount": 5,
+      "OracleNames": [
+        "过程和产品监视测量程序",
+        "成品检验作业指导书",
+        "过程检验规程",
+        "过程检验记录",
+        "成品检验记录",
+        "产品放行审核记录",
+        "检测设备使用/校准记录",
+        "第三方检验报告"
+      ],
+      "GenNames": [
+        "产品监视和测量控制程序",
+        "产品检验规程",
+        "产品监视和测量记录",
+        "植入性医疗器械检验人员身份记录",
+        "产品放行记录"
+      ],
+      "Process": [
+        "inspection",
+        "production"
+      ],
+      "Applicability": "conditional",
+      "ApplicabilityCondition": "对于植入性医疗器械",
+      "Dependencies": [
+        [
+          "4.2.5",
+          "evidence_rule"
+        ]
+      ],
+      "CrossChecks": 2,
+      "DirectMatch": null,
+      "Note": ""
+    },
+    {
+      "ClauseNumber": "8.3.2",
+      "OracleCount": 6,
+      "GenCount": 3,
+      "OracleNames": [
+        "不合格品控制程序",
+        "不合格品通知及评审处置表",
+        "让步接收申请表",
+        "报废申请单",
+        "返工/返修记录",
+        "进货/过程/成品不合格检验记录"
+      ],
+      "GenNames": [
+        "不合格品处置记录",
+        "让步接收审批记录",
+        "不合格品隔离与标识记录"
+      ],
+      "Process": [
+        "production",
+        "inspection",
+        "warehouse"
+      ],
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Dependencies": [
+        [
+          "4.2.5",
+          "evidence_rule"
+        ]
+      ],
+      "CrossChecks": 2,
+      "DirectMatch": null,
+      "Note": ""
+    },
+    {
+      "ClauseNumber": "7.6",
+      "OracleCount": 6,
+      "GenCount": 7,
+      "OracleNames": [
+        "监视和测量装置控制程序",
+        "监视和测量设备台账",
+        "计量设备周期检定计划",
+        "校准/检定记录",
+        "校准状态标识/使用记录",
+        "计算机软件确认记录"
+      ],
+      "GenNames": [
+        "监视和测量设备控制程序",
+        "监视和测量设备台账",
+        "校准和检定（验证）记录",
+        "测量设备标识记录",
+        "不符合监视和测量设备处置记录",
+        "计算机软件确认程序",
+        "计算机软件确认记录"
+      ],
+      "Process": [
+        "metrology",
+        "inspection",
+        "production"
+      ],
+      "Applicability": "general",
+      "ApplicabilityCondition": "",
+      "Dependencies": [
+        [
+          "4.2.5",
+          "evidence_rule"
+        ],
+        [
+          "4.2.4",
+          "evidence_rule"
+        ]
+      ],
+      "CrossChecks": 3,
+      "DirectMatch": null,
+      "Note": ""
+    }
+  ],
+  "Validation": {
+    "V1": "5/5",
+    "V2": "5/5 (8.3.2=3)",
+    "V3": "5/5",
+    "V4": "5/5",
+    "V5": "3/5（7.6 E4/E5、8.3.2 E2 条件项 Required=true）",
+    "V6": "5/5",
+    "V7": "5/5",
+    "V8": "5/5（含“不直接开不符合项”表述）",
+    "Process": "5/5 允许值内"
+  },
+  "DirectMatch": "约 13/32（按名称直接对应）；含部分对应约 15/32",
+  "Conclusion": "结构 5/5 通过；证据召回不足，8.2.6 仍把植入器械子句抬成整条 conditional；8.3.2 漏返工/返修/报废/进货不合格记录。"
+}
