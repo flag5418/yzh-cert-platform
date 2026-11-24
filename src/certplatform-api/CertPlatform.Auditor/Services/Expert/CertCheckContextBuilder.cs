@@ -722,6 +722,13 @@ public sealed class CertCheckContextBuilder
         {
             switch (fact)
             {
+                case "任命书" when fm.Appointment is not null:
+                    sb.AppendLine("【手册·任命书】");
+                    AppendField(sb, "管理者代表", fm.Appointment.ManagerRep);
+                    AppendField(sb, "总经理", fm.Appointment.GeneralManager);
+                    AppendField(sb, "任命日期", fm.Appointment.Date);
+                    break;
+
                 case "公司简介" when fm.Company is not null:
                     sb.AppendLine("【手册·公司简介】");
                     AppendField(sb, "公司名称", fm.Company.Name);
@@ -884,11 +891,29 @@ public sealed class CertCheckContextBuilder
         if (GetObject(root, "DocMeta", "docMeta") is { } meta)
             fileName = GetString(meta, "FileName", "fileName") ?? "";
 
-        var clauseNumbers = ReadClauseNumbers(output, "PrimaryClauses", "primaryClauses")
+        var directNumbers = ReadClauseNumbers(output, "PrimaryClauses", "primaryClauses")
             .Concat(ReadClauseNumbers(output, "SupportClauses", "supportClauses"))
             .Distinct(StringComparer.Ordinal)
             .Where(wantedNumbers.Contains)
             .ToList();
+
+        // ★ 章级召回（用户 2026-11-24）：政策/程序类文档常只有 Chapters（如 ["5","7.2"]），
+        //   PrimaryClauses 不全（如岗位职责 KSY-QMS-WI-01 PrimaryClauses=["7.2"]）。
+        //   若不按 Chapters 做章级匹配，第 5 章（5.2 方针/5.3 职责）永远召不回这份文档，
+        //   进而误报"批准人身份未明示"。chapter "5" 覆盖 5/5.1/5.2/5.3，chapter "7.2" 覆盖 7.2/7.2.1。
+        var chapterHits = new List<string>();
+        foreach (var chapter in ReadClauseNumbers(output, "Chapters", "chapters"))
+        {
+            foreach (var wanted in wantedNumbers)
+            {
+                if (wanted == chapter
+                    || wanted.StartsWith(chapter + ".", StringComparison.Ordinal)
+                    || chapter.StartsWith(wanted + ".", StringComparison.Ordinal))
+                    chapterHits.Add(wanted);
+            }
+        }
+
+        var clauseNumbers = directNumbers.Concat(chapterHits).Distinct(StringComparer.Ordinal).ToList();
         if (clauseNumbers.Count == 0) return result;
 
         var excerpt = BuildModeExcerpt(output, mode);

@@ -810,11 +810,15 @@ public class CertCheckEngineService
             {
                 using var doc = JsonDocument.Parse(raw);
                 var root = doc.RootElement;
-                if (root.TryGetProperty("ClauseContext", out var cc)
-                    && cc.ValueKind == JsonValueKind.Object
-                    && cc.TryGetProperty("ClauseNumber", out var cn)
+                // 精简版 findings 直接输出顶层 ClauseNumber；保留旧版 ClauseContext 兜底
+                if (root.TryGetProperty("ClauseNumber", out var cn)
                     && cn.ValueKind == JsonValueKind.String)
                     clauseNo = cn.GetString() ?? "";
+                else if (root.TryGetProperty("ClauseContext", out var cc)
+                    && cc.ValueKind == JsonValueKind.Object
+                    && cc.TryGetProperty("ClauseNumber", out var ccn)
+                    && ccn.ValueKind == JsonValueKind.String)
+                    clauseNo = ccn.GetString() ?? "";
 
                 AppendFindingSection(f, root, "EvidenceFindings", clauseNo, "证据发现");
                 AppendFindingSection(d, root, "Doubts", clauseNo, "疑点");

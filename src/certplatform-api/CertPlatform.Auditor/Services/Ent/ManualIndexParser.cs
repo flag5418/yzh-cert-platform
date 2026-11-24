@@ -62,6 +62,14 @@ namespace CertPlatform.Auditor.Services.Ent
             public List<string> Duties { get; set; } = new();
         }
 
+        /// <summary>0.3 管理者代表任命书：把「总经理=潘明海」「管理者代表=胥加娟」这层职务关系明示出来。</summary>
+        public sealed class Appointment
+        {
+            public string GeneralManager { get; set; } = string.Empty;
+            public string ManagerRep { get; set; } = string.Empty;
+            public string Date { get; set; } = string.Empty;
+        }
+
         /// <summary>手册封面受控元数据（文件编号/版本/编制/审核/批准/发布日期）——证据引用必须带全这些。</summary>
         public sealed class ManualMeta
         {
@@ -75,11 +83,12 @@ namespace CertPlatform.Auditor.Services.Ent
             public string EffectiveDate { get; set; } = string.Empty;
         }
 
-        /// <summary>0.1 公司简介 / 0.4 方针目标 / 0.7 职责权限 三个前置事实段落。</summary>
+        /// <summary>0.1 公司简介 / 0.3 任命书 / 0.4 方针目标 / 0.7 职责权限 四个前置事实段落。</summary>
         public sealed class FrontMatter
         {
             public ManualMeta? ManualMeta { get; set; }
             public CompanyProfile? Company { get; set; }
+            public Appointment? Appointment { get; set; }
             public PolicyObjective? PolicyObjective { get; set; }
             public List<DeptDuty> DeptDuties { get; set; } = new();
         }
@@ -237,12 +246,14 @@ namespace CertPlatform.Auditor.Services.Ent
         private static FrontMatter? ParseFrontMatter(string[] lines)
         {
             var company = ParseCompanyProfile(lines);
+            var appointment = ParseAppointment(lines);
             var policy = ParsePolicyObjective(lines);
             var duties = ParseDeptDuties(lines);
-            if (company is null && policy is null && duties.Count == 0) return null;
+            if (company is null && appointment is null && policy is null && duties.Count == 0) return null;
 
             var fm = new FrontMatter();
             fm.Company = company;
+            fm.Appointment = appointment;
             fm.PolicyObjective = policy;
             fm.DeptDuties = duties;
             return fm;
@@ -368,6 +379,34 @@ namespace CertPlatform.Auditor.Services.Ent
             return result;
         }
 
+        /// <summary>
+        /// 解析 0.3 管理者代表任命书：特任命 X 为管理者代表、总经理 Y、日期。
+        /// <para>这是把「潘明海=总经理」「胥加娟=管理者代表」职务关系显式写入前置事实的关键，
+        /// 否则 5.2/5.3 只能看到「批准人潘明海（无职务）」「总经理审批（无名字）」，从而误报身份未明示。</para>
+        /// </summary>
+        private static Appointment? ParseAppointment(string[] lines)
+        {
+            var start = FindHeading(lines, "0.3", "任命");
+            if (start < 0) return null;
+
+            var ap = new Appointment();
+            for (var i = start + 1; i < lines.Length; i++)
+            {
+                if (IsTopHeading(lines[i])) break;
+                var line = lines[i].Trim();
+
+                if (ap.ManagerRep.Length == 0)
+                    ap.ManagerRep = MatchGroup(line, @"特任命\s*([^\s为]+)\s*为管理者代表");
+                if (ap.GeneralManager.Length == 0)
+                    ap.GeneralManager = MatchGroup(line, @"总经理[:：]\s*([^\s*]+)");
+                if (ap.Date.Length == 0)
+                    ap.Date = MatchGroup(line, @"日期[:：]?\s*(\d{4}[./-]\d{1,2}[./-]\d{1,2})");
+            }
+
+            if (ap.GeneralManager.Length == 0 && ap.ManagerRep.Length == 0 && ap.Date.Length == 0) return null;
+            return ap;
+        }
+
         /// <summary>定位「# 编号 关键词」顶级标题行号；找不到返回 -1。</summary>
         private static int FindHeading(string[] lines, string num, string keyword)
         {
@@ -404,19 +443,21 @@ namespace CertPlatform.Auditor.Services.Ent
             return m.Success ? m.Groups[1].Value.Trim() : string.Empty;
         }
 
-        /// <summary>条款 → 前置事实类型（默认话术：哪些章需要环境/方针/职责事实）。</summary>
-        private static readonly Dictionary<string, string> ClauseFactMap = new(StringComparer.Ordinal)
+        /// <summary>条款 → 前置事实类型（默认话术：哪些章需要环境/方针/职责/任命事实）。</summary>
+        private static readonly Dictionary<string, List<string>> ClauseFactMap = new(StringComparer.Ordinal)
         {
-            ["4.1"] = "公司简介",
-            ["4.2"] = "公司简介",
-            ["5.2"] = "方针目标",
-            ["5.3"] = "部门职责",
+            ["4.1"] = new() { "公司简介" },
+            ["4.2"] = new() { "公司简介" },
+            ["5.1"] = new() { "任命书" },
+            ["5.2"] = new() { "方针目标", "任命书" },
+            ["5.3"] = new() { "部门职责", "任命书" },
         };
 
         /// <summary>事实类型 → 手册目录标题关键词（从 TocMapping 反查章节号，不写死章节号）。</summary>
         private static readonly Dictionary<string, string> FactKeywordMap = new(StringComparer.Ordinal)
         {
             ["公司简介"] = "公司简介",
+            ["任命书"] = "任命书",
             ["方针目标"] = "方针",
             ["部门职责"] = "职责权限",
         };
@@ -449,16 +490,19 @@ namespace CertPlatform.Auditor.Services.Ent
                 if (secKey is not null)
                     src.Sections.AddRange(sectionByClause[secKey]);
 
-                // ② 前置事实：5.2.1 → 5.2 → 方针目标
+                // ② 前置事实：5.2.1 → 5.2 → 方针目标 + 任命书
                 var factKey = BestPrefixKey(clause, ClauseFactMap.Keys);
-                if (factKey is not null && ClauseFactMap.TryGetValue(factKey, out var fact))
+                if (factKey is not null && ClauseFactMap.TryGetValue(factKey, out var facts))
                 {
-                    src.FactSources.Add(fact);
-                    if (FactKeywordMap.TryGetValue(fact, out var keyword))
+                    foreach (var fact in facts)
                     {
-                        var factRow = index.TocMapping.FirstOrDefault(t => t.Title.Contains(keyword, StringComparison.Ordinal));
-                        if (factRow is not null && !src.Sections.Contains(factRow.Section, StringComparer.Ordinal))
-                            src.Sections.Add(factRow.Section);
+                        src.FactSources.Add(fact);
+                        if (FactKeywordMap.TryGetValue(fact, out var keyword))
+                        {
+                            var factRow = index.TocMapping.FirstOrDefault(t => t.Title.Contains(keyword, StringComparison.Ordinal));
+                            if (factRow is not null && !src.Sections.Contains(factRow.Section, StringComparer.Ordinal))
+                                src.Sections.Add(factRow.Section);
+                        }
                     }
                 }
 
