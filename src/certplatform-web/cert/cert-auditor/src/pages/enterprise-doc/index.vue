@@ -445,9 +445,9 @@ onBeforeUnmount(() => {
                 text
                 :icon="RefreshRight"
                 :disabled="!hasPlan || isBusy"
-                @click="logic.reextractAll()"
+                @click="logic.reextract()"
               >
-                重新分析
+                {{ selectedRows.length > 0 ? '重新分析（' + selectedRows.length + '）' : '重新分析' }}
               </el-button>
               <el-button
                 v-if="selectedCode"
@@ -853,6 +853,7 @@ onBeforeUnmount(() => {
               :action-fixed="false"
               row-key="ClauseNumber"
               size="small"
+              :height="'calc(100vh - 360px)'"
               @row-action="onClauseRowAction"
             >
               <template #column-Anchor="{ row }">

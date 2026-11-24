@@ -52,6 +52,13 @@ namespace CertPlatform.Auditor.Entities.Expert
         [StringLength(100)]
         public string? LeaderTitle { get; set; }
 
+        /// <summary>
+        /// 部门职能（从质量手册 0.7 职责权限解析的 JSON 数组，如 <c>["负责…","负责…"]</c>）。
+        /// 无手册来源时为 null；后续可用语义匹配补充并标 semantic_inferred。
+        /// </summary>
+        [SugarColumn(ColumnDataType = "longtext", IsNullable = true)]
+        public string? DeptDuty { get; set; }
+
         /// <summary>排序号</summary>
         public int Sort { get; set; }
 

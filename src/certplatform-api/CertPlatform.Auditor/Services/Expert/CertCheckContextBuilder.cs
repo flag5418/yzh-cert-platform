@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Auditor.Entities.Expert;
+using CertPlatform.Auditor.Services.Ent;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
@@ -52,6 +53,33 @@ public sealed class ClauseContext
 
     /// <summary>该条款是否命中任何企业文档内容</summary>
     public bool HasDocContent => Slices.Count > 0;
+
+    /// <summary>手册纲领：该条款的「事实证据提取属性」（应读章节 / 负责部门 / 前置事实）。</summary>
+    public ManualIndexParser.ClauseEvidenceSource? EvidenceSource { get; set; }
+
+    /// <summary>该条款命中的前置事实原文（公司简介 / 方针目标 / 部门职责），供证据发现定向召回。</summary>
+    public string FactText { get; set; } = string.Empty;
+
+    /// <summary>章节画像：喂给证据发现提示词的「去哪找 + 谁负责」纲领。</summary>
+    public string ChapterProfile => RenderChapterProfile(EvidenceSource);
+
+    private static string RenderChapterProfile(ManualIndexParser.ClauseEvidenceSource? src)
+    {
+        if (src is null)
+            return "（手册无纲领映射，按条款正文做通用提取）";
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"应读章节：{string.Join("、", src.Sections)}");
+        if (src.PrimaryDepts.Count > 0)
+            sb.AppendLine($"主要责任部门：{string.Join("、", src.PrimaryDepts)}");
+        if (src.RelatedDepts.Count > 0)
+            sb.AppendLine($"相关部门：{string.Join("、", src.RelatedDepts)}");
+        if (src.FactSources.Count > 0)
+            sb.AppendLine($"前置事实：{string.Join("、", src.FactSources)}");
+        if (src.IsFallback)
+            sb.AppendLine("（手册无映射，走条款通用提取属性）");
+        return sb.ToString();
+    }
 }
 
 /// <summary>一条「某份文档在某条款上的原文摘录」</summary>
@@ -601,9 +629,138 @@ public sealed class CertCheckContextBuilder
             }
         }
 
+        // ---- 6. 手册纲领：把 EvidenceSources（应读章节/负责部门/前置事实）挂到每条条款 ----
+        LoadManualGuidance(clauses, extractions, warnings);
+
         var noHit = clauses.Where(c => !c.HasDocContent).Select(c => c.ClauseNumber).ToList();
         if (noHit.Count > 0)
             warnings.Add($"以下条款在企业文档中未提取到对应内容：{string.Join(",", noHit)}");
+    }
+
+    /// <summary>
+    /// 从提取产物 <c>ContentJson.ManualIndex / EvidenceSources</c> 读出「手册纲领」，
+    /// 并挂到每条条款：应读章节、负责部门、前置事实原文。零 LLM，确定性解析。
+    /// </summary>
+    private void LoadManualGuidance(
+        List<ClauseContext> clauses, List<DocumentExtraction> extractions, List<string> warnings)
+    {
+        ManualIndexParser.ManualIndex? index = null;
+        var sources = new List<ManualIndexParser.ClauseEvidenceSource>();
+
+        foreach (var ex in extractions)
+        {
+            if (string.IsNullOrWhiteSpace(ex.ContentJson)) continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(ex.ContentJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("ManualIndex", out var mi) && mi.ValueKind == JsonValueKind.Object)
+                    index ??= JsonSerializer.Deserialize<ManualIndexParser.ManualIndex>(mi.GetRawText());
+                if (root.TryGetProperty("EvidenceSources", out var es) && es.ValueKind == JsonValueKind.Array)
+                {
+                    var parsed = JsonSerializer.Deserialize<List<ManualIndexParser.ClauseEvidenceSource>>(es.GetRawText());
+                    if (parsed is { Count: > 0 }) sources.AddRange(parsed);
+                }
+            }
+            catch (JsonException ex2)
+            {
+                _logger.LogWarning(ex2, "[CertCheckContext] ContentJson 的 ManualIndex/EvidenceSources 解析失败");
+            }
+        }
+
+        if (sources.Count == 0)
+        {
+            warnings.Add("手册纲领（EvidenceSources）未解析到 ⇒ 证据发现按条款通用提取（无应读章节/负责部门/前置事实）");
+            return;
+        }
+
+        foreach (var c in clauses)
+        {
+            var src = MatchEvidenceSource(c.ClauseNumber, sources);
+            c.EvidenceSource = src;
+            c.FactText = RenderFactText(src, index?.FrontMatter);
+        }
+    }
+
+    /// <summary>最长前缀匹配：条款 <c>4.4.1</c> 回退到手册纲领里的 <c>4.4</c>（不跨编号段）。</summary>
+    private static ManualIndexParser.ClauseEvidenceSource? MatchEvidenceSource(
+        string clauseNumber, List<ManualIndexParser.ClauseEvidenceSource> sources)
+    {
+        if (string.IsNullOrWhiteSpace(clauseNumber)) return null;
+        ManualIndexParser.ClauseEvidenceSource? best = null;
+        foreach (var s in sources)
+        {
+            if (string.IsNullOrWhiteSpace(s.Clause)) continue;
+            if (s.Clause == clauseNumber || clauseNumber.StartsWith(s.Clause + ".", StringComparison.Ordinal))
+            {
+                if (best is null || s.Clause.Length > best.Clause.Length) best = s;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>把命中的前置事实渲染成原文文本（公司简介 / 方针目标 / 部门职责）。</summary>
+    private static string RenderFactText(
+        ManualIndexParser.ClauseEvidenceSource? src, ManualIndexParser.FrontMatter? fm)
+    {
+        if (src is null || fm is null || src.FactSources.Count == 0) return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("（以下为质量手册前置章节的原文事实，不是独立文件；写证据时直接引用内容，勿把【】当文件名编造）");
+        if (fm.ManualMeta is { } mm)
+        {
+            var metaParts = new List<string> { $"编号 {mm.DocCode}" };
+            if (!string.IsNullOrWhiteSpace(mm.Version)) metaParts.Add($"版本 {mm.Version}");
+            if (!string.IsNullOrWhiteSpace(mm.PreparedBy)) metaParts.Add($"编制 {mm.PreparedBy}");
+            if (!string.IsNullOrWhiteSpace(mm.ReviewedBy)) metaParts.Add($"审核 {mm.ReviewedBy}");
+            if (!string.IsNullOrWhiteSpace(mm.ApprovedBy)) metaParts.Add($"批准 {mm.ApprovedBy}");
+            if (!string.IsNullOrWhiteSpace(mm.IssuedDate)) metaParts.Add($"发布日期 {mm.IssuedDate}");
+            if (!string.IsNullOrWhiteSpace(mm.EffectiveDate)) metaParts.Add($"实施日期 {mm.EffectiveDate}");
+            sb.AppendLine($"【手册受控信息】{string.Join("，", metaParts)}");
+        }
+        foreach (var fact in src.FactSources)
+        {
+            switch (fact)
+            {
+                case "公司简介" when fm.Company is not null:
+                    sb.AppendLine("【手册·公司简介】");
+                    AppendField(sb, "公司名称", fm.Company.Name);
+                    AppendField(sb, "成立日期", fm.Company.Established);
+                    AppendField(sb, "法定代表人", fm.Company.LegalRepresentative);
+                    AppendField(sb, "注册地址", fm.Company.RegisteredAddress);
+                    AppendField(sb, "公司地址", fm.Company.Address);
+                    AppendField(sb, "经营范围", fm.Company.BusinessScope);
+                    break;
+
+                case "方针目标" when fm.PolicyObjective is not null:
+                    sb.AppendLine("【手册·质量方针】");
+                    sb.AppendLine(fm.PolicyObjective.Policy);
+                    if (fm.PolicyObjective.Objectives.Count > 0)
+                    {
+                        sb.AppendLine("【手册·质量目标】");
+                        foreach (var o in fm.PolicyObjective.Objectives)
+                            sb.AppendLine($"- {o}");
+                    }
+                    break;
+
+                case "部门职责" when fm.DeptDuties.Count > 0:
+                    sb.AppendLine("【手册·部门职责】");
+                    foreach (var dd in fm.DeptDuties)
+                    {
+                        sb.AppendLine($"- {dd.Dept}：");
+                        foreach (var d in dd.Duties)
+                            sb.AppendLine($"  · {d}");
+                    }
+                    break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static void AppendField(StringBuilder sb, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            sb.AppendLine($"{label}：{value}");
     }
 
     /// <summary>解析 <c>ContentJson</c>，只挑出 <paramref name="wantedNumbers"/> 里的条款切片。</summary>
@@ -626,7 +783,11 @@ public sealed class CertCheckContextBuilder
             foreach (var el in clausesEl.EnumerateArray())
             {
                 var number = GetString(el, "ClauseNumber", "clauseNumber");
-                if (string.IsNullOrWhiteSpace(number) || !wantedNumbers.Contains(number!)) continue;
+                if (string.IsNullOrWhiteSpace(number)) continue;
+                // ★ 父子回退：请求 4.4 时，提取产物里的 4.4.1 也要命中（归到 4.4）；
+                //   请求 5.1 时，5.1.1 / 5.1.2 都归到 5.1。与 CertTaskService 口径一致。
+                var requested = ResolveRequestedClause(number!, wantedNumbers);
+                if (requested == null) continue;
 
                 var excerpts = new List<string>();
                 var statuses = new List<string>();
@@ -664,7 +825,7 @@ public sealed class CertCheckContextBuilder
                 if (el.TryGetProperty("Confidence", out var cv) && cv.ValueKind == JsonValueKind.Number)
                     conf = cv.GetDecimal();
 
-                result.Add((number!, new ParsedSlice
+                result.Add((requested, new ParsedSlice
                 {
                     FileName = fileName,
                     Anchor = GetString(el, "Anchor", "anchor"),
@@ -684,6 +845,25 @@ public sealed class CertCheckContextBuilder
             _logger.LogWarning(ex, "[CertCheckContext] ContentJson 解析失败（跳过该文档）");
         }
         return result;
+    }
+
+    /// <summary>
+    /// 把提取产物里的条款号，对应回「请求的条款号」。
+    /// <para>精确命中优先；否则按父子回退：请求 4.4 ⇒ 4.4.1 命中（返回 "4.4"），
+    /// 请求 5.1 ⇒ 5.1.1 / 5.1.2 命中（都归到 "5.1"）。</para>
+    /// <para>与 <see cref="CertTaskService.IsClauseOrDescendantMatch"/> 口径一致：只做后代回退，不做祖先回退。</para>
+    /// </summary>
+    private static string? ResolveRequestedClause(string number, HashSet<string> wantedNumbers)
+    {
+        if (wantedNumbers.Contains(number)) return number;
+        foreach (var root in wantedNumbers)
+        {
+            if (root.Length > 0
+                && number.Length > root.Length
+                && number.StartsWith(root + ".", StringComparison.Ordinal))
+                return root;
+        }
+        return null;
     }
 
     /// <summary>

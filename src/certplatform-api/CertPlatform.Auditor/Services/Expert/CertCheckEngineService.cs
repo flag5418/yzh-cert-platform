@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Expert;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Clauses;
+using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Services.Workflow;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -316,9 +317,10 @@ public class CertCheckEngineService
             .Select(e => e.ContentMD5!)
             .OrderBy(m => m));
 
-        // ---- L6：调 LLM ----
+        // ---- L6：调 LLM（两段式优先：① 审核发现 → ② 证据生成；缺提示词/失败回退旧单段）----
         var aiSettings = await GetAiSettingsAsync();
-        var llmResponse = await _llm.CompleteAsync(new LlmInvokeRequest
+        var twoStage = await RunTwoStageAsync(stageKind, detail, context, activeEvidences, aiSettings);
+        var llmResponse = twoStage?.Response ?? await _llm.CompleteAsync(new LlmInvokeRequest
         {
             BaseUrl = aiSettings.BaseUrl,
             ApiKey = aiSettings.ApiKey,
@@ -332,6 +334,7 @@ public class CertCheckEngineService
             DocumentContent = "",
             ForceJson = true
         });
+        var pipeline = twoStage?.Pipeline ?? "single";
 
         result.LlmCalled = true;
         result.DurationMs = llmResponse.DurationMs;
@@ -420,6 +423,7 @@ public class CertCheckEngineService
                 ResultSummaryJson = JsonSerializer.Serialize(new
                 {
                     stage_kind = stageKind,
+                    pipeline = pipeline,
                     clause_count = clausePairs.Count,
                     evidence_count = evidences.Count,
                     // ★ 装配质量指标：这三项为 0 就说明「三模型没串上」，⛔ 不能只看结论
@@ -661,6 +665,179 @@ public class CertCheckEngineService
                 sb.AppendLine($"  在场人员：{ev.PresentPersons}");
         }
         return sb.ToString();
+    }
+
+    // ================================================================
+    // 两段式证据链路：① 审核发现（clause_evidence_findings）→ ② 证据生成（audit_check_evidence）
+    // 提示词统一存在 cert_prompt_template（不再散落），缺行 / 失败则回退旧单段 audit_check。
+    // ================================================================
+
+    /// <summary>读统一提示词表 <c>cert_prompt_template</c> 里的平台级生效行（OrgCode 空、ScopeKey 空）。</summary>
+    private async Task<string?> ResolveCertPromptTemplateAsync(string promptCode)
+    {
+        if (string.IsNullOrWhiteSpace(promptCode)) return null;
+        var rows = await _db.Client.Queryable<CertPromptTemplateRow>()
+            .Where(x => x.PromptCode == promptCode && !x.IsDeleted && x.IsValid == 1
+                        && (x.OrgCode == null || x.OrgCode == ""))
+            .ToListAsync();
+        return (rows ?? new List<CertPromptTemplateRow>())
+            .Where(x => string.IsNullOrWhiteSpace(x.ScopeKey) && !string.IsNullOrWhiteSpace(x.Template))
+            .Select(x => x.Template)
+            .FirstOrDefault();
+    }
+
+    /// <summary>两段式执行结果：把响应与「实际走的管线」一起带回，便于落库留痕。</summary>
+    private sealed record TwoStageOutcome(LlmInvokeResponse Response, string Pipeline);
+
+    /// <summary>
+    /// 两段式分析（仅 onsite 检查分支）：先逐条款跑「审核发现」，再跑一次「证据生成」。
+    /// <para>任一端提示词缺行 / 第一段失败 ⇒ 返回 null，由调用方回退旧单段 audit_check。</para>
+    /// </summary>
+    private async Task<TwoStageOutcome?> RunTwoStageAsync(
+        string stageKind, Entities.Expert.CertAuditPlanDetail? detail,
+        CertCheckContext context, List<CertEvidence> evidences, AiSettings aiSettings)
+    {
+        if (!string.Equals(stageKind, StageOnsite, StringComparison.Ordinal)) return null;
+
+        var findingsTpl = await ResolveCertPromptTemplateAsync(PromptTypes.ClauseEvidenceFindings);
+        var genTpl = await ResolveCertPromptTemplateAsync(PromptTypes.AuditEvidenceGen);
+        if (string.IsNullOrWhiteSpace(findingsTpl) || string.IsNullOrWhiteSpace(genTpl))
+        {
+            _logger.LogWarning(
+                "[CertCheck] 两段式提示词缺行 findings={F} gen={G}，回退旧单段 audit_check",
+                string.IsNullOrWhiteSpace(findingsTpl) ? "missing" : "ok",
+                string.IsNullOrWhiteSpace(genTpl) ? "missing" : "ok");
+            return null;
+        }
+
+        var findings = new List<string>();
+        foreach (var clause in context.Clauses)
+        {
+            var resp = await _llm.CompleteAsync(new LlmInvokeRequest
+            {
+                BaseUrl = aiSettings.BaseUrl,
+                ApiKey = aiSettings.ApiKey,
+                Model = aiSettings.Model,
+                Temperature = aiSettings.Temperature,
+                MaxTokens = aiSettings.MaxTokens,
+                SystemPrompt = "你是认证审核专家，正在做第一阶段「审核发现」：只从条款与企业文档摘录中找回事实，不写符合性结论。输出 JSON。",
+                Prompt = RenderFindingsPrompt(findingsTpl, clause, context),
+                DocumentContent = "",
+                ForceJson = true
+            });
+            if (!resp.Success || resp.Json == null)
+            {
+                _logger.LogWarning("[CertCheck] 两段式第一段失败 clause={C} msg={M}", clause.ClauseNumber, resp.Message);
+                return null;
+            }
+            findings.Add(resp.Json.RootElement.GetRawText());
+        }
+
+        var (findingsText, doubtsText, assembliesText) = SplitFindings(findings);
+        var genResp = await _llm.CompleteAsync(new LlmInvokeRequest
+        {
+            BaseUrl = aiSettings.BaseUrl,
+            ApiKey = aiSettings.ApiKey,
+            Model = aiSettings.Model,
+            Temperature = aiSettings.Temperature,
+            MaxTokens = aiSettings.MaxTokens,
+            SystemPrompt = "你是认证审核专家，正在做第二阶段「证据生成」：消费审核发现，写出审核证据并给出默认结论。输出 JSON。",
+            Prompt = RenderEvidenceGenPrompt(genTpl, detail, context, findingsText, doubtsText, assembliesText, evidences),
+            DocumentContent = "",
+            ForceJson = true
+        });
+        if (!genResp.Success || genResp.Json == null)
+            return null;
+
+        _logger.LogInformation(
+            "[CertCheck] 两段式执行成功 item={Item} clauses={N} findings={F}",
+            detail?.Code, context.Clauses.Count, findings.Count);
+        return new TwoStageOutcome(genResp, "two_stage");
+    }
+
+    private static string RenderFindingsPrompt(string template, ClauseContext clause, CertCheckContext context)
+    {
+        var allowedRefs = string.Join("、", context.Clauses.Select(c => c.ClauseNumber).Distinct());
+        var excerpts = new StringBuilder();
+        foreach (var s in clause.Slices)
+        {
+            excerpts.AppendLine($"《{s.FileName}》");
+            for (var i = 0; i < s.Excerpts.Count; i++)
+                excerpts.AppendLine(s.Excerpts[i]);
+        }
+
+        return template
+            .Replace("{{standard_name}}", "", StringComparison.Ordinal)
+            .Replace("{{mode}}", "findings", StringComparison.Ordinal)
+            .Replace("{{clause_number}}", clause.ClauseNumber, StringComparison.Ordinal)
+            .Replace("{{clause_title}}", clause.Title, StringComparison.Ordinal)
+            .Replace("{{clause_content}}", clause.Description ?? "", StringComparison.Ordinal)
+            .Replace("{{chapter_profile}}", clause.ChapterProfile, StringComparison.Ordinal)
+            .Replace("{{allowed_clause_refs}}", allowedRefs, StringComparison.Ordinal)
+            .Replace("{{referenced_clauses}}", "", StringComparison.Ordinal)
+            .Replace("{{doc_facts}}", clause.FactText, StringComparison.Ordinal)
+            .Replace("{{doc_excerpts}}", excerpts.ToString(), StringComparison.Ordinal);
+    }
+
+    private static string RenderEvidenceGenPrompt(
+        string template, Entities.Expert.CertAuditPlanDetail? detail,
+        CertCheckContext context, string findings, string doubts, string assemblies, List<CertEvidence> evidences)
+    {
+        return template
+            .Replace("{{check_item_name}}", BuildCheckItemName(detail), StringComparison.Ordinal)
+            .Replace("{{dept_names}}", string.IsNullOrWhiteSpace(detail?.DeptNames) ? "-" : detail!.DeptNames!, StringComparison.Ordinal)
+            .Replace("{{clause_blocks}}", context.RenderClauseInfo(), StringComparison.Ordinal)
+            .Replace("{{findings}}", findings, StringComparison.Ordinal)
+            .Replace("{{doubts}}", doubts, StringComparison.Ordinal)
+            .Replace("{{assemblies}}", assemblies, StringComparison.Ordinal)
+            .Replace("{{onsite_evidence}}", BuildOnsiteEvidenceBlock(evidences), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 把第一段「审核发现」的逐条款 JSON 拆成三段喂给第二段：
+    /// <c>EvidenceFindings</c>（事实）、<c>Doubts</c>（疑点）、<c>EvidenceAssembly</c>（证据组合），
+    /// 各自带条款号前缀，避免第二段再啃整份发现 JSON。
+    /// </summary>
+    private static (string Findings, string Doubts, string Assemblies) SplitFindings(List<string> findingsJson)
+    {
+        var f = new StringBuilder();
+        var d = new StringBuilder();
+        var a = new StringBuilder();
+        foreach (var raw in findingsJson)
+        {
+            string clauseNo = "";
+            try
+            {
+                using var doc = JsonDocument.Parse(raw);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("ClauseContext", out var cc)
+                    && cc.ValueKind == JsonValueKind.Object
+                    && cc.TryGetProperty("ClauseNumber", out var cn)
+                    && cn.ValueKind == JsonValueKind.String)
+                    clauseNo = cn.GetString() ?? "";
+
+                AppendFindingSection(f, root, "EvidenceFindings", clauseNo, "证据发现");
+                AppendFindingSection(d, root, "Doubts", clauseNo, "疑点");
+                AppendFindingSection(a, root, "EvidenceAssembly", clauseNo, "证据组合");
+            }
+            catch (JsonException)
+            {
+                f.AppendLine(raw);
+            }
+        }
+        return (f.ToString(), d.ToString(), a.ToString());
+    }
+
+    private static void AppendFindingSection(StringBuilder sb, JsonElement root, string prop, string clauseNo, string header)
+    {
+        if (!root.TryGetProperty(prop, out var el)
+            || el.ValueKind != JsonValueKind.Array
+            || el.GetArrayLength() == 0) return;
+
+        sb.AppendLine($"## {header}（条款 {clauseNo}）");
+        foreach (var item in el.EnumerateArray())
+            sb.AppendLine(item.GetRawText());
+        sb.AppendLine();
     }
 
     // ================================================================

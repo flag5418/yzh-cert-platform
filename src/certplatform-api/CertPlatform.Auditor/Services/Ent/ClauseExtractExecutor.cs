@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
@@ -53,20 +54,24 @@ namespace CertPlatform.Auditor.Services.Ent
 
         /// <summary>
         /// 单块送模型的文档字符数上限。
-        /// <para>★ 2026-11-11：由 30000 降到 15000 —— 实测 2.7 万字手册 + 3 万字标准原文一次调用
-        /// 输出 15630 字符、completion 正好撞 8192 上限被截断，只能救回 36 条。分段变小后每段
-        /// 输出量约减半，避免「后半本手册的条款被 max_tokens 吃掉」。</para>
+        /// <para>★ 2026-11-23 二调：6000 字/块仍会在「第 2 段（1.0–5.1，含 4.4 过程清单 + 0.7 职责权限）」
+        /// 撞 8192 输出上限被截断。降到 2800：让 4.4/0.7 这类密集章节拆成更小块，单块条款更少、
+        /// 输出量再降一半，配合并发总时长仍控制在 1 分钟左右。</para>
         /// </summary>
-        public const int ChunkChars = 15000;
+        public const int ChunkChars = 2800;
 
         /// <summary>单次模型调用的条款 Markdown 分片上限。</summary>
         private const int StandardTextChars = 30_000;
 
         /// <summary>最多切几块（防误传超大文件把额度烧光；超出的部分记入 Message ⛔ 不静默丢）</summary>
-        public const int MaxChunks = 8;
+        public const int MaxChunks = 16;
 
         private const int MaxStandardChunks = 8;
-        private const int MaxModelCalls = 32;
+        private const int MaxModelCalls = 64;
+
+        /// <summary>文档分段的 LLM 并发度。各段互不依赖（合并阶段才按批次序做并集），
+        /// 并行后墙钟≈最慢单段；手册拆成约 10 段后并发 8，仍能压到 1 分钟以内。</summary>
+        private const int MaxConcurrentExtractCalls = 8;
 
         public ClauseExtractExecutor(
             IServiceProvider serviceProvider,
@@ -304,47 +309,60 @@ namespace CertPlatform.Auditor.Services.Ent
                 var failMessages = new List<string>();
                 var droppedNumbers = 0;
 
+                // ★ 2026-11-23：改并发。原串行「每段一次调用」让 5 段手册跑 3+ 分钟；
+                //   各段互不依赖（合并阶段才按批次序做并集），并行后墙钟≈最慢单段。
+                var responses = new LlmInvokeResponse?[callCount];
+                var batchLabels = new string[callCount];
+
+                await Parallel.ForEachAsync(
+                    Enumerable.Range(0, callCount),
+                    new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentExtractCalls, CancellationToken = cancellationToken },
+                    async (batch, ct) =>
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        var i = batch / standardChunks.Count;
+                        var j = batch % standardChunks.Count;
+                        var standardMarkdown = standardChunks[j];
+                        var batchLabel = $"文档第 {i + 1}/{chunks.Count} 段、标准第 {j + 1}/{standardChunks.Count} 段";
+                        batchLabels[batch] = batchLabel;
+
+                        var prompt = DocExtractPromptService.Render(
+                            template,
+                            $"{standard.StandardName}（{standard.StandardCode}）",
+                            standard.StandardCode ?? string.Empty,
+                            doc.FileName ?? string.Empty,
+                            clauseList,
+                            chunks[i]);
+
+                        // 条款 Markdown 仅供理解条款，不是待提取的企业文档。
+                        prompt += $"\n\n【标准条款 Markdown 分片 {j + 1}/{standardChunks.Count}，仅用于理解条款，不是待提取的文档内容】\n"
+                               + "这是由条款表生成的内容，可能存在正文不完整或摘要；当前仅包含一个连续片段，可能不含完整条款或其上下文。"
+                               + "企业文档里若没有对应证据，不要凭标准编造摘录。\n"
+                               + standardMarkdown;
+
+                        _logger.LogInformation(
+                            "[条款提取] {File}×{Std} {Batch}：prompt {Chars} 字符（文档段 {DocChars}，条款 Markdown {StdChars}）",
+                            doc.Code, standard.StandardCode, batchLabel,
+                            prompt.Length, chunks[i].Length, standardMarkdown.Length);
+
+                        responses[batch] = await llm.CompleteAsync(new LlmInvokeRequest
+                        {
+                            BaseUrl = settings.BaseUrl,
+                            ApiKey = settings.ApiKey,
+                            Model = settings.Model,
+                            Temperature = 0.1f,
+                            MaxTokens = 8192,
+                            Prompt = prompt,
+                            ForceJson = true,
+                            TimeoutSeconds = 600,
+                        });
+                    });
+
+                // 合并阶段仍按批次序串行做，保证结果确定、与旧版一致。
                 for (var batch = 0; batch < callCount; batch++)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var i = batch / standardChunks.Count;
-                    var j = batch % standardChunks.Count;
-                    var standardMarkdown = standardChunks[j];
-                    var batchLabel = $"文档第 {i + 1}/{chunks.Count} 段、标准第 {j + 1}/{standardChunks.Count} 段";
-
-                    var prompt = DocExtractPromptService.Render(
-                        template,
-                        $"{standard.StandardName}（{standard.StandardCode}）",
-                        standard.StandardCode ?? string.Empty,
-                        doc.FileName ?? string.Empty,
-                        clauseList,
-                        chunks[i]);
-
-                    // 条款 Markdown 仅供理解条款，不是待提取的企业文档。
-                    prompt += $"\n\n【标准条款 Markdown 分片 {j + 1}/{standardChunks.Count}，仅用于理解条款，不是待提取的文档内容】\n"
-                           + "这是由条款表生成的内容，可能存在正文不完整或摘要；当前仅包含一个连续片段，可能不含完整条款或其上下文。"
-                           + "企业文档里若没有对应证据，不要凭标准编造摘录。\n"
-                           + standardMarkdown;
-
-                    // ★ 2026-11-11：长文档提取实测在 180s 稳定超时（提示词含标准原文 3 万字
-                    //   + 文档段 3 万字 + 输出上限 8192 token），单次必须给到 600s。
-                    //   同时把实际规模打进日志，便于判断是输入过大还是模型输出卡住。
-                    _logger.LogInformation(
-                        "[条款提取] {File}×{Std} {Batch}：prompt {Chars} 字符（文档段 {DocChars}，条款 Markdown {StdChars}）",
-                        doc.Code, standard.StandardCode, batchLabel,
-                        prompt.Length, chunks[i].Length, standardMarkdown.Length);
-
-                    var resp = await llm.CompleteAsync(new LlmInvokeRequest
-                    {
-                        BaseUrl = settings.BaseUrl,
-                        ApiKey = settings.ApiKey,
-                        Model = settings.Model,
-                        Temperature = 0.1f,
-                        MaxTokens = 8192,
-                        Prompt = prompt,
-                        ForceJson = true,
-                        TimeoutSeconds = 600,
-                    });
+                    var resp = responses[batch]!;
+                    var batchLabel = batchLabels[batch];
 
                     if (!resp.Success || resp.Json == null)
                     {
@@ -447,6 +465,21 @@ namespace CertPlatform.Auditor.Services.Ent
                     }
                 }
 
+                // ★ 入库前统一清洗：定位（LocateUnique）必须用原始文本做逐字匹配，
+                // 清洗必须放在定位之后、序列化之前 —— 这样 Start/End 仍指向原文真实位置，
+                // 而存入 ContentJson 的摘录/锚点/标题已无 Markdown/表格/排版噪声。
+                foreach (var clause in ordered)
+                {
+                    clause.Title = CleanText(clause.Title);
+                    clause.Anchor = CleanText(clause.Anchor);
+                    for (var i = 0; i < clause.Excerpts.Count; i++)
+                    {
+                        clause.Excerpts[i] = CleanText(clause.Excerpts[i]);
+                    }
+                    clause.Excerpts.RemoveAll(string.IsNullOrEmpty);
+                }
+
+                var manualIndex = ManualIndexParser.Parse(markdown);
                 var payloadDoc = new ExtractedDoc
                 {
                     DocMeta = new ExtractedDocMeta
@@ -463,6 +496,11 @@ namespace CertPlatform.Auditor.Services.Ent
                         Chunks = chunks.Count,
                     },
                     Clauses = ordered,
+                    ManualIndex = manualIndex,
+                    EvidenceSources = manualIndex is null
+                        ? new List<ManualIndexParser.ClauseEvidenceSource>()
+                        : ManualIndexParser.BuildEvidenceSources(
+                            ordered.Select(c => c.ClauseNumber), manualIndex),
                 };
 
                 var json = JsonSerializer.Serialize(payloadDoc, new JsonSerializerOptions
@@ -904,6 +942,43 @@ namespace CertPlatform.Auditor.Services.Ent
             return (got, dropped);
         }
 
+        /// <summary>
+        /// <b>入库前清洗</b>：摘录/锚点会被下游「审核发现 → 证据生成」直接逐字复用与定位，
+        /// 不再二次加工 ⇒ 必须在写 <see cref="DocumentExtraction.ContentJson"/> 前把
+        /// Markdown / 表格 / 排版噪声一次性清掉（⛔ 脏数据入库 = 后续锚点匹配失败 + 证据串味）。
+        /// </summary>
+        private static string CleanText(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+            var s = raw!;
+
+            // ① 表格噪声：竖线分隔符 + 职责三角 ▲△（《职能分配表》/《目录对应表》漏进摘录）
+            s = s.Replace("▲", string.Empty)
+                 .Replace("△", string.Empty)
+                 .Replace("|", string.Empty);
+
+            // ② Markdown 强调/代码符号 + HTML 换行标签
+            s = s.Replace("**", string.Empty)
+                 .Replace("`", string.Empty)
+                 .Replace("<br>", " ", StringComparison.OrdinalIgnoreCase)
+                 .Replace("<br/>", " ", StringComparison.OrdinalIgnoreCase)
+                 .Replace("<br />", " ", StringComparison.OrdinalIgnoreCase);
+
+            // ③ 每行去首尾空白、丢弃空行（模型输出常见「摘录内部换行」）
+            var lines = s.Split('\n')
+                         .Select(l => l.Trim())
+                         .Where(l => l.Length > 0);
+            s = string.Join('\n', lines);
+
+            // ④ 压缩连续空白（制表符/多空格 → 单空格）、去零宽字符（BOM/ZWNBSP）
+            s = Regex.Replace(s, @"[ \t]{2,}", " ");
+            s = s.Replace("\u200B", string.Empty)
+                 .Replace("\uFEFF", string.Empty);
+
+            return s.Trim();
+        }
+
         /// <summary>取字段（大小写不敏感）—— 见 <see cref="Str"/> 的注释</summary>
         private static bool TryProp(JsonElement obj, string name, out JsonElement value)
         {
@@ -975,7 +1050,10 @@ namespace CertPlatform.Auditor.Services.Ent
         }
 
         /// <summary>
-        /// 按<b>段落边界</b>切块（⛔ 不硬切字符：硬切会把一句话劈开，模型摘录的锚点就对不上原文）。
+        /// 按<b>标题边界</b>切块（⛔ 不硬切字符：硬切会把一句话劈开，模型摘录的锚点就对不上原文）。
+        /// <para>先按 Markdown 标题（# / ## / ### / ####）切成「节」，再贪婪装入不超过
+        /// <paramref name="chunkChars"/> 的块；单节超长时按换行兜底切。质量手册这类大文档因此
+        /// 每个大章节自成一块，单块命中条款更少，输出不会撞 max_tokens 上限。</para>
         /// <para>块数上限 <paramref name="maxChunks"/>：超出的尾部<b>不送模型</b>，由调用方在
         /// <c>Message</c> 里如实说明（⛔ 不静默丢）。</para>
         /// </summary>
@@ -992,8 +1070,77 @@ namespace CertPlatform.Auditor.Services.Ent
                 return result;
             }
 
+            var current = new StringBuilder(text.Length);
+            foreach (var section in SplitByHeadings(text))
+            {
+                if (result.Count >= maxChunks) break;
+
+                if (section.Length > chunkChars)
+                {
+                    if (current.Length > 0)
+                    {
+                        result.Add(current.ToString());
+                        current.Clear();
+                        if (result.Count >= maxChunks) break;
+                    }
+                    foreach (var piece in SplitOversized(section, chunkChars))
+                    {
+                        if (result.Count >= maxChunks) break;
+                        result.Add(piece);
+                    }
+                    continue;
+                }
+
+                if (current.Length > 0 && current.Length + section.Length > chunkChars)
+                {
+                    result.Add(current.ToString());
+                    current.Clear();
+                }
+                current.Append(section);
+            }
+            if (current.Length > 0 && result.Count < maxChunks)
+                result.Add(current.ToString());
+            return result;
+        }
+
+        /// <summary>按 Markdown 标题行（行首 1–4 个 # 后跟空格/制表符）把文本切成「节」。</summary>
+        private static List<string> SplitByHeadings(string text)
+        {
+            var sections = new List<string>();
+            var sectionStart = 0;
+            var idx = 0;
+            var n = text.Length;
+            while (idx < n)
+            {
+                var lineEnd = text.IndexOf('\n', idx);
+                if (lineEnd < 0) lineEnd = n;
+                var lineLength = lineEnd - idx;
+                if (IsHeadingLine(text, idx, lineLength) && idx > sectionStart)
+                {
+                    sections.Add(text.Substring(sectionStart, idx - sectionStart));
+                    sectionStart = idx;
+                }
+                idx = lineEnd + 1;
+            }
+            if (sectionStart < n)
+                sections.Add(text.Substring(sectionStart));
+            return sections;
+        }
+
+        private static bool IsHeadingLine(string text, int start, int length)
+        {
+            var hash = 0;
+            while (hash < length && hash < 4 && text[start + hash] == '#') hash++;
+            if (hash < 1) return false;
+            return hash < length && (text[start + hash] == ' ' || text[start + hash] == '\t');
+        }
+
+        /// <summary>单节超过预算时按换行边界兜底切（保留 UTF-16 代理对，避免拆坏字符）。</summary>
+        private static List<string> SplitOversized(string text, int chunkChars)
+        {
+            var result = new List<string>();
             var offset = 0;
-            while (offset < text.Length && result.Count < maxChunks)
+            while (offset < text.Length)
             {
                 var length = Math.Min(chunkChars, text.Length - offset);
                 if (offset + length < text.Length)

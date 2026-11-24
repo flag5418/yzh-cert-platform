@@ -534,6 +534,13 @@ export class EnterpriseDocLogic extends SingleTableCore<any> implements UploadHo
     }
   }
 
+  /** 「重新分析」：勾选了文件 = 只重跑勾选文件；没勾选 = 整家企业（走画像重建 + 确认）。 */
+  async reextract(): Promise<void> {
+    const rows = (this.selectedRows.value ?? []) as EntDocRow[]
+    if (rows.length > 0) return this.startExtract(rows, true)
+    return this.reextractAll()
+  }
+
   // ═══════════════════════ 六、提取结果抽屉 ═══════════════════════
 
   extractionVisible = ref(false)

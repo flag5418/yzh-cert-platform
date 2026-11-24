@@ -391,6 +391,19 @@ namespace CertPlatform.Auditor.Services.Ent
 
         /// <summary>命中的条款切片（旧 <c>doc_clause_extract</c> 与手册逐条款使用）</summary>
         public List<ExtractedClause> Clauses { get; set; } = new();
+
+        /// <summary>
+        /// 手册「纲领层」结构化索引（0.0 目录对应表 + 0.6 职能分配表，确定性解析，零 LLM）。
+        /// <para>非手册文档（无这两张表）为 <c>null</c>。下游「审核发现」据此定位
+        /// 「条款 → 章节 / 部门 / 文档方向」，而不是把规则写死在提示词里。</para>
+        /// </summary>
+        public ManualIndexParser.ManualIndex? ManualIndex { get; set; }
+
+        /// <summary>
+        /// 每条条款的「事实证据提取属性」（由 ManualIndex 确定性派生）：
+        /// 应读章节 / 负责部门 / 前置事实；无映射的标记 IsFallback，走条款通用提取。
+        /// </summary>
+        public List<ManualIndexParser.ClauseEvidenceSource> EvidenceSources { get; set; } = new();
     }
 
     public class ExtractedDocMeta

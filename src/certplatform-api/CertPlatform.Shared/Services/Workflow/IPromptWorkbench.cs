@@ -34,6 +34,12 @@ namespace CertPlatform.Shared.Services.Workflow
 
         /// <summary>★★★ 认证检查符合性分析（输入「条款 + 证据」→ 输出结论/NC 建议 JSON）</summary>
         public const string AuditCheck = "audit_check";
+
+        /// <summary>★★★ 审核发现（两段式第一段：条款 + 文档摘录 → 找回事实 / 疑点 / 证据组合，⛔ 不判符合性）</summary>
+        public const string ClauseEvidenceFindings = "clause_evidence_findings";
+
+        /// <summary>★★★ 证据生成（两段式第二段：消费发现/疑点/组合 → 400~500 字审核证据 + 默认结论）</summary>
+        public const string AuditEvidenceGen = "audit_check_evidence";
         /// <summary>★★★ NC 不符合项描述与处置建议（输入「条款 + 证据 + 结论」→ 输出 NC No/描述/等级建议）</summary>
         public const string NcSuggest = "nc_suggest";
         /// <summary>★★★ 证据与检查项关联分析（输入「证据元数据列表 + 检查项」→ 输出关联度 JSON）</summary>
