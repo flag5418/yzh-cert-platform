@@ -778,7 +778,9 @@ namespace CertPlatform.Auditor.Services.Expert
                 item.Message = isLocked ? "已锁定（入队前被锁），跳过" : null;
                 item.UpdateBy = userCode;
                 item.UpdateTime = now;
-                await _db.UpdateAsync(item);
+                await _db.UpdateAsync(item,
+                    nameof(item.Status), nameof(item.AnalysisState), nameof(item.RerunState),
+                    nameof(item.Message), nameof(item.UpdateBy), nameof(item.UpdateTime));
 
                 if (!isLocked) toEnqueue.Add(item);
             }
@@ -802,7 +804,9 @@ namespace CertPlatform.Auditor.Services.Expert
                 task.Message = $"选中的 {items.Count} 个检查项均已锁定，本次未执行任何分析";
                 task.UpdateBy = userCode;
                 task.UpdateTime = now;
-                await _db.UpdateAsync(task);
+                await _db.UpdateAsync(task,
+                    nameof(task.Status), nameof(task.QueueCode), nameof(task.FinishedAt),
+                    nameof(task.Message), nameof(task.UpdateBy), nameof(task.UpdateTime));
 
                 _logger.LogInformation(
                     "[CertTask] 全锁跳过 task={Task} items={Count}", taskCode, items.Count);
@@ -870,7 +874,9 @@ namespace CertPlatform.Auditor.Services.Expert
                 task.Message = $"投递队列失败：{error}";
                 task.UpdateBy = userCode;
                 task.UpdateTime = now;
-                await _db.UpdateAsync(task);
+                await _db.UpdateAsync(task,
+                    nameof(task.Status), nameof(task.Message),
+                    nameof(task.UpdateBy), nameof(task.UpdateTime));
 
                 _logger.LogError("[CertTask] 投递队列失败 task={Task} err={Err}", taskCode, error);
                 return Result<CertTaskStartResponse>.Fail($"投递队列失败：{error}");
@@ -884,7 +890,9 @@ namespace CertPlatform.Auditor.Services.Expert
                 : $"已入队 {count} 项";
             task.UpdateBy = userCode;
             task.UpdateTime = now;
-            await _db.UpdateAsync(task);
+            await _db.UpdateAsync(task,
+                nameof(task.Status), nameof(task.QueueCode), nameof(task.Message),
+                nameof(task.UpdateBy), nameof(task.UpdateTime));
 
             _logger.LogInformation(
                 "[CertTask] 已启动 task={Task} queue={Queue} enqueued={Count} locked={Locked}",
@@ -923,7 +931,8 @@ namespace CertPlatform.Auditor.Services.Expert
             task.UpdateBy = userCode;
             task.UpdateTime = DateTime.Now;
 
-            await _db.UpdateAsync(task);
+            await _db.UpdateAsync(task,
+                nameof(task.Status), nameof(task.UpdateBy), nameof(task.UpdateTime));
 
             return Result<CertTaskStartResponse>.Ok(new CertTaskStartResponse
             {
@@ -1135,7 +1144,10 @@ namespace CertPlatform.Auditor.Services.Expert
             r.UpdateBy = userCode;
             r.UpdateTime = DateTime.Now;
 
-            await _db.UpdateAsync(r);
+            await _db.UpdateAsync(r,
+                nameof(r.Severity), nameof(r.SeveritySource), nameof(r.Conclusion),
+                nameof(r.ConclusionBy), nameof(r.ConclusionAt), nameof(r.Reason),
+                nameof(r.UpdateBy), nameof(r.UpdateTime));
             return Result.Ok();
         }
 
@@ -1163,7 +1175,9 @@ namespace CertPlatform.Auditor.Services.Expert
             evi.UpdateBy = userCode;
             evi.UpdateTime = DateTime.Now;
 
-            await _db.UpdateAsync(evi);
+            await _db.UpdateAsync(evi,
+                nameof(evi.PrevContentMD5), nameof(evi.ContentMD5),
+                nameof(evi.UpdateBy), nameof(evi.UpdateTime));
 
             return Result.Ok();
         }
@@ -1221,7 +1235,10 @@ namespace CertPlatform.Auditor.Services.Expert
                 item.UpdateBy = userCode;
                 item.UpdateTime = DateTime.Now;
 
-                await _db.UpdateAsync(item);
+                await _db.UpdateAsync(item,
+                    nameof(item.RerunState), nameof(item.RerunReason),
+                    nameof(item.RerunTriggeredAt), nameof(item.RerunTriggeredBy),
+                    nameof(item.UpdateBy), nameof(item.UpdateTime));
                 affectedTaskItemCount++;
 
                 affectedItemsJsonArr.Add(new
@@ -1996,7 +2013,8 @@ namespace CertPlatform.Auditor.Services.Expert
 
                 // ★ 召回计划：由检查项条款的 cert_clause_attr（Process/Role/EvidenceFamily/EvidenceForm）
                 //   经 RecallPathResolver 解析而来 —— 决定 RM2 过程轴的键、RM1 的体裁白名单、记录族是否启用主轴。
-                var recall = await ResolveClauseRecallAsync(clauses);
+                //   ★ 同时带上检查项部门（detail.DeptNames）作为 RM3 部门轴的「检查项端」键。
+                var recall = await ResolveClauseRecallAsync(clauses, detail.DeptNames);
 
                 var extractions = (await _db.GetListAsync<DocumentExtraction>(x =>
                     stdCodes.Contains(x.StandardCode)
@@ -2313,6 +2331,7 @@ namespace CertPlatform.Auditor.Services.Expert
                 //   否则退回"条款轴没命中时"的兜底（15 号 §三/§四；翻转现状"条款轴优先、过程轴仅兜底"）。
                 //   ⛔ 两条轴都不产生条款号：ClauseCode 保持 null、Anchor 写召回理由，
                 //      条款号只能来自文档自身，避免把采购记录挂到环境因素这类串条款错误。
+                var processAxisFired = false;
                 if (keywords.Count > 0 && (clauseAxisRows == 0 || recordAxisActive))
                 {
                     var mode = GetJsonString(root, "ExtractionMode");
@@ -2322,19 +2341,49 @@ namespace CertPlatform.Auditor.Services.Expert
                         : (JsonElement?)null;
                     var processArea = modeOutput.HasValue ? GetJsonString(modeOutput.Value, "ProcessArea") : string.Empty;
 
-                    if (ProcessAreaRecall.Matches(processArea, keywords))
+                    // ★ RM2 归一：条款 Process 码 ∩ 文档 ProcessArea 归一码（不再靠中文关键词包含碰运气）
+                    if (ProcessAreaRecall.MatchesProcessAxis(processArea, recall?.ProcessKeys ?? Array.Empty<string>()))
                     {
                         if (mode == EnterpriseDocExtractionRouter.ProcessProfile
                             || mode == EnterpriseDocExtractionRouter.WorkInstructionCitation)
                         {
                             ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
                                 fileName, markdownHash, rows, ProcessAreaRecall.ProgramAnchor, ignoreClauses: true);
+                            processAxisFired = true;
                         }
                         else if (mode == EnterpriseDocExtractionRouter.RecordProfile
                                  && modeOutput.HasValue && HasRecordData(modeOutput.Value))
                         {
                             ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
                                 fileName, markdownHash, rows, ProcessAreaRecall.RecordAnchor, ignoreClauses: true);
+                            processAxisFired = true;
+                        }
+                    }
+                }
+
+                // ★ 部门轴（RM3，15 号 §三）：**记录类主轴** —— 检查项部门 ∩ 文档责任部门（f2/f1f2 执行族）。
+                //   与认证检查装配（CertCheckContextBuilder.ApplyDeptAxis）同构：命中即召回、锚点写召回理由。
+                //   ⛔ 同一份文档已按过程轴召回 ⇒ 不再按部门轴重复（不虚增）；⛔ 从不从文档反推条款号。
+                if (!processAxisFired && recall is { DeptAxisActive: true } && recall.DeptAxisDepts.Count > 0)
+                {
+                    var mode = GetJsonString(root, "ExtractionMode");
+                    var modeOutput = root.TryGetProperty("ModeOutput", out var mo)
+                                     && mo.ValueKind == JsonValueKind.Object
+                        ? ModeOutputProjector.ForProjection(mo, mode)
+                        : (JsonElement?)null;
+                    if (modeOutput.HasValue
+                        && DocDeptNames.Collect(modeOutput.Value).Any(recall.DeptAxisDepts.Contains))
+                    {
+                        if (mode == EnterpriseDocExtractionRouter.RecordProfile && HasRecordData(modeOutput.Value))
+                        {
+                            ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
+                                fileName, markdownHash, rows, DocDeptNames.DeptRecordAnchor, ignoreClauses: true);
+                        }
+                        else if (mode == EnterpriseDocExtractionRouter.ProcessProfile
+                                 || mode == EnterpriseDocExtractionRouter.WorkInstructionCitation)
+                        {
+                            ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
+                                fileName, markdownHash, rows, DocDeptNames.DeptFileAnchor, ignoreClauses: true);
                         }
                     }
                 }
@@ -2591,7 +2640,7 @@ namespace CertPlatform.Auditor.Services.Expert
         ///
         /// <para>⛔ 拿不到属性就退化为"不过滤 + 不启用过程轴"（宁可不召回，也不靠写死编号猜）。</para>
         /// </summary>
-        private async Task<ClauseRecallPlan> ResolveClauseRecallAsync(List<ISOClause> clauses)
+        private async Task<ClauseRecallPlan> ResolveClauseRecallAsync(List<ISOClause> clauses, string? deptNames)
         {
             var plan = new ClauseRecallPlan();
             var codes = clauses.Select(c => c.Code).Where(x => !string.IsNullOrWhiteSpace(x))
@@ -2613,6 +2662,7 @@ namespace CertPlatform.Auditor.Services.Expert
             var allKeys = new List<string>();
             var allowed = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
             var recordAxisActive = false;
+            var deptAxisActive = false;
             // ★ RM7 语义语料：仅收 ClauseCategory ∈ {策划,支持,运行,改进} 且有条款正文的条款
             var semanticCorpus = new List<(string ClauseNumber, string Text)>();
             var semanticClauses = new HashSet<string>(StringComparer.Ordinal);
@@ -2646,6 +2696,11 @@ namespace CertPlatform.Auditor.Services.Expert
                     foreach (var mode in path.DocTypes) modes.Add(mode);
                 if (modes.Count > 0) allowed[number] = modes;
 
+                // ★ RM3 部门轴：解析器为该条款 plan 出部门轴（f2/f1f2 执行族）⇒ 启用 —— 轴由解析器给，⛔ 不自己猜。
+                if (!deptAxisActive
+                    && paths.Any(p => string.Equals(p.Axis, RecallAxis.Dept, StringComparison.Ordinal)))
+                    deptAxisActive = true;
+
                 // ★ RM7：条款作用类型驱动 + 有条款正文 ⇒ 纳入语义召回语料
                 var clauseText = ClauseTextMatcher.FlattenClauseText(Get("ClauseText"));
                 if (clauseText.Length > 0 && ClauseCategoryResolver.NeedsSemantic(Get("Role"), number))
@@ -2655,9 +2710,15 @@ namespace CertPlatform.Auditor.Services.Expert
                 }
             }
 
+            plan.ProcessKeys = allKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             plan.ProcessKeywords = ProcessAreaRecall.KeywordsFor(allKeys);
             plan.AllowedModesByClause = allowed;
             plan.RecordAxisActive = recordAxisActive;
+            // ★ RM3：解析器 plan 出部门轴时才启用；检查项部门名集是「检查项端」键（空 ⇒ 不执行）。
+            plan.DeptAxisActive = deptAxisActive;
+            var wantedDepts = new HashSet<string>(StringComparer.Ordinal);
+            DocDeptNames.AddText(deptNames, wantedDepts);
+            plan.DeptAxisDepts = wantedDepts;
             plan.SemanticClauses = semanticClauses;
             plan.SemanticMatcher = semanticCorpus.Count > 0 ? ClauseTextMatcher.Build(semanticCorpus) : null;
             return plan;
@@ -2667,8 +2728,20 @@ namespace CertPlatform.Auditor.Services.Expert
         private sealed class ClauseRecallPlan
         {
             public IReadOnlySet<string> ProcessKeywords { get; set; } = new HashSet<string>();
+
+            /// <summary>条款 <c>Process</c> 码全集（purchase/inspection/…）—— RM2 归一匹配用（码 ∩ 码）。</summary>
+            public IReadOnlyCollection<string> ProcessKeys { get; set; } = new List<string>();
             public Dictionary<string, HashSet<string>> AllowedModesByClause { get; set; } = new(StringComparer.Ordinal);
             public bool RecordAxisActive { get; set; }
+
+            /// <summary>
+            /// RM3 部门轴：检查项**任一条款**的召回计划含部门轴（f2/f1f2 执行族）⇒ 启用部门名交集召回。
+            /// <para>轴由 <see cref="RecallPathResolver"/> 给，⛔ 不由条款号 / 证据族反推。</para>
+            /// </summary>
+            public bool DeptAxisActive { get; set; }
+
+            /// <summary>检查项部门名集（RM3 部门轴的「检查项端」键）；空 ⇒ 不执行部门轴。</summary>
+            public IReadOnlySet<string> DeptAxisDepts { get; set; } = new HashSet<string>();
 
             /// <summary>RM7 语义匹配器（条款释义 BM25）；无语料时为 null（跳过 RM7）。</summary>
             public ClauseTextMatcher? SemanticMatcher { get; set; }
@@ -2731,8 +2804,10 @@ namespace CertPlatform.Auditor.Services.Expert
             Dictionary<string, HashSet<string>>? allowedByClause, string docMode)
         {
             if (allowedByClause == null || allowedByClause.Count == 0) return true;
-            // 老文档无模式（None/legacy 归一）时无从判定体裁 ⇒ 放行，不凭空丢证据
-            if (string.IsNullOrEmpty(docMode) || docMode == EnterpriseDocExtractionRouter.Legacy) return true;
+            // 老文档无模式（None/legacy/unclassified 归一）时无从判定体裁 ⇒ 放行，不凭空丢证据
+            if (string.IsNullOrEmpty(docMode)
+                || docMode == EnterpriseDocExtractionRouter.Legacy
+                || docMode == EnterpriseDocExtractionRouter.Unclassified) return true;
 
             var owner = checkClauses.Contains(clauseNumber)
                 ? clauseNumber

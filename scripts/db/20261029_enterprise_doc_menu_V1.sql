@@ -33,9 +33,9 @@ VALUES
   ('MENU_AUD_18', 'MENU_AUD_00', '企业资料', 'FolderOpened', 295, '/enterprise-doc', 'auditor',
    '企业资料（V2 上传重写版）：只按「企业」存一层（无阶段/无槽位），上传不带标准，标准只从当前有效认证计划来；转换产物 PDF+Markdown，按标准做 L1 条款提取',
    1, 0, NOW(), 'seed_enterprise_doc')
+-- ⛔ 不覆盖 `MenuName`（人工可改列，守卫 B-R6）：菜单名改过再重跑会被冲回
 ON DUPLICATE KEY UPDATE
   `ParentCode`  = VALUES(`ParentCode`),
-  `MenuName`    = VALUES(`MenuName`),
   `Icon`        = VALUES(`Icon`),
   `OrderNo`     = VALUES(`OrderNo`),
   `Url`         = VALUES(`Url`),

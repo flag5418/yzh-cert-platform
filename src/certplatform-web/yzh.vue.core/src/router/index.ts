@@ -102,7 +102,8 @@ export interface YzhRoutesOptions {
  * const routes = createYzhRoutes({
  *   menuTag: 'admin',
  *   branding: { appTitle: '映智汇认证管理平台' },
- *   businessRoutes: [{ path: 'cert/iso-standard', component: () => import('@/pages/foundation/iso-standard') }],
+ *   // 宿主业务页原子路由（path 须与 Sys_Menu.Url 逐字一致）
+ *   businessRoutes: [],
  * })
  */
 export function createYzhRoutes(options: YzhRoutesOptions = {}): RouteRecordRaw[] {

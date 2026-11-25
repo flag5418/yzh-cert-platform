@@ -296,7 +296,9 @@ public class CertEvidenceService
         e.UpdateBy = userCode;
         e.UpdateTime = DateTime.Now;
 
-        await _db.UpdateAsync(e);
+        await _db.UpdateAsync(e,
+            nameof(e.PrevContentMD5), nameof(e.LlmSummary), nameof(e.ContentMD5),
+            nameof(e.Status), nameof(e.DroppedReason), nameof(e.UpdateBy), nameof(e.UpdateTime));
 
         // ★ 2026-11-03：证据内容变化后，已分析过的检查项标记「建议重新分析」
         await MarkRerunSuggestedAsync(userCode, e.CheckItemCode);
@@ -322,7 +324,9 @@ public class CertEvidenceService
         e.UpdateBy = userCode;
         e.UpdateTime = DateTime.Now;
 
-        await _db.UpdateAsync(e);
+        await _db.UpdateAsync(e,
+            nameof(e.IsDeleted), nameof(e.DeleteBy), nameof(e.DeleteTime),
+            nameof(e.UpdateBy), nameof(e.UpdateTime));
 
         // ★ 2026-11-03：证据删除后，已分析过的检查项标记「建议重新分析」
         await MarkRerunSuggestedAsync(userCode, e.CheckItemCode);

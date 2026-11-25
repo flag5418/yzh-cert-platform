@@ -743,6 +743,27 @@ namespace CertPlatform.Auditor.Services.Ent
                 modeOutput = DocExtractGuard.ValidateEvidenceAgainstText(extractionMode, modeOutput, markdown);
             }
 
+            // ★ V4 章节级产物：按画像 Toc 的偏移把文档切成 Sections[]（确定性，零模型成本）。
+            //   概要（Summary）取模型产物 SectionSummaries；原文锚段（CharStart/CharEnd）供报告期原样回取。
+            //   详见 docs/80-v4/17-文档分类：结构指纹与角色定位-V1.md §五 / §七。
+            modeOutput = DocSectionsBuilder.Attach(modeOutput, doc.DocProfileJson);
+
+            // ★ 手册章节模式：把「纲领层」（0.0 目录映射 / 0.6 职能分配 / 0.1·0.3·0.4·0.7 前置事实）
+            //   一并落库，供 CertCheckContextBuilder.LoadManualGuidance 读出「应读章节 / 负责部门 / 前置事实」。
+            //   ⛔ 不落库 ⇒ 检查退化为「按条款通用提取」，且不报错（最难查的一类缺陷）。
+            ManualIndexParser.ManualIndex? manualIndex = null;
+            var evidenceSources = new List<ManualIndexParser.ClauseEvidenceSource>();
+            if (extractionMode == EnterpriseDocExtractionRouter.ManualChapter)
+            {
+                manualIndex = ManualIndexParser.Parse(markdown);
+                if (manualIndex != null)
+                {
+                    var clauseNumbers = ReadPrimaryClauses(modeOutput);
+                    if (clauseNumbers.Count > 0)
+                        evidenceSources = ManualIndexParser.BuildEvidenceSources(clauseNumbers, manualIndex);
+                }
+            }
+
             var payloadDoc = new ExtractedDoc
             {
                 DocMeta = new ExtractedDocMeta
@@ -764,6 +785,8 @@ namespace CertPlatform.Auditor.Services.Ent
                 ExtractionMode = extractionMode,
                 ModeOutput = modeOutput,
                 Clauses = new List<ExtractedClause>(),
+                ManualIndex = manualIndex,
+                EvidenceSources = evidenceSources,
             };
 
             var json = JsonSerializer.Serialize(payloadDoc, new JsonSerializerOptions
@@ -800,6 +823,24 @@ namespace CertPlatform.Auditor.Services.Ent
             await docSvc.RecomputeExtractStatusAsync(doc.Code!);
             // 旧画像常常没有 OwnerDept；模式产物已有部门时补回画像，页面/按部门检索才可用
             await docSvc.MergeModeOutputProfileAsync(doc, extractionMode, modeOutput);
+
+            // ★ 手册章节模式：用确定性解析出的「0.7 职责权限」完善本企业部门职能。
+            //   ⛔ 只覆盖已存在部门的 DeptDuty（审核员手工对齐后同步），不新增/改名/删除部门。
+            if (extractionMode == EnterpriseDocExtractionRouter.ManualChapter
+                && manualIndex?.FrontMatter?.DeptDuties is { Count: > 0 })
+            {
+                try
+                {
+                    var synced = await ManualDeptDutySyncer.SyncAsync(db, doc.EnterpriseCode ?? string.Empty, manualIndex, cancellationToken);
+                    if (synced > 0)
+                        _logger.LogInformation("[模式提取] 部门职能同步 {Count} 个部门 {File}", synced, doc.Code);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[模式提取] 部门职能同步失败（不影响提取结果）{File}", doc.Code);
+                }
+            }
+
             _logger.LogInformation("[模式提取] {Status} {File}×{Std} mode={Mode}",
                 ExtractRowStatus.Done, doc.Code, standard.StandardCode, extractionMode);
 
@@ -899,6 +940,30 @@ namespace CertPlatform.Auditor.Services.Ent
                     && !string.IsNullOrWhiteSpace(s)) return s;
             }
             return null;
+        }
+
+        /// <summary>
+        /// 从模式产物读取「已在代码挂载的 ISO 条款号」（<c>PrimaryClauses</c> 字符串数组）。
+        /// 手册章节模式下由 <see cref="AttachManualChapterClauses"/> 确定性挂载，供
+        /// <see cref="ManualIndexParser.BuildEvidenceSources"/> 派生每条条款的应读章节/负责部门/前置事实。
+        /// </summary>
+        private static List<string> ReadPrimaryClauses(JsonElement modeOutput)
+        {
+            var list = new List<string>();
+            if (modeOutput.ValueKind == JsonValueKind.Object
+                && modeOutput.TryGetProperty("PrimaryClauses", out var arr)
+                && arr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in arr.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var s = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
+                    }
+                }
+            }
+            return list;
         }
 
         // ========================================================

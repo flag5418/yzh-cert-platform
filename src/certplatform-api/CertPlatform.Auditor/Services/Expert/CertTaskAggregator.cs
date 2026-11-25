@@ -110,7 +110,8 @@ public static class CertTaskAggregator
             }
 
             task.UpdateTime = DateTime.Now;
-            await db.UpdateAsync(task);
+            await db.UpdateAsync(task,
+                nameof(task.Status), nameof(task.FinishedAt), nameof(task.Message), nameof(task.UpdateTime));
         }
         catch (Exception ex)
         {

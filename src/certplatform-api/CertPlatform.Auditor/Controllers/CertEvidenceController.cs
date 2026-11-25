@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
 using CertPlatform.Auditor.Services.Expert;
@@ -13,7 +14,7 @@ namespace CertPlatform.Auditor.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/Auditor/[controller]")]
-public class CertEvidenceController : ControllerBase
+public class CertEvidenceController : WebControllerBase
 {
     private readonly CertEvidenceService _evidenceSvc;
     private readonly CertTaskService _taskSvc;

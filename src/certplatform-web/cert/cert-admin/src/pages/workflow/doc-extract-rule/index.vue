@@ -20,10 +20,12 @@ import {
   filterRules,
   getRuleDetail,
   getPrompt,
+  getPromptTypes,
   savePrompt,
   testDocExtractPrompt,
   type DocExtractRuleDto,
   type DocExtractPromptDto,
+  type DocExtractPromptTypeDto,
   type DocExtractTestResult,
 } from '@share/api/workflow/doc-extract-rule'
 
@@ -41,7 +43,10 @@ async function loadList() {
   }
 }
 
-onMounted(loadList)
+onMounted(() => {
+  loadPromptTypes()
+  loadList()
+})
 
 // ── 构建左树（按 Category 分组，2 层：体系 → 标准） ──
 interface TreeNode extends StdStageTreeNode {
@@ -91,20 +96,48 @@ const treeData = computed(() => buildTree(ruleList.value))
 // ── 当前选中的标准 Code ──
 const selectedCode = ref<string>('')
 
-/** 提示词类型：条款逐条是旧口径；其余 8 条是 2026-11-14 V2 类型提示词 */
-const PROMPT_TYPES = [
-  { code: 'doc_clause_extract', name: '条款逐条提取（当前）' },
-  { code: 'doc_extract_process_profile', name: '程序 / 过程文件' },
-  { code: 'doc_extract_record_profile', name: '记录 / 表单' },
-  { code: 'doc_extract_index', name: '文件索引' },
-  { code: 'doc_extract_audit', name: '内审 / 管理评审' },
-  { code: 'doc_extract_document_control', name: '文件控制类' },
-  { code: 'doc_extract_work_instruction_citation', name: '作业指导书' },
-  { code: 'doc_extract_context_list', name: '组织环境 / 相关方清单' },
-  { code: 'doc_extract_policy_profile', name: '制度 / 管理办法' },
-] as const
+/**
+ * 提示词类型：★ 运行时从后端加载（来源 = DocExtractionPromptCatalog，与提取路由同一映射），
+ * 覆盖「画像总闸 / 9 类按类型提取 / 条款逐条兜底」。
+ * 后端不可达时回退到下面这份等价清单，避免下拉为空。
+ */
+const FALLBACK_PROMPT_TYPES: DocExtractPromptTypeDto[] = [
+  { PromptCode: 'doc_profile', Mode: '', DisplayName: '文档画像（分流总闸）', Group: '画像（分流总闸）', Sort: 10 },
+  { PromptCode: 'doc_extract_manual_chapter', Mode: 'manual_chapter', DisplayName: '手册 / 方针章节', Group: '类型提取', Sort: 20 },
+  { PromptCode: 'doc_extract_process_profile', Mode: 'process_profile', DisplayName: '程序 / 过程文件', Group: '类型提取', Sort: 21 },
+  { PromptCode: 'doc_extract_record_profile', Mode: 'record_profile', DisplayName: '记录 / 表单', Group: '类型提取', Sort: 22 },
+  { PromptCode: 'doc_extract_index', Mode: 'index_only', DisplayName: '文件索引 / 清单', Group: '类型提取', Sort: 23 },
+  { PromptCode: 'doc_extract_document_control', Mode: 'document_control', DisplayName: '文件控制类', Group: '类型提取', Sort: 24 },
+  { PromptCode: 'doc_extract_work_instruction_citation', Mode: 'work_instruction_citation', DisplayName: '作业指导书', Group: '类型提取', Sort: 25 },
+  { PromptCode: 'doc_extract_policy_profile', Mode: 'policy_profile', DisplayName: '制度 / 管理办法', Group: '类型提取', Sort: 26 },
+  { PromptCode: 'doc_extract_context_list', Mode: 'context_list', DisplayName: '组织环境 / 相关方清单', Group: '类型提取', Sort: 27 },
+  { PromptCode: 'doc_extract_audit', Mode: 'audit_profile', DisplayName: '内审 / 管理评审', Group: '类型提取', Sort: 28 },
+  { PromptCode: 'doc_clause_extract', Mode: 'legacy', DisplayName: '条款逐条（兜底 · 仅 other）', Group: '兜底', Sort: 90 },
+]
 
-const promptType = ref<string>('doc_clause_extract')
+const promptTypes = ref<DocExtractPromptTypeDto[]>(FALLBACK_PROMPT_TYPES)
+
+/** 按 Group 连续分组（后端已按 Sort 升序返回） */
+const promptTypeGroups = computed(() => {
+  const groups: { label: string; items: DocExtractPromptTypeDto[] }[] = []
+  for (const t of promptTypes.value) {
+    const last = groups[groups.length - 1]
+    if (last && last.label === t.Group) last.items.push(t)
+    else groups.push({ label: t.Group, items: [t] })
+  }
+  return groups
+})
+
+async function loadPromptTypes() {
+  try {
+    const list = await getPromptTypes()
+    if (list.length) promptTypes.value = list
+  } catch {
+    // 保持回退清单
+  }
+}
+
+const promptType = ref<string>('doc_profile')
 
 function onTreeNodeClick(node: StdStageTreeNode) {
   if (node.Type !== 'standard') return
@@ -192,7 +225,6 @@ const testFile = ref<File | null>(null)
 const testLoading = ref(false)
 const testMeta = ref<DocExtractTestResult | null>(null)
 const testError = ref('')
-const testMode = ref<'Section' | 'Whole'>('Section')
 
 function onFileChange(e: Event) {
   const target = e.target as HTMLInputElement
@@ -224,7 +256,7 @@ async function runTest() {
       file: testFile.value,
       standardCode: detail.value.StandardCode,
       template: promptEditing.value,
-      mode: testMode.value,
+      promptCode: promptType.value,
     })
     testMeta.value = r
     if (!r.Success) testError.value = r.Message || '试跑失败'
@@ -249,10 +281,21 @@ async function runTest() {
 
 const hasPrompt = computed(() => (promptEditing.value ?? '').length > 0)
 const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
+
+/** 画像整链：doc_profile 试跑续跑后，附带的画像 JSON 原文（格式化） */
+const prettyProfile = computed(() => {
+  const raw = testMeta.value?.ProfileOutput ?? ''
+  if (!raw) return ''
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+})
 </script>
 
 <template>
-  <YzhPageLayout title="提取提示词管理">
+  <YzhPageLayout title="提取提示词管理" no-padding>
     <div class="doc-extract-rule">
       <!-- 左栏：标准树 -->
       <aside class="doc-extract-rule__left">
@@ -283,16 +326,22 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
             <span class="doc-extract-rule__info-meta">v{{ detail.Version }} · {{ detail.IsPublished ? '已发布' : '草稿' }}</span>
           </div>
 
-          <!-- 提示词类型：条款逐条 / 8 类文档模式 -->
+          <!-- 提示词类型：画像总闸 / 类型提取 / 兜底（数据源 = 后端 DocExtractionPromptCatalog） -->
           <div class="doc-extract-rule__type-bar">
             <span class="doc-extract-rule__type-label">提示词类型</span>
             <el-select v-model="promptType" size="small" class="doc-extract-rule__type-select">
-              <el-option
-                v-for="t in PROMPT_TYPES"
-                :key="t.code"
-                :label="t.name"
-                :value="t.code"
-              />
+              <el-option-group
+                v-for="g in promptTypeGroups"
+                :key="g.label"
+                :label="g.label"
+              >
+                <el-option
+                  v-for="t in g.items"
+                  :key="t.PromptCode"
+                  :label="t.DisplayName"
+                  :value="t.PromptCode"
+                />
+              </el-option-group>
             </el-select>
             <span v-if="promptType !== 'doc_clause_extract'" class="doc-extract-rule__type-hint">
               类型提示词为全局默认，不随左侧标准变化
@@ -347,10 +396,6 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
             </div>
             <div class="doc-extract-rule__test-bar">
               <input type="file" :accept="buildAcceptAttribute(['document', 'pdf'])" @change="onFileChange" />
-              <el-select v-model="testMode" size="small" :disabled="testLoading" class="doc-extract-rule__mode-select">
-                <el-option label="小节模式（推荐）" value="Section" />
-                <el-option label="整篇模式（对比）" value="Whole" />
-              </el-select>
               <el-button type="primary" :loading="testLoading" :disabled="!testFile || testLoading" @click="runTest">
                 {{ testLoading ? '试跑中…' : '运行测试' }}
               </el-button>
@@ -359,11 +404,6 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
                 {{ testMeta.PromptTokens + testMeta.CompletionTokens }} tokens ·
                 提取 {{ testMeta.ClauseCount }}<template v-if="testMeta.AllClauseCount"> / 清单 {{ testMeta.AllClauseCount }}</template> 条<template v-if="testMeta.SkippedByDocCheckMode">（跳过 {{ testMeta.SkippedByDocCheckMode }} 条 DocCheckMode=none）</template> ·
                 正文 {{ testMeta.MarkdownLength }} 字<template v-if="testMeta.Truncated">（已截断至 3 万字）</template>
-                <template v-if="testMeta.Mode === 'Section' && testMeta.SectionTotal">
-                  · 小节 {{ testMeta.SectionSucceeded }}/{{ testMeta.SectionTotal }} 段
-                  <template v-if="testMeta.SectionFailed">（失败 {{ testMeta.SectionFailed }} 段）</template>
-                </template>
-                <template v-if="testMeta.SectionTruncated"> · {{ testMeta.SectionTruncated }} 节截断至 6000 字</template>
                 <template v-if="!testMeta.JsonValid"> · 输出不是合法 JSON</template>
               </span>
             </div>
@@ -372,8 +412,13 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
             <div v-if="testResult" class="doc-extract-rule__test-result">
               <pre>{{ testResult }}</pre>
             </div>
-            <div v-else-if="!testLoading" class="doc-extract-rule__test-tip">
-              默认小节模式：先按标准条款解析文档章节，只把对应小节送给模型，5 路并发；整篇模式仅用于对比旧结果。
+            <el-collapse v-if="prettyProfile && testMeta?.RoutedPromptCode" class="doc-extract-rule__test-profile">
+              <el-collapse-item :title="`画像判定原文（doc_profile → ${testMeta.RoutedMode}）`">
+                <pre>{{ prettyProfile }}</pre>
+              </el-collapse-item>
+            </el-collapse>
+            <div v-if="!testResult && !testLoading" class="doc-extract-rule__test-tip">
+              全文试跑：按当前所选提示词类型渲染占位符，整篇文档一次送模型（超 3 万字截断）。
             </div>
           </section>
         </template>
@@ -542,10 +587,6 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
   margin-bottom: var(--yzh-space-3, 12px);
 }
 
-.doc-extract-rule__mode-select {
-  width: 160px;
-}
-
 .doc-extract-rule__test-result {
   max-height: 300px;
   overflow-y: auto;
@@ -560,6 +601,19 @@ const isFallbackPrompt = computed(() => promptData.value?.IsFallback ?? false)
   word-break: break-all;
   font-size: var(--yzh-font-size-sm, 13px);
   color: var(--yzh-color-text-regular, #ccc);
+  margin: 0;
+}
+
+.doc-extract-rule__test-profile {
+  margin-top: var(--yzh-space-2, 8px);
+}
+
+.doc-extract-rule__test-profile pre {
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: var(--yzh-font-size-sm, 13px);
   margin: 0;
 }
 

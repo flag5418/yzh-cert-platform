@@ -28,6 +28,7 @@ using CertPlatform.Admin.Entities.Workflow;
 using CertPlatform.Admin.Services.Cert;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Scope;
+using CertPlatform.Shared.Storage;
 
 namespace CertPlatform.Admin.Controllers.Workflow;
 
@@ -211,38 +212,65 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
             : Ok(ApiResponse.BizFail(message));
     }
 
+    /// <summary>
+    /// 可选提示词类型（页面下拉数据源）。
+    /// <para>★ 唯一事实源 = <see cref="DocExtractionPromptCatalog"/>，与 Auditor 运行时
+    /// <c>EnterpriseDocExtractionRouter.PromptCodeForMode</c> 同一映射，前端不再硬编码。</para>
+    /// </summary>
+    [HttpGet("prompt/types")]
+    public IActionResult GetPromptTypes()
+        => Ok(ApiResponse<IReadOnlyList<DocExtractPromptTypeDto>>.Ok(
+            DocExtractionPromptCatalog.All.Select(e => new DocExtractPromptTypeDto
+            {
+                PromptCode = e.PromptCode,
+                Mode = e.Mode,
+                DisplayName = e.DisplayName,
+                Group = e.Group,
+                Sort = e.Sort,
+            }).ToList()));
+
     // ════════════════════════════════════════════════════════════════════
     // ★ 页面内试跑（2026-11-10）：上传文档 → 转 Markdown → 用「当前编辑正文」跑一次
     // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>单次试跑送模型的文档字符上限（整篇模式，与 ClauseExtractExecutor.ChunkChars 同口径 3 万字）</summary>
+    /// <summary>legacy 兜底提示词 Code（与 DocExtractionPromptCatalog / cert_prompt_template 一致）</summary>
+    private const string PromptCodeLegacy = "doc_clause_extract";
+
+    /// <summary>画像总闸提示词 Code</summary>
+    private const string ProfilePromptCode = "doc_profile";
+
+    /// <summary>单次试跑送模型的文档字符上限（与 ClauseExtractExecutor.ChunkChars 同口径 3 万字）</summary>
     private const int MaxTestDocChars = 30_000;
 
-    /// <summary>小节模式：单节送模型的字符上限（与 Auditor ProbeSectionAsync 同口径）</summary>
-    private const int SectionMaxChars = 6_000;
+    /// <summary>画像提示词注入的正文开头长度（与 <c>{{first_2000}}</c> 同口径）</summary>
+    private const int ProfileHeadChars = 2_000;
 
-    /// <summary>小节模式：一次调用最多处理多少条条款（越小输出越短、并发越高）</summary>
-    private const int SectionClausesPerCall = 6;
+    /// <summary>画像提示词注入的标题清单条数上限</summary>
+    private const int ProfileMaxHeadings = 80;
 
-    /// <summary>小节模式：并发路数（条款属性页 5 路无 429；试跑短输出用 8 路）</summary>
-    private const int SectionConcurrency = 8;
-
-    /// <summary>小节模式：单次输出上限（不要用全局 32768，否则又会写飞）</summary>
-    private const int SectionMaxTokens = 4_096;
-
-    /// <summary>小节模式：相邻小节合并后单次送模型的字符上限（6 个短小节 ≈ 8~10k）</summary>
-    private const int SectionBatchMaxChars = 10_000;
+    // 占位符（与 DocExtractPromptService / cert_prompt_template 逐字一致；本控制器在 Admin 侧，不反向依赖 Auditor，故本地声明）
+    private const string PhDocProfile = "{{doc_profile}}";
+    private const string PhDocumentText = "{{document_text}}";
+    private const string PhFileName = "{{file_name}}";
+    private const string PhFolderPath = "{{folder_path}}";
+    private const string PhHeadings = "{{headings}}";
+    private const string PhFirst2000 = "{{first_2000}}";
+    // ★ V4「结构指纹 + 角色定位」：画像提示词新增两个输入占位符（代码确定性提取，零模型成本）
+    private const string PhFingerprints = "{{fingerprints}}";
+    private const string PhToc = "{{toc}}";
 
     /// <summary>
     /// <b>试跑文档提取提示词</b>（不落库、不写队列）。
     ///
-    /// <para>入参 = 文件 + 标准短码 + <b>页面当前正文</b>（未保存也能试，实现边改边看）。</para>
-    /// <para>链路与线上同源：<c>IFileConvertCore.ConvertToMarkdownInlineAsync</c>（anydoc → OCR 兜底），
-    /// 不是裸 anydoc —— 否则扫描件在测试环境永远测不出真实结果。</para>
-    ///
-    /// <para>★ 2026-11-12 增加 <c>Mode</c>：
-    /// <c>Section</c>（默认）= 章节索引 + 按小节聚合 + 5 路并发；
-    /// <c>Whole</c> = 旧的整篇一次大 JSON，仅用于对比。</para>
+    /// <para>入参 = 文件 + 标准短码 + <b>页面当前正文</b> + <b>提示词 Code</b>（未保存也能试，实现边改边看）。</para>
+    /// <para>★ 按<b>提示词家族</b>渲染占位符（此前只认 legacy 的 5 个占位符，其它提示词一律拿不到文档内容 ⇒ 模型只会回「没给输入」）：
+    /// <list type="bullet">
+    ///   <item><c>doc_profile</c>（画像总闸）⇒ <c>{{file_name}}/{{folder_path}}/{{headings}}/{{first_2000}}</c></item>
+    ///   <item><c>doc_extract_*</c>（9 类按类型提取）⇒ 先跑画像得 profile JSON，再注入 <c>{{doc_profile}}/{{document_text}}</c></item>
+    ///   <item><c>doc_clause_extract</c>（legacy 兜底）⇒ <c>{{standard_name}}/{{standard_code}}/{{document_name}}/{{clause_list}}/{{document_content}}</c></item>
+    /// </list></para>
+    /// <para>链路与线上同源：<c>IFileConvertCore.ConvertToMarkdownInlineAsync</c>（anydoc → OCR 兜底）。
+    /// ★ 2026-11-25：取消「小节模式」，只做<b>全文试跑</b>（小节切分会掩盖占位符渲染问题）。</para>
     /// </summary>
     [HttpPost("prompt/test")]
     [RequestSizeLimit(200_000_000)]
@@ -252,6 +280,11 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
             return Ok(ApiResponse.Fail("请先选择要测试的文档"));
         if (string.IsNullOrWhiteSpace(req.Template))
             return Ok(ApiResponse.Fail("提示词正文为空：请先在编辑器里填写提示词再试跑"));
+
+        // ★ 上传契约闸门（唯一事实源 UploadFilePolicy）——前端 accept 可绕过，此处硬拦
+        var verdict = UploadFilePolicy.Check(req.File.FileName);
+        if (!verdict.Ok)
+            return Ok(ApiResponse.Fail(verdict.Message));
 
         // 1) 文件 → Markdown（与线上同一条转换内核）
         byte[] bytes;
@@ -273,58 +306,310 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
             new { key = (req.StandardCode ?? "").Trim() });
         if (stdList == null || stdList.Count != 1)
             return Ok(ApiResponse.Fail("标准不存在或存在多个版本，请选择明确的标准版本"));
-        var std = stdList?.FirstOrDefault();
+        var std = stdList.FirstOrDefault();
         var stdName = std?.StandardName ?? (req.StandardCode ?? "未知标准");
         var stdGuid = std?.Code ?? "";
         var stdShort = std?.StandardCode ?? (req.StandardCode ?? "");
 
-        // 3) 条款清单（编号 + 标题；小节模式还需要 Code/Sort 做章节映射）
-        var clauseRows = string.IsNullOrWhiteSpace(stdGuid)
-            ? new List<ClauseRow>()
-            : await _db.Client.Ado.SqlQueryAsync<ClauseRow>(
-                "SELECT Code, ClauseNumber, Title, Sort FROM cert_iso_clause "
-                + "WHERE StandardCode = @guid AND IsValid = 1 AND IsDeleted = 0 "
-                + "GROUP BY Code, ClauseNumber, Title, Sort ORDER BY MIN(Sort)",
-                new { guid = stdGuid });
-
-        // 4) DocCheckMode≠none 过滤：与线上 ClauseExtractExecutor 同口径
-        var (clauseRefs, skippedByMode, filterNote) = await ResolveClausesAsync(
-            clauseRows ?? new List<ClauseRow>(), stdShort);
-
-        string clauseMarkdown;
-        var clauseSections = new Dictionary<string, string>(StringComparer.Ordinal);
-        try
+        // 3) 按「提示词家族」分流渲染
+        var promptCode = string.IsNullOrWhiteSpace(req.PromptCode) ? PromptCodeLegacy : req.PromptCode.Trim();
+        object result = ResolveFamily(promptCode) switch
         {
-            var standard = await _core.GetStandardByCodeAsync(stdGuid)
-                ?? throw new InvalidOperationException("标准不存在或已停用");
-            clauseMarkdown = await ClauseMarkdownInput.LoadAsync(_storage, standard);
-            var selectedCodes = clauseRefs.Select(c => c.Code).ToHashSet(StringComparer.Ordinal);
-            var currentClauses = await _core.GetClausesAsync(stdGuid);
-            foreach (var clause in currentClauses.Where(c => selectedCodes.Contains(c.Code ?? string.Empty)
-                         && !string.IsNullOrWhiteSpace(c.Description)))
-                clauseSections.Add(clause.Code!, ClauseMarkdownInput.ReadSection(clauseMarkdown, clause));
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return Ok(ApiResponse.Fail($"条款 Markdown 不可用：{ex.Message}"));
-        }
-
-        // 5) 两种模式
-        var mode = string.Equals(req.Mode, "Whole", StringComparison.OrdinalIgnoreCase)
-            ? "Whole"
-            : "Section";
-
-        if (mode == "Whole" && clauseMarkdown.Length > 30_000)
-            return Ok(ApiResponse.Fail("条款 Markdown 超过整篇试跑输入上限，请使用分节试跑；正式提取会按预算分片"));
-
-        object result = mode == "Whole"
-            ? await RunWholeDocumentAsync(req, markdown, stdName, stdShort, stdGuid,
-                clauseRows ?? new List<ClauseRow>(), clauseRefs, skippedByMode, filterNote, clauseMarkdown)
-            : await RunSectionAsync(req, markdown, stdName, stdShort, stdGuid,
-                clauseRefs, clauseRows?.Count ?? 0, skippedByMode, filterNote, clauseSections);
-
+            PromptFamily.Profile => await RunProfileTestAsync(req, markdown, stdShort, promptCode),
+            PromptFamily.Mode => await RunModeTestAsync(req, markdown, stdShort, promptCode),
+            _ => await RunLegacyTestAsync(req, markdown, stdName, stdShort, stdGuid),
+        };
         return Ok(ApiResponse<object>.Ok(result));
     }
+
+    /// <summary>提示词家族（决定占位符渲染方式）。</summary>
+    private enum PromptFamily { Profile, Mode, Legacy }
+
+    /// <summary>提示词 Code → 家族（判据 = 共享层 <see cref="DocExtractionPromptCatalog"/>，与运行时同一映射）。</summary>
+    private static PromptFamily ResolveFamily(string promptCode)
+    {
+        var entry = DocExtractionPromptCatalog.All.FirstOrDefault(e =>
+            string.Equals(e.PromptCode, promptCode, StringComparison.Ordinal));
+        if (entry == null) return PromptFamily.Legacy;               // 未知 Code ⇒ 仍按 legacy 渲染，不静默丢占位符
+        if (entry.Mode.Length == 0) return PromptFamily.Profile;     // doc_profile（画像总闸）
+        return string.Equals(entry.Mode, "legacy", StringComparison.Ordinal)
+            ? PromptFamily.Legacy
+            : PromptFamily.Mode;
+    }
+
+    /// <summary>
+    /// 画像总闸试跑（★ 整链）：先按画像提示词得画像 JSON，再据其 <c>ExtractionMode</c>
+    /// 自动续跑对应的「按类型提取」提示词（手册→manual_chapter 等），
+    /// 一次输出真正「按章节组织的内容」；画像 JSON 附在 <c>ProfileOutput</c> 供核对分流。
+    /// <para>未续跑时（mode 缺失 / none / 库中缺该 mode 提示词）只返回画像，并在 <c>Note</c> 说明原因。</para>
+    /// </summary>
+    private async Task<object> RunProfileTestAsync(
+        DocExtractPromptTestRequest req, string markdown, string standardShort, string promptCode)
+    {
+        var fileName = req.File!.FileName ?? "";
+        var ai = await ReadAiSettingsAsync();
+
+        // ① 画像判定
+        var profilePrompt = FillProfilePlaceholders(req.Template!, fileName, markdown);
+        var (pResp, pMs) = await CallModelAsync(ai, profilePrompt, 0.1f, 2_048);
+        await LogUsageAsync(ai, pResp, standardShort);
+        if (!pResp.Success)
+            return Pack(req, markdown, profilePrompt, promptCode, ai.Model, pResp, pMs, "画像判定");
+
+        var profileRaw = string.IsNullOrWhiteSpace(pResp.Content) ? "" : StripFence(pResp.Content);
+        var profileJson = IsJson(profileRaw) ? profileRaw : "{}";
+
+        // ② 画像 → ExtractionMode → 「按类型提取」提示词（唯一映射 = 共享层目录）
+        var mode = ReadExtractionMode(profileJson);
+        var modePromptCode = DocExtractionPromptCatalog.PromptCodeForMode(mode);
+        if (modePromptCode.Length == 0)
+        {
+            var why = string.IsNullOrWhiteSpace(mode)
+                ? "画像未给出 ExtractionMode，无法续跑按类型提取"
+                : string.Equals(mode, "none", StringComparison.Ordinal)
+                    ? "画像判定与标准无关（ExtractionMode=none），无需续跑按类型提取"
+                    : $"画像判定的 ExtractionMode={mode} 暂无对应提取提示词，无法续跑";
+            return Pack(req, markdown, profilePrompt, promptCode, ai.Model, pResp, pMs, "画像判定",
+                why, profileJson, mode, null);
+        }
+
+        var modeTemplate = await _promptTemplate.GetAsync(modePromptCode, null, standardShort);
+        if (string.IsNullOrWhiteSpace(modeTemplate.Template))
+            return Pack(req, markdown, profilePrompt, promptCode, ai.Model, pResp, pMs, "画像判定",
+                $"画像判定 ExtractionMode={mode}，但库中缺 {modePromptCode} 提示词，未续跑",
+                profileJson, mode, modePromptCode);
+
+        // ③ 续跑「按类型提取」：注入画像 + 全文（与 RunModeTestAsync 同口径）
+        var extractPrompt = modeTemplate.Template
+            .Replace(PhDocProfile, profileJson, StringComparison.Ordinal)
+            .Replace(PhDocumentText, markdown, StringComparison.Ordinal);
+        var maxTokens = Math.Min(ai.MaxTokens <= 0 ? 8_192 : ai.MaxTokens, 8_192);
+        var (eResp, eMs) = await CallModelAsync(ai, extractPrompt, ai.Temperature, maxTokens);
+        await LogUsageAsync(ai, eResp, standardShort);
+
+        return Pack(req, markdown, extractPrompt, modePromptCode, ai.Model, eResp, eMs,
+            $"画像→{mode} 按类型提取",
+            $"画像判定 ExtractionMode={mode}，已自动续跑 {modePromptCode}",
+            profileJson, mode, modePromptCode);
+    }
+
+    /// <summary>
+    /// 按类型提取试跑：先跑 <c>doc_profile</c> 得画像 JSON，再注入 <c>{{doc_profile}}</c> 与 <c>{{document_text}}</c>。
+    /// <para>⚠️ 线上 <c>{{doc_profile}}</c> 注入的是确定性画像（<c>EnterpriseDocProfileBuilder</c>）；
+    /// 试跑为免 Admin 反向依赖 Auditor（守卫 A-R1），改用 doc_profile 提示词现场生成。</para>
+    /// </summary>
+    private async Task<object> RunModeTestAsync(
+        DocExtractPromptTestRequest req, string markdown, string standardShort, string promptCode)
+    {
+        var profileJson = "{}";
+        string? note = null;
+
+        var profileTemplate = await _promptTemplate.GetAsync(ProfilePromptCode, null, standardShort);
+        if (string.IsNullOrWhiteSpace(profileTemplate.Template))
+        {
+            note = "库中缺 doc_profile 提示词，已按空画像试跑";
+        }
+        else
+        {
+            var profilePrompt = FillProfilePlaceholders(profileTemplate.Template, req.File!.FileName ?? "", markdown);
+            var ai = await ReadAiSettingsAsync();
+            var pr = await _llm.CompleteAsync(new LlmInvokeRequest
+            {
+                BaseUrl = ai.BaseUrl,
+                ApiKey = ai.ApiKey,
+                Model = ai.Model,
+                Temperature = 0.1f,
+                MaxTokens = 2_048,
+                Prompt = profilePrompt,
+                ForceJson = true,
+                TimeoutSeconds = 300,
+            });
+            await LogUsageAsync(ai, pr, standardShort);
+
+            var pj = string.IsNullOrWhiteSpace(pr.Content) ? "" : StripFence(pr.Content);
+            if (IsJson(pj))
+                profileJson = pj;
+            else
+                note = "画像提示词输出不是合法 JSON，已按空画像试跑"
+                       + (string.IsNullOrWhiteSpace(pr.Message) ? "" : "：" + pr.Message);
+        }
+
+        var prompt = (req.Template ?? string.Empty)
+            .Replace(PhDocProfile, profileJson, StringComparison.Ordinal)
+            .Replace(PhDocumentText, markdown, StringComparison.Ordinal);
+        return await InvokeAndPackAsync(req, markdown, prompt, promptCode, standardShort, "按类型提取", note);
+    }
+
+    /// <summary>注入画像提示词的 6 个占位符（folder_path 无上传目录信息，置空）。</summary>
+    private static string FillProfilePlaceholders(string template, string fileName, string markdown)
+    {
+        var headings = ExtractDocHeadings(markdown);
+        var fingerprints = DocFingerprintExtractor.Extract(markdown, headings);
+        return (template ?? string.Empty)
+            .Replace(PhFileName, fileName ?? string.Empty, StringComparison.Ordinal)
+            .Replace(PhFolderPath, string.Empty, StringComparison.Ordinal)
+            .Replace(PhHeadings, string.Join("\n", headings.Select(h => h.Title)), StringComparison.Ordinal)
+            .Replace(PhFirst2000, Head(markdown, ProfileHeadChars), StringComparison.Ordinal)
+            .Replace(PhFingerprints, FormatFingerprints(fingerprints), StringComparison.Ordinal)
+            .Replace(PhToc, FormatToc(headings), StringComparison.Ordinal);
+    }
+
+    /// <summary>调一次模型（试跑口径：ForceJson + 600s 超时），返回响应与实测耗时。</summary>
+    private async Task<(LlmInvokeResponse Resp, long Ms)> CallModelAsync(
+        AiCfg ai, string prompt, float temperature, int maxTokens)
+    {
+        var sw = Stopwatch.StartNew();
+        var resp = await _llm.CompleteAsync(new LlmInvokeRequest
+        {
+            BaseUrl = ai.BaseUrl,
+            ApiKey = ai.ApiKey,
+            Model = ai.Model,
+            Temperature = temperature,
+            MaxTokens = maxTokens,
+            Prompt = prompt,
+            ForceJson = true,
+            TimeoutSeconds = 600,
+        });
+        sw.Stop();
+        return (resp, sw.ElapsedMilliseconds);
+    }
+
+    /// <summary>调一次模型并打包试跑结果（整篇口径；profile / mode 两族共用）。</summary>
+    private async Task<object> InvokeAndPackAsync(
+        DocExtractPromptTestRequest req, string markdown, string prompt,
+        string promptCode, string standardShort, string familyName, string? note = null)
+    {
+        var ai = await ReadAiSettingsAsync();
+        var maxTokens = Math.Min(ai.MaxTokens <= 0 ? 8_192 : ai.MaxTokens, 8_192);
+        var (resp, ms) = await CallModelAsync(ai, prompt, ai.Temperature, maxTokens);
+        await LogUsageAsync(ai, resp, standardShort);
+        return Pack(req, markdown, prompt, promptCode, ai.Model, resp, ms, familyName, note);
+    }
+
+    /// <summary>
+    /// 打包试跑结果（统一形状）。
+    /// <para>★ 画像整链额外三字段：<c>ProfileOutput</c>（画像 JSON）、<c>RoutedMode</c>（画像判定的提取模式）、
+    /// <c>RoutedPromptCode</c>（自动续跑的按类型提取提示词 Code）。</para>
+    /// </summary>
+    private static object Pack(
+        DocExtractPromptTestRequest req, string markdown, string prompt, string promptCode,
+        string model, LlmInvokeResponse resp, long durationMs, string familyName,
+        string? note = null, string? profileOutput = null,
+        string? routedMode = null, string? routedPromptCode = null)
+    {
+        var raw = string.IsNullOrWhiteSpace(resp.Content) ? "" : StripFence(resp.Content);
+        return new
+        {
+            Success = resp.Success,
+            Message = resp.Success ? $"试跑完成（{familyName}）" : resp.Message,
+            Mode = promptCode,
+            Model = model,
+            DurationMs = durationMs,
+            PromptTokens = resp.PromptTokens ?? 0,
+            CompletionTokens = resp.CompletionTokens ?? 0,
+            JsonValid = IsJson(raw),
+            Output = raw,
+            PromptChars = prompt.Length,
+            ClauseCount = 0,
+            AllClauseCount = 0,
+            SkippedByDocCheckMode = 0,
+            MarkdownLength = markdown.Length,
+            Truncated = false,
+            MarkdownHead = Head(markdown, 1_200),
+            FileName = req.File?.FileName,
+            Note = note,
+            ProfileOutput = profileOutput,
+            RoutedMode = routedMode,
+            RoutedPromptCode = routedPromptCode,
+        };
+    }
+
+    /// <summary>试跑失败但保持结果契约形状（避免前端字段缺失）。</summary>
+    private static object TestFailure(
+        string message, DocExtractPromptTestRequest req, string markdown, string promptCode)
+        => new
+        {
+            Success = false,
+            Message = message,
+            Mode = promptCode,
+            Model = "",
+            DurationMs = 0L,
+            PromptTokens = 0,
+            CompletionTokens = 0,
+            JsonValid = false,
+            Output = "",
+            PromptChars = 0,
+            ClauseCount = 0,
+            AllClauseCount = 0,
+            SkippedByDocCheckMode = 0,
+            MarkdownLength = markdown?.Length ?? 0,
+            Truncated = false,
+            MarkdownHead = Head(markdown ?? string.Empty, 1_200),
+            FileName = req?.File?.FileName,
+            Note = (string?)null,
+            ProfileOutput = (string?)null,
+            RoutedMode = (string?)null,
+            RoutedPromptCode = (string?)null,
+        };
+
+    /// <summary>取字符串前 <paramref name="max"/> 个字符（超长即截断）。</summary>
+    private static string Head(string text, int max)
+        => string.IsNullOrEmpty(text) ? string.Empty
+            : (text.Length > max ? text.Substring(0, max) : text);
+
+    /// <summary>
+    /// 从 Markdown 抽标题清单（画像提示词的 <c>{{headings}}</c>）。
+    /// <para>兼容 <c># 标题</c> 与独占一行的加粗短标题（.doc 经 anydoc 转换后多为后者）。</para>
+    /// </summary>
+    private static string ExtractHeadings(string markdown)
+        => string.Join("\n", ExtractDocHeadings(markdown).Select(h => h.Title));
+
+    /// <summary>
+    /// 从 Markdown 抽章节头（<c># 标题</c> 取 <c>#</c> 数当层级；独占一行的加粗短标题当 0 级）。
+    /// <para><c>{{headings}}</c> / <c>{{toc}}</c> 与结构指纹提取共用这一份解析，⛔ 不各自为政。</para>
+    /// </summary>
+    private static List<DocHeading> ExtractDocHeadings(string markdown)
+    {
+        var list = new List<DocHeading>();
+        if (string.IsNullOrWhiteSpace(markdown)) return list;
+
+        foreach (var raw in markdown.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0) continue;
+
+            string? title = null;
+            var level = 0;
+            var h = Regex.Match(line, @"^(#{1,6})\s+(.+?)\s*#*$");
+            if (h.Success)
+            {
+                title = h.Groups[2].Value.Trim();
+                level = h.Groups[1].Value.Length;
+            }
+            else
+            {
+                var b = Regex.Match(line, @"^\*\*(.{2,60}?)\*\*$");
+                if (b.Success) title = b.Groups[1].Value.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(title) || title.Length > 80) continue;
+            list.Add(new DocHeading(title, level, true));
+            if (list.Count >= ProfileMaxHeadings) break;
+        }
+        return list;
+    }
+
+    /// <summary>结构指纹 → 提示词可读正文（一行一条：权重 + Key + 证据）。</summary>
+    private static string FormatFingerprints(IReadOnlyList<DocFingerprint> fingerprints)
+        => fingerprints.Count == 0
+            ? "（未命中任何结构指纹 ⇒ DocType / ExtractionMode 必须为 unclassified）"
+            : string.Join("\n", fingerprints.Select(f => $"- [{f.Weight}] {f.Key}：{f.Evidence}"));
+
+    /// <summary>章节头 → 提示词可读目录（一行一条：序号 + 章节名）。</summary>
+    private static string FormatToc(IReadOnlyList<DocHeading> headings)
+        => headings.Count == 0
+            ? "（无标题）"
+            : string.Join("\n", headings.Select((h, i) => $"{i + 1}. {h.Title}"));
 
     /// <summary>条款清单：过滤 DocCheckMode=none；没配过就退回全部（与线上一致）。</summary>
     private async Task<(List<DocClauseRef> Refs, int Skipped, string? Note)> ResolveClausesAsync(
@@ -367,19 +652,46 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
             : $"部分条款的 DocCheckMode 存在重复，已保留这些条款待核实：{string.Join(",", duplicates)}");
     }
 
-    /// <summary>旧整篇模式：整篇 30k + 全部条款 + 一次大 JSON。仅用于对比。</summary>
-    private async Task<object> RunWholeDocumentAsync(
+    /// <summary>
+    /// legacy 兜底试跑（<c>doc_clause_extract</c>）：整篇 30k + 全量条款清单 + 5 个占位符，
+    /// 附标准条款 Markdown（仅供模型理解条款，不是企业文档），一次大 JSON。
+    /// </summary>
+    private async Task<object> RunLegacyTestAsync(
         DocExtractPromptTestRequest req,
         string markdown,
         string stdName,
         string stdShort,
-        string stdGuid,
-        List<ClauseRow> clauseRows,
-        List<DocClauseRef> clauseRefs,
-        int skippedByMode,
-        string? filterNote,
-        string clauseMarkdown)
+        string stdGuid)
     {
+        // 1) 条款清单（编号 + 标题；与线上 ClauseExtractExecutor 同口径）
+        var queried = string.IsNullOrWhiteSpace(stdGuid)
+            ? new List<ClauseRow>()
+            : await _db.Client.Ado.SqlQueryAsync<ClauseRow>(
+                "SELECT Code, ClauseNumber, Title, Sort FROM cert_iso_clause "
+                + "WHERE StandardCode = @guid AND IsValid = 1 AND IsDeleted = 0 "
+                + "GROUP BY Code, ClauseNumber, Title, Sort ORDER BY MIN(Sort)",
+                new { guid = stdGuid });
+        var clauseRows = queried ?? new List<ClauseRow>();
+
+        var (clauseRefs, skippedByMode, filterNote) = await ResolveClausesAsync(clauseRows, stdShort);
+        if (clauseRefs.Count == 0)
+            return TestFailure("标准未配置有效条款，无法试跑", req, markdown, PromptCodeLegacy);
+
+        // 2) 标准条款 Markdown（供模型理解条款，不是企业文档）
+        string clauseMarkdown;
+        try
+        {
+            var standard = await _core.GetStandardByCodeAsync(stdGuid)
+                ?? throw new InvalidOperationException("标准不存在或已停用");
+            clauseMarkdown = await ClauseMarkdownInput.LoadAsync(_storage, standard);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return TestFailure("条款 Markdown 不可用：" + ex.Message, req, markdown, PromptCodeLegacy);
+        }
+        if (clauseMarkdown.Length > MaxTestDocChars)
+            return TestFailure("条款 Markdown 超过试跑输入上限，无法试跑", req, markdown, PromptCodeLegacy);
+
         var truncated = markdown.Length > MaxTestDocChars;
         var docForModel = truncated ? markdown.Substring(0, MaxTestDocChars) : markdown;
 
@@ -424,8 +736,8 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         return new
         {
             Success = resp.Success,
-            Message = resp.Success ? "试跑完成（整篇模式）" : resp.Message,
-            Mode = "Whole",
+            Message = resp.Success ? "试跑完成（全文）" : resp.Message,
+            Mode = PromptCodeLegacy,
             Model = ai.Model,
             DurationMs = sw.ElapsedMilliseconds,
             PromptTokens = resp.PromptTokens ?? 0,
@@ -438,311 +750,8 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
             SkippedByDocCheckMode = skippedByMode,
             MarkdownLength = markdown.Length,
             Truncated = truncated,
-            MarkdownHead = markdown.Length > 1200 ? markdown.Substring(0, 1200) : markdown,
+            MarkdownHead = Head(markdown, 1_200),
             FileName = req.File.FileName,
-            SectionTotal = 1,
-            SectionSucceeded = resp.Success ? 1 : 0,
-            SectionFailed = resp.Success ? 0 : 1,
-            SectionTruncated = 0,
-            Note = filterNote,
-        };
-    }
-
-    /// <summary>
-    /// 把相邻小节合并成「最多 8 条条款 + 最多 1.2 万字」一次调用。
-    /// <para>原实现是「一个小节一次调用」，79 个小节 = 79 次请求；合并后通常 10~20 次，
-    /// 输出仍是每条几百 token 的小 JSON，质量口径不变。</para>
-    /// </summary>
-    private static List<SectionCall> BuildSectionCalls(
-        List<(int Start, int End, string Text, string Title, string Path, List<DocClauseRef> Clauses)> sections)
-    {
-        var calls = new List<SectionCall>();
-        SectionCall? current = null;
-        var seenClauseNos = new HashSet<string>(StringComparer.Ordinal);
-
-        void Flush()
-        {
-            if (current == null) return;
-            if (current.Clauses.Count > 0 && current.Text.Length > 0) calls.Add(current);
-            current = null;
-        }
-
-        foreach (var g in sections)
-        {
-            var clauses = g.Clauses
-                .Where(c => !string.IsNullOrWhiteSpace(c.ClauseNumber) && seenClauseNos.Add(c.ClauseNumber))
-                .ToList();
-            if (clauses.Count == 0) continue;
-
-            var truncated = g.Text.Length > SectionMaxChars;
-            var text = truncated ? g.Text.Substring(0, SectionMaxChars) : g.Text;
-
-            // 当前组已满（条款数或字符数）→ 先落一组
-            if (current != null
-                && (current.Clauses.Count + clauses.Count > SectionClausesPerCall
-                    || current.Text.Length + text.Length > SectionBatchMaxChars))
-            {
-                Flush();
-            }
-
-            current ??= new SectionCall { Title = g.Title, Path = g.Path };
-            if (current.Text.Length > 0) current.Text += "\n\n";
-            current.Text += "===== 小节：" + g.Title + " =====\n" + text;
-            current.Path = string.IsNullOrWhiteSpace(current.Path) ? g.Path : current.Path;
-            current.Clauses.AddRange(clauses);
-            current.Truncated |= truncated;
-
-            if (current.Clauses.Count >= SectionClausesPerCall) Flush();
-        }
-
-        Flush();
-        return calls;
-    }
-
-    /// <summary>
-    /// 小节模式：章节索引 → 按小节聚合条款 → 每 8 条一组 → 5 路并发。
-    /// <para>输入从 27k 降到 6k/节，输出从 10k tokens 降到几百~1k/节。</para>
-    /// </summary>
-    private async Task<object> RunSectionAsync(
-        DocExtractPromptTestRequest req,
-        string markdown,
-        string stdName,
-        string stdShort,
-        string stdGuid,
-        List<DocClauseRef> clauseRefs,
-        int allClauseCount,
-        int skippedByMode,
-        string? filterNote,
-        Dictionary<string, string> clauseSections)
-    {
-        var sw = Stopwatch.StartNew();
-        var map = DocSectionIndex.Build(markdown, clauseRefs, stdShort, stdName);
-
-        var sections = map.Sections
-            .Where(s => s.CoverageMode != "missing" && s.CharStart >= 0 && s.CharEnd > s.CharStart)
-            .GroupBy(s => (s.CharStart, s.CharEnd))
-            .Select(g =>
-            {
-                var start = g.Key.CharStart;
-                var end = Math.Min(g.Key.CharEnd, markdown.Length);
-                var text = start < end ? markdown.Substring(start, end - start) : "";
-                var title = g.First().HeadingTitle;
-                var path = g.First().HeadingPath;
-                var clauses = g
-                    .Select(x => new DocClauseRef(x.ClauseCode, x.ClauseNo, x.ClauseTitle, 0))
-                    .GroupBy(x => x.ClauseNumber)
-                    .Select(x => x.First())
-                    .ToList();
-                return (Start: start, End: end, Text: text, Title: title, Path: path, Clauses: clauses);
-            })
-            .Where(g => g.Text.Length > 0 && g.Clauses.Count > 0)
-            .OrderBy(g => g.Start)
-            .ToList();
-
-        var calls = BuildSectionCalls(sections);
-
-        if (calls.Count == 0)
-        {
-            sw.Stop();
-            return new
-            {
-                Success = false,
-                Message = "没有可定位的小节：文档标题/条款编号与标准清单对不上，建议切回整篇模式对比",
-                Mode = "Section",
-                Model = "",
-                DurationMs = sw.ElapsedMilliseconds,
-                PromptTokens = 0,
-                CompletionTokens = 0,
-                JsonValid = true,
-                Output = "{\"mode\":\"Section\",\"sections\":[],\"clauses\":[]}",
-                PromptChars = 0,
-                ClauseCount = clauseRefs.Count,
-                AllClauseCount = allClauseCount,
-                SkippedByDocCheckMode = skippedByMode,
-                MarkdownLength = markdown.Length,
-                Truncated = false,
-                MarkdownHead = markdown.Length > 1200 ? markdown.Substring(0, 1200) : markdown,
-                FileName = req.File!.FileName,
-                SectionTotal = 0,
-                SectionSucceeded = 0,
-                SectionFailed = 0,
-                SectionTruncated = 0,
-                MissingSections = map.MissingCount,
-                Note = filterNote,
-            };
-        }
-
-        var ai = await ReadAiSettingsAsync();
-        var maxTokens = Math.Min(ai.MaxTokens <= 0 ? SectionMaxTokens : ai.MaxTokens, SectionMaxTokens);
-        var gate = new SemaphoreSlim(SectionConcurrency, SectionConcurrency);
-        var results = new SectionCallResult[calls.Count];
-
-        await Task.WhenAll(calls.Select(async (call, index) =>
-        {
-            await gate.WaitAsync();
-            try
-            {
-                var clauseList = string.Join("\n", call.Clauses
-                    .Select(c => "- " + c.ClauseNumber + (string.IsNullOrWhiteSpace(c.Title) ? "" : " " + c.Title)));
-                var missing = call.Clauses.Where(c => !clauseSections.ContainsKey(c.Code))
-                    .Select(c => c.ClauseNumber).ToList();
-                if (missing.Count > 0)
-                    throw new InvalidOperationException($"条款 Markdown 缺少正文：{string.Join(",", missing)}");
-                var reference = string.Join("\n\n", call.Clauses.Select(c => clauseSections[c.Code]));
-                if (reference.Length > 30_000)
-                    throw new InvalidOperationException("本批条款 Markdown 超过试跑输入上限");
-                var prompt = RenderPrompt(req.Template, stdName, stdShort, req.File!.FileName ?? "",
-                    clauseList, call.Text)
-                    + "\n\n【标准条款 Markdown，仅用于理解条款，不是企业文档】\n" + reference;
-                var resp = await _llm.CompleteAsync(new LlmInvokeRequest
-                {
-                    BaseUrl = ai.BaseUrl,
-                    ApiKey = ai.ApiKey,
-                    Model = ai.Model,
-                    Temperature = 0.1f,
-                    MaxTokens = maxTokens,
-                    Prompt = prompt,
-                    ForceJson = true,
-                    TimeoutSeconds = 300,
-                });
-                results[index] = new SectionCallResult
-                {
-                    Call = call,
-                    Prompt = prompt,
-                    Response = resp,
-                };
-            }
-            catch (Exception ex)
-            {
-                results[index] = new SectionCallResult
-                {
-                    Call = call,
-                    Prompt = "",
-                    Response = new LlmInvokeResponse { Success = false, Message = ex.Message },
-                    Exception = ex.Message,
-                };
-            }
-            finally
-            {
-                gate.Release();
-            }
-        }));
-        gate.Dispose();
-        sw.Stop();
-
-        // 计费落库：SqlSugar 客户端非线程安全，统一在并发结束后串行写
-        foreach (var r in results)
-        {
-            if (r?.Response != null && !string.IsNullOrWhiteSpace(r.Prompt))
-                await LogUsageAsync(ai, r.Response, stdShort);
-        }
-
-        var mergedClauses = new JsonArray();
-        var clauseMap = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
-        var knownClauseNos = clauseRefs
-            .Select(c => DocSectionIndex.NormalizeClauseNo(c.ClauseNumber))
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToHashSet(StringComparer.Ordinal);
-        var sectionsArray = new JsonArray();
-        var succeeded = 0;
-        var failed = 0;
-        long promptTokens = 0;
-        long completionTokens = 0;
-        var promptChars = 0;
-        var sectionTruncated = 0;
-
-        for (var i = 0; i < results.Length; i++)
-        {
-            var r = results[i];
-            if (r == null) { failed++; continue; }
-            var resp = r.Response!;
-            if (resp.Success) succeeded++; else failed++;
-            promptTokens += resp.PromptTokens ?? 0;
-            completionTokens += resp.CompletionTokens ?? 0;
-            promptChars += r.Prompt.Length;
-            if (r.Call.Truncated) sectionTruncated++;
-
-            var raw = string.IsNullOrWhiteSpace(resp.Content) ? "" : StripFence(resp.Content);
-            var parsed = TryParseJson(raw);
-            if (parsed != null) MergeSectionClauses(parsed, mergedClauses, clauseMap, knownClauseNos);
-
-            var clauseNumbers = new JsonArray();
-            foreach (var c in r.Call.Clauses)
-                clauseNumbers.Add(JsonValue.Create(c.ClauseNumber));
-
-            sectionsArray.Add(new JsonObject
-            {
-                ["Index"] = i + 1,
-                ["SectionTitle"] = r.Call.Title,
-                ["SectionPath"] = r.Call.Path,
-                ["ClauseNumbers"] = clauseNumbers,
-                ["Truncated"] = r.Call.Truncated,
-                ["Success"] = resp.Success,
-                ["Message"] = resp.Message ?? "",
-                ["DurationMs"] = resp.DurationMs,
-                ["PromptChars"] = r.Prompt.Length,
-                ["PromptTokens"] = resp.PromptTokens ?? 0,
-                ["CompletionTokens"] = resp.CompletionTokens ?? 0,
-                ["Output"] = parsed ?? JsonValue.Create(raw),
-            });
-        }
-
-        var root = new JsonObject
-        {
-            ["mode"] = "Section",
-            ["sections"] = sectionsArray,
-            ["clauses"] = mergedClauses,
-            ["metrics"] = new JsonObject
-            {
-                ["SectionTotal"] = calls.Count,
-                ["SectionSucceeded"] = succeeded,
-                ["SectionFailed"] = failed,
-                ["PromptTokens"] = promptTokens,
-                ["CompletionTokens"] = completionTokens,
-                ["PromptChars"] = promptChars,
-                ["DurationMs"] = sw.ElapsedMilliseconds,
-                ["ClauseCount"] = clauseRefs.Count,
-                ["AllClauseCount"] = allClauseCount,
-                ["SkippedByDocCheckMode"] = skippedByMode,
-                ["MissingSections"] = map.MissingCount,
-                ["SectionTruncated"] = sectionTruncated,
-            },
-        };
-
-        var message = failed == 0
-            ? $"试跑完成（小节模式：{calls.Count}/{calls.Count} 段）"
-            : succeeded > 0
-                ? $"试跑完成，部分小节失败：{succeeded}/{calls.Count} 段成功"
-                : "试跑失败：所有小节调用失败";
-
-        return new
-        {
-            Success = succeeded > 0,
-            Message = message,
-            Mode = "Section",
-            Model = ai.Model,
-            DurationMs = sw.ElapsedMilliseconds,
-            PromptTokens = promptTokens,
-            CompletionTokens = completionTokens,
-            JsonValid = true,
-            Output = root.ToJsonString(new JsonSerializerOptions
-            {
-                WriteIndented = false,
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            }),
-            PromptChars = promptChars,
-            ClauseCount = mergedClauses.Count,
-            AllClauseCount = allClauseCount,
-            SkippedByDocCheckMode = skippedByMode,
-            MarkdownLength = markdown.Length,
-            Truncated = false,
-            MarkdownHead = markdown.Length > 1200 ? markdown.Substring(0, 1200) : markdown,
-            FileName = req.File!.FileName,
-            SectionTotal = calls.Count,
-            SectionSucceeded = succeeded,
-            SectionFailed = failed,
-            SectionTruncated = sectionTruncated,
-            MissingSections = map.MissingCount,
             Note = filterNote,
         };
     }
@@ -771,97 +780,12 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         catch (JsonException) { return null; }
     }
 
-    /// <summary>把每段输出里的 clauses 合并到顶层；同编号合并 Excerpts，保留最可信的 Anchor。</summary>
-    private static void MergeSectionClauses(
-        JsonNode parsed, JsonArray merged, Dictionary<string, JsonObject> byClause,
-        HashSet<string> knownClauseNos)
+    /// <summary>从画像 JSON 取 <c>ExtractionMode</c>（PascalCase；兼容 camelCase）。</summary>
+    private static string ReadExtractionMode(string profileJson)
     {
-        IEnumerable<JsonNode?> items;
-        if (parsed is JsonObject obj)
-        {
-            var arr = obj["clauses"] as JsonArray ?? obj["Clauses"] as JsonArray;
-            if (arr == null) return;
-            items = arr.ToList();
-        }
-        else if (parsed is JsonArray arr)
-        {
-            items = arr.ToList();
-        }
-        else return;
-
-        foreach (var item in items)
-        {
-            if (item is not JsonObject clause) continue;
-            var rawNo = clause["ClauseNumber"]?.GetValue<string>()
-                        ?? clause["clauseNumber"]?.GetValue<string>() ?? "";
-            var no = CanonicalClauseNo(rawNo, knownClauseNos);
-            if (string.IsNullOrWhiteSpace(no)) continue;
-            // 条款清单外的编号直接丢弃（防止模型把目录行/章节标题当条款）
-            if (knownClauseNos.Count > 0 && !knownClauseNos.Contains(no)) continue;
-
-            clause["ClauseNumber"] = no;
-
-            if (byClause.TryGetValue(no, out var existing))
-            {
-                MergeExcerpts(existing, clause);
-                continue;
-            }
-
-            var clone = (JsonObject)clause.DeepClone();
-            byClause[no] = clone;
-            merged.Add(clone);
-        }
-    }
-
-    /// <summary>
-    /// 模型常把标题一起写进 ClauseNumber（“9.1.2 顾客满意”“9.2.1 组织应…”），
-    /// 先抽前导编号，再按标准清单做最长前缀匹配。
-    /// </summary>
-    private static string CanonicalClauseNo(string raw, HashSet<string> known)
-    {
-        var s = DocSectionIndex.NormalizeClauseNo(raw);
-        if (string.IsNullOrWhiteSpace(s)) return "";
-        if (known.Contains(s)) return s;
-
-        var m = Regex.Match(s, @"^([0-9]+(?:\.[0-9]+)*)");
-        if (m.Success)
-        {
-            var no = DocSectionIndex.NormalizeClauseNo(m.Groups[1].Value);
-            if (known.Contains(no)) return no;
-        }
-
-        var hit = known
-            .Where(k => s.StartsWith(k + " ", StringComparison.Ordinal)
-                        || s.StartsWith(k + "\t", StringComparison.Ordinal)
-                        || s.StartsWith(k + "、", StringComparison.Ordinal)
-                        || s.StartsWith(k + "：", StringComparison.Ordinal))
-            .OrderByDescending(k => k.Length)
-            .FirstOrDefault();
-        return hit ?? s;
-    }
-
-    private static void MergeExcerpts(JsonObject target, JsonObject source)
-    {
-        var dst = target["Excerpts"] as JsonArray;
-        var src = source["Excerpts"] as JsonArray;
-        if (dst != null && src != null)
-        {
-            var seen = dst.Select(x => x?.GetValue<string>() ?? "").ToHashSet(StringComparer.Ordinal);
-            foreach (var e in src)
-            {
-                var text = e?.GetValue<string>() ?? "";
-                if (!string.IsNullOrWhiteSpace(text) && seen.Add(text))
-                    dst.Add(JsonValue.Create(text));
-            }
-        }
-
-        var targetConf = target["Confidence"]?.GetValue<double>() ?? 0;
-        var sourceConf = source["Confidence"]?.GetValue<double>() ?? 0;
-        if (sourceConf > targetConf)
-            target["Confidence"] = sourceConf;
-
-        if (string.IsNullOrWhiteSpace(target["Anchor"]?.GetValue<string>()))
-            target["Anchor"] = source["Anchor"]?.GetValue<string>();
+        if (TryParseJson(profileJson) is not JsonObject obj) return string.Empty;
+        var node = obj["ExtractionMode"] ?? obj["extractionMode"];
+        return (node?.ToString() ?? string.Empty).Trim();
     }
 
     /// <summary>AI 配置（口径与 PromptWorkbenchService / DocFillPromptController 一致）</summary>
@@ -963,22 +887,6 @@ public class DocExtractRuleController : YzhControllerBase<DocExtractRule>
         public string? AttrValue { get; set; }
     }
 
-    private sealed class SectionCall
-    {
-        public string Title { get; set; } = "";
-        public string Path { get; set; } = "";
-        public string Text { get; set; } = "";
-        public List<DocClauseRef> Clauses { get; set; } = new();
-        public bool Truncated { get; set; }
-    }
-
-    private sealed class SectionCallResult
-    {
-        public SectionCall Call { get; set; } = null!;
-        public string Prompt { get; set; } = "";
-        public LlmInvokeResponse Response { get; set; } = null!;
-        public string? Exception { get; set; }
-    }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1005,6 +913,17 @@ public sealed class DocExtractPromptSaveRequest
     public string? StandardCode { get; set; }
 }
 
+/// <summary>可选提示词类型（页面下拉数据源，来源 = DocExtractionPromptCatalog）</summary>
+public sealed class DocExtractPromptTypeDto
+{
+    public string PromptCode { get; set; } = string.Empty;
+    /// <summary>对应的画像 ExtractionMode（画像总闸为空串）</summary>
+    public string Mode { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string Group { get; set; } = string.Empty;
+    public int Sort { get; set; }
+}
+
 /// <summary>页面内试跑入参（multipart）</summary>
 public sealed class DocExtractPromptTestRequest
 {
@@ -1014,6 +933,10 @@ public sealed class DocExtractPromptTestRequest
     public string? StandardCode { get; set; }
     /// <summary>页面当前正文（未保存也能试）</summary>
     public string? Template { get; set; }
-    /// <summary>试跑模式：Section（默认，章节索引+小节并发）/ Whole（整篇一次大 JSON，仅对比）</summary>
-    public string? Mode { get; set; }
+    /// <summary>
+    /// 提示词代码（决定占位符渲染家族）：
+    /// <c>doc_profile</c>（画像总闸）/ <c>doc_extract_xxx</c>（按类型提取）/ <c>doc_clause_extract</c>（兜底）。
+    /// 空 = 兜底 doc_clause_extract。
+    /// </summary>
+    public string? PromptCode { get; set; }
 }

@@ -17,7 +17,8 @@ import CertAdminLayout from '@/layouts/CertAdminLayout.vue'
 const businessRoutes: RouteRecordRaw[] = [
   // ★ 标准管理（MENU_00219）—— 体系 → 族 → 版本 三层只读树 + 族 CRUD
   { path: 'cert/standard-manage', name: 'CertStandardManage', component: () => import('@/pages/foundation/standard-manage/index.vue') },
-  { path: 'cert/iso-standard', name: 'CertIsoStandard', component: () => import('@/pages/foundation/iso-standard/index.vue') },
+  // ⛔ 已删 `cert/iso-standard`（2026-11-25）：无菜单入口的孤儿路由；页面 `foundation/iso-standard/`
+  //    是 AGENTS 指定的「左树右表照抄样板」，**保留目录但不挂路由**（同 `pages/system/user` 处理）。
   { path: 'foundation/certification-body', name: 'FoundationCertificationBody', component: () => import('@/pages/foundation/certification-body/index.vue') },
   { path: 'cert/cert-stage', name: 'CertCertStage', component: () => import('@/pages/foundation/cert-stage/index.vue') },
   { path: 'cert/link-org-standard', name: 'CertLinkOrgStandard', component: () => import('@/pages/foundation/cert-org-standard/index.vue') },
@@ -25,7 +26,8 @@ const businessRoutes: RouteRecordRaw[] = [
   { path: 'business/directory-manager', name: 'BusinessDirectoryManager', component: () => import('@/pages/workflow/directory/index.vue') },
   // ★ 体系认证全局参数定义（MENU_00217）—— 按「机构 × 标准 × 阶段」预定义填充参数
   { path: 'business/fill-param-def', name: 'BusinessFillParamDef', component: () => import('@/pages/cert/fill-param-def/index.vue') },
-  { path: 'business/doc-extraction-rule', name: 'BusinessDocExtractionRule', component: () => import('@/pages/workflow/doc-extraction-rule/index.vue') },
+  // ⛔ 已删 `business/doc-extraction-rule`（2026-11-25）：无菜单入口的孤儿路由；
+  //    文档提取规则菜单（MENU_00208）指向 `business/doc-extract-rule`（现行页面）。
   // ★ 标准文档填写规则（MENU_00218）—— 给空白模板标注锚点 + 挂全文填写提示词
   { path: 'business/doc-fill-rule', name: 'BusinessDocFillRule', component: () => import('@/pages/workflow/doc-fill-rule/index.vue') },
   // ★ V2 条款属性：属性池 L0（MENU_00220）/ 条款配置 L1（MENU_00221）
@@ -35,12 +37,16 @@ const businessRoutes: RouteRecordRaw[] = [
   { path: 'cert/clause-prompt', name: 'CertClausePrompt', component: () => import('@/pages/cert/clause-prompt/index.vue') },
   // ★ 条款管理（MENU_ISO_CLAUSE）—— 标准选择器 + 条款树（增/改/删/批量删除）
   { path: 'cert/iso-clause', name: 'CertIsoClause', component: () => import('@/pages/foundation/iso-clause/index.vue') },
-  { path: 'business/report-def', name: 'BusinessReportDef', component: () => import('@/pages/workflow/report-rule/index.vue') },
-  { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
-  { path: 'business/skill-manage', name: 'BusinessSkillManage', component: () => import('@/pages/workflow/skill-manage/index.vue') },
+  // ⛔ 已删 `business/report-def`（2026-11-25）：无菜单入口的孤儿路由；
+  //    报告内容设计菜单（MENU_00211）指向 `business/report-rule-config`（现行设计器）。
   { path: 'business/nc-config', name: 'BusinessNcConfig', component: () => import('@/pages/workflow/nc-config/designer.vue') },
-  { path: 'business/workflow-rules', name: 'BusinessWorkflowRules', component: () => import('@/pages/workflow/nc-config/index.vue') },
+  // ⛔ 已删 `business/workflow-rules`（2026-11-25）：无菜单入口的孤儿路由；
+  //    NC 规则设计菜单（MENU_00212）指向 `business/nc-config`（designer.vue）。
   { path: 'business/report-rule-config', name: 'BusinessReportRuleConfig', component: () => import('@/pages/workflow/report-rule-config/index.vue') },
+  // ★ 文档语义规则（MENU_00210）：统一提示词模板管理（原「Prompt 模板」）
+  { path: 'business/prompt-template', name: 'BusinessPromptTemplate', component: () => import('@/pages/workflow/prompt-template/index.vue') },
+  // ★ 技能管理（MENU_00215）
+  { path: 'business/skill-manage', name: 'BusinessSkillManage', component: () => import('@/pages/workflow/skill-manage/index.vue') },
   { path: 'business/doc-extract-rule', name: 'BusinessDocExtractRule', component: () => import('@/pages/workflow/doc-extract-rule/index.vue') },
   { path: 'business/ai-usage', name: 'BusinessAiUsage', component: () => import('@/pages/workflow/ai-usage/index.vue') },
   { path: 'business/queue-monitor', name: 'BusinessQueueMonitor', component: () => import('@/pages/workflow/queue/index.vue') },

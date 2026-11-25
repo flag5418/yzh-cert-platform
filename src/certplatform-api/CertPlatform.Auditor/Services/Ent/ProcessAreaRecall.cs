@@ -36,6 +36,55 @@ namespace CertPlatform.Auditor.Services.Ent
             ["after_sales"] = new[] { "售后", "投诉", "退货", "顾客满意", "维修", "服务" }
         };
 
+        /// <summary>
+        /// 文档侧 <c>ProcessArea</c> 自由文本 → <see cref="process"/> 码 的**归一表**（纯配置，跨标准不变）。
+        ///
+        /// <para>用途：过程轴 RM2 由"关键词包含"升级为「码 ∩ 码」，消除"采购过程 / 供应商管理 / 供方评审"
+        /// 等同义异写法靠字符串碰运气的问题。见 <c>docs/80-v4/19-召回路径实施方案-V1.md</c> §三 RM2。</para>
+        /// <para>⛔ 未知文本返回空集（由 <see cref="MatchesProcessAxis"/> 退回关键词），⛔ 不猜。</para>
+        /// </summary>
+        private static readonly (string Marker, string[] Keys)[] AreaToKeys =
+        {
+            ("gm", new[] { "management" }), ("管代", new[] { "management" }), ("管理层", new[] { "management" }),
+            ("行政", new[] { "hr" }), ("人事", new[] { "hr" }), ("人力资源", new[] { "hr" }), ("培训", new[] { "hr" }),
+            ("销售", new[] { "sales" }), ("顾客", new[] { "sales" }), ("客户", new[] { "sales" }), ("市场", new[] { "sales" }),
+            ("采购", new[] { "purchase" }), ("供方", new[] { "purchase" }), ("供应商", new[] { "purchase" }), ("外包", new[] { "purchase" }),
+            ("生产", new[] { "production" }), ("制造", new[] { "production" }), ("工序", new[] { "production" }), ("装配", new[] { "production" }),
+            ("检验", new[] { "inspection" }), ("检测", new[] { "inspection" }), ("试验", new[] { "inspection" }), ("化验", new[] { "inspection" }),
+            ("仓储", new[] { "warehouse" }), ("仓库", new[] { "warehouse" }), ("库存", new[] { "warehouse" }), ("物流", new[] { "warehouse" }),
+            ("设备", new[] { "metrology" }), ("计量", new[] { "metrology" }), ("校准", new[] { "metrology" }), ("仪器", new[] { "metrology" }),
+            ("设计", new[] { "design" }), ("研发", new[] { "design" }),
+            ("售后", new[] { "after_sales" }), ("投诉", new[] { "after_sales" }), ("顾客满意", new[] { "after_sales" })
+        };
+
+        /// <summary>文档过程域文本归一为 Process 码集合（未知文本 ⇒ 空集，⛔ 不猜）。</summary>
+        public static HashSet<string> NormalizeAreaKeys(string? processArea)
+        {
+            var area = (processArea ?? string.Empty).Trim();
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (area.Length == 0) return set;
+            var lower = area.ToLowerInvariant();
+            foreach (var (marker, keys) in AreaToKeys)
+            {
+                if (!area.Contains(marker, StringComparison.Ordinal) && !lower.Contains(marker, StringComparison.Ordinal))
+                    continue;
+                foreach (var k in keys) set.Add(k);
+            }
+            return set;
+        }
+
+        /// <summary>
+        /// 过程轴 RM2 匹配：优先「码 ∩ 码」（归一表），归一不出码时退回「关键词包含」。
+        /// <para>⛔ 两条路都为否 ⇒ false（宁可不召回，也不靠字符串碰运气）。</para>
+        /// </summary>
+        public static bool MatchesProcessAxis(string? processArea, IReadOnlyCollection<string> clauseKeys)
+        {
+            if (clauseKeys.Count == 0) return false;
+            var areaKeys = NormalizeAreaKeys(processArea);
+            if (areaKeys.Count > 0) return areaKeys.Overlaps(clauseKeys);
+            return Matches(processArea, KeywordsFor(clauseKeys));
+        }
+
         /// <summary>从条款属性值（形如 <c>["purchase","inspection"]</c> 或 <c>purchase</c>）抽取 Process 键。</summary>
         public static List<string> ParseKeys(string? attrValue)
         {

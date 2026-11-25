@@ -211,3 +211,15 @@ DocClass 只能是以下三种：
 3. 空白模板：`RecordState=blank`、`HasInstance=false`、`ZeroEvent=false`、`Coverage="0 批"`；不要把“没有数据”写成 `ZeroEvent=true`。
 4. 跨产品模板：产品名称/技术要求与审核范围明显不符时 `Applicable=false`，Warnings 记 `cross_product`；不要因为表里有内容就填 `filled` 并当证据。
 5. 零事件记录：原文明确“无投诉/无事故/无发生”才 `ZeroEvent=true`；只是空白模板不等于零事件。
+
+
+## 章节概要（V4 必填，供审核员证据发现用）
+
+画像 {{doc_profile}} 里的 Toc 是本文档的客观章节表（系统已从原文切好，含每节的起止位置）。
+请在输出 JSON 顶层额外给出 SectionSummaries，为 Toc 中每个 Level ≤ 2 的标题各写一句概要（≤40 个汉字），说明该节实际写了什么。
+
+- Label 必须逐字抄 Toc 的 Title（不许改写、不许增删字、不许换标点）；对不上就丢弃该条。
+- Summary 只概括本节实际写到的内容；该节为空或只有标题 ⇒ Summary 给空串。
+- 只写概要：不要自己编章节号、页码、偏移或 CharStart/CharEnd —— 章节骨架由系统按 Toc 生成。
+- 示例："SectionSummaries": [ { "Label": "3 职责", "Summary": "规定采购、品质、仓储三部门在采购过程中的职责分工" } ]
+- Toc 缺失或为空 ⇒ SectionSummaries 给 []。

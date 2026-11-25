@@ -108,6 +108,12 @@ public sealed class CertCheckContext
     /// <summary>装配过程中发现的问题（数据缺失 / 降级），写进快照与日志，⛔ 不静默</summary>
     public List<string> Warnings { get; init; } = new();
 
+    /// <summary>
+    /// 召回路径记账（改造4）：逐条款记「RM 计划轴 + 命中份数」，供快照核对「不遗漏、不虚增」。
+    /// <para>格式：<c>条款号|RM计划=RM1,RM7|来源份数=N</c>。</para>
+    /// </summary>
+    public List<string> RecallTrace { get; init; } = new();
+
     /// <summary>命中的文档份数（去重）</summary>
     public int DocHitCount => Clauses
         .SelectMany(c => c.Slices)
@@ -219,7 +225,9 @@ public sealed class CertCheckContext
                     {
                         var status = i < s.ExcerptStatuses.Count ? s.ExcerptStatuses[i] : "unverified";
                         var label = status == "section_candidate" ? "章节原文候选，已定位转换文本，相关性需核实"
-                            : status == "matched" ? "已逐字匹配转换文本" : "未经逐字核验，需核实";
+                            : status == "matched" ? "已逐字匹配转换文本"
+                            : status == "interview" ? "访谈证据（面谈记录/转录，需与现场记录相互印证）"
+                            : "未经逐字核验，需核实";
                         sb.AppendLine($"  摘录（{label}）：{s.Excerpts[i]}");
                     }
                 }
@@ -348,13 +356,19 @@ public sealed class CertCheckContextBuilder
     /// <param name="clauseCodes">条款 Code 列表（来自 <c>cert_audit_plan_detail.Clauses</c> 拆分）</param>
     /// <param name="enterpriseCode">企业 Code（取文档切片的过滤键；空 ⇒ 不装配文档，只装配条款）</param>
     /// <param name="evidences">审核员补充的证据（原样带过，由引擎单独成块）</param>
+    /// <param name="deptNames">
+    /// 检查项部门（<c>cert_audit_plan_detail.DeptNames</c>，逗号串）—— RM3 部门轴的匹配键（仅 f2 执行族）。
+    /// <para>空 ⇒ 部门轴不执行，只走条款轴 / 过程轴。</para>
+    /// </param>
     public async Task<CertCheckContext> BuildAsync(
         IReadOnlyList<string> clauseCodes,
         string? enterpriseCode,
         IReadOnlyList<CertEvidence>? evidences = null,
-        IReadOnlyList<ClauseRef>? clauseRefs = null)
+        IReadOnlyList<ClauseRef>? clauseRefs = null,
+        string? deptNames = null)
     {
         var warnings = new List<string>();
+        var recallTrace = new List<string>();
         var evList = evidences?.ToList() ?? new List<CertEvidence>();
 
         var codeList = new List<string>();
@@ -525,26 +539,81 @@ public sealed class CertCheckContextBuilder
 
         // ---- 4. 文档模型：按「企业 × 标准 × 条款编号」取切片 ----
         if (!string.IsNullOrWhiteSpace(enterpriseCode))
-            await LoadDocSlicesAsync(clauses, enterpriseCode!, warnings);
+            await LoadDocSlicesAsync(clauses, enterpriseCode!, deptNames, warnings, recallTrace);
         else
             warnings.Add("企业 Code 为空 ⇒ 未装配企业文档（条款块里的资料命中全部为空）");
 
         // ---- 5. 审核员证据：按条款归位，未挂条款的单独留 ----
+        // ★ RM6 访谈轴：条款召回计划含访谈轴（证据形态 interview）时，把访谈类证据挂进该条款块
+        //   （真实报告 4.1/4.2 的举证主体正是「面谈最高管理者」）。其余证据留作「未归属证据」，
+        //   ⛔ 不能因挂了条款号就静默丢弃（原实现 target != null 时既不挂条款也不入孤儿 ⇒ 证据凭空消失）。
+        var recallByClauseForEvidence = ResolveClauseRecall(clauses);
         var orphans = new List<CertEvidence>();
         foreach (var ev in evList)
         {
             var target = string.IsNullOrEmpty(ev.ClauseCode)
                 ? null
                 : clauses.FirstOrDefault(c => string.Equals(c.ClauseCode, ev.ClauseCode, StringComparison.Ordinal));
-            if (target == null) orphans.Add(ev);
+            if (target == null)
+            {
+                orphans.Add(ev);
+                continue;
+            }
+
+            var interviewText = new[] { ev.LlmSummary, ev.TranscriptText, ev.Snippet }
+                .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s));
+            var hasInterviewAxis = recallByClauseForEvidence.TryGetValue(target.ClauseNumber ?? string.Empty, out var paths)
+                && paths.Any(p => string.Equals(p.Axis, RecallAxis.Interview, StringComparison.Ordinal));
+            if (hasInterviewAxis
+                && string.Equals(ev.EvidenceKind, "interview", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(interviewText))
+            {
+                target.Slices.Add(new ClauseDocSlice
+                {
+                    FileCode = ev.SourceCode ?? ev.Code,
+                    FileName = string.IsNullOrWhiteSpace(ev.SourceName) ? "面谈记录" : ev.SourceName!,
+                    Anchor = InterviewAnchor,
+                    Excerpts = new List<string> { interviewText! },
+                    ExcerptStatuses = new List<string> { "interview" }
+                });
+            }
+            else
+            {
+                orphans.Add(ev);
+            }
         }
 
         return new CertCheckContext
         {
             Clauses = clauses,
             OrphanEvidences = orphans,
-            Warnings = warnings
+            Warnings = warnings,
+            RecallTrace = recallTrace
         };
+    }
+
+    /// <summary>
+    /// 逐条款解析召回路径（<b>唯一判据 = <see cref="RecallPathResolver"/></b>，与 <c>CertTaskService.ResolveClauseRecallAsync</c> 同源）。
+    /// <para>★ 2 层结构：条款属性已在装配阶段读入 <see cref="ClauseContext.Attrs"/>，此处<b>只匹配已提取字段</b>，
+    /// ⛔ 不查库、⛔ 不二次解析企业文档原文。</para>
+    /// <para>返回：条款号 → 路径清单（键 = <see cref="ClauseContext.ClauseNumber"/>）。</para>
+    /// </summary>
+    private static Dictionary<string, List<RecallPath>> ResolveClauseRecall(List<ClauseContext> clauses)
+    {
+        var result = new Dictionary<string, List<RecallPath>>(StringComparer.Ordinal);
+        foreach (var c in clauses)
+        {
+            if (string.IsNullOrWhiteSpace(c.ClauseNumber)) continue;
+            result[c.ClauseNumber] = RecallPathResolver.Resolve(new ClauseRecallInput
+            {
+                ClauseNumber = ClauseRefs.NormalizeNumber(c.ClauseNumber),
+                EvidenceFamily = c.Attr("EvidenceFamily"),
+                EvidenceForm = c.Attr("EvidenceForm"),
+                Role = c.Attr("Role"),
+                ProcessKeys = ProcessAreaRecall.ParseKeys(c.Attr("Process"))
+            });
+        }
+        return result;
     }
 
     /// <summary>
@@ -552,7 +621,8 @@ public sealed class CertCheckContextBuilder
     /// <para>过滤链：<c>EnterpriseCode</c> → <c>StandardCode</c> → <c>ContentJson.Clauses[].ClauseNumber</c>。</para>
     /// </summary>
     private async Task LoadDocSlicesAsync(
-        List<ClauseContext> clauses, string enterpriseCode, List<string> warnings)
+        List<ClauseContext> clauses, string enterpriseCode, string? deptNames,
+        List<string> warnings, List<string> recallTrace)
     {
         // 条款号 → 该编号所属标准（⛔ 4.1 在 iso9001 和 iso13485 都存在，不能只按编号匹配）
         var wanted = clauses
@@ -597,6 +667,20 @@ public sealed class CertCheckContextBuilder
 
         // 轴2 过程轴候选先收集、循环结束后统一分配（记录优先），见 ApplyProcessAxis
         var processAxisCandidates = new List<ProcessAxisCandidate>();
+        // 轴3 部门轴候选（RM3）同样先收集再统一分配，见 ApplyDeptAxis
+        var deptAxisCandidates = new List<DeptAxisCandidate>();
+
+        // ★ 改造1（19 号方案）：逐条款解析召回路径（唯一判据 = RecallPathResolver，全仓唯一）。
+        //   条款号 → 路径清单；RM1 体裁白名单从中派生（该条款召回不含条款轴 ⇒ 不做体裁过滤，由 RM2/RM3 承担）。
+        var recallByClause = ResolveClauseRecall(clauses);
+
+        /// 取某条款的 RM1 体裁白名单（无 RM1 或无 DocTypes ⇒ null ⇒ 不过滤）
+        HashSet<string>? WhitelistOf(string clauseNumber)
+            => recallByClause.TryGetValue(clauseNumber, out var ps)
+                ? ps.Where(p => string.Equals(p.Axis, RecallAxis.Clause, StringComparison.Ordinal))
+                    .SelectMany(p => p.DocTypes)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : null;
 
         foreach (var ex in extractions)
         {
@@ -612,13 +696,20 @@ public sealed class CertCheckContextBuilder
             if (!wanted.TryGetValue(ex.StandardCode, out var numbers)) continue;
 
             // ---- 轴1 条款轴：文档自身声明了条款号 ⇒ 精确挂到那条条款 ----
-            var slices = ParseClauseSlices(ex.ContentJson!, numbers, warnings);
+            var slices = ParseClauseSlices(ex.ContentJson!, numbers, warnings, out var exModeRaw);
+            var exMode = EnterpriseDocExtractionRouter.NormalizeMode(exModeRaw);
             foreach (var (clauseNumber, slice) in slices)
             {
                 var target = clauses.FirstOrDefault(c =>
                     string.Equals(c.ClauseNumber, clauseNumber, StringComparison.Ordinal)
                     && string.Equals(c.StandardCode, ex.StandardCode, StringComparison.Ordinal));
                 if (target == null) continue;
+
+                // ★ RM1 体裁白名单：仅当该条款的召回路径含条款轴（RM1）时过滤（15 号 §4.1）。
+                //   白名单为空（该条款由 RM2/RM3 承担）⇒ 不过滤，避免把执行类证据误删。
+                var allowed = WhitelistOf(target.ClauseNumber);
+                if (allowed is { Count: > 0 } && !allowed.Contains(exMode))
+                    continue;
 
                 target.Slices.Add(new ClauseDocSlice
                 {
@@ -636,10 +727,14 @@ public sealed class CertCheckContextBuilder
             // 导致证据只能写"《X》规定…"。候选先收集，循环结束后统一按"记录优先"分配。
             // ⛔ 只决定"要不要召回这份文档"，条款归属由被匹配的条款决定，永不反推条款号。
             ExtractProcessAxisCandidate(ex, processAxisCandidates);
+            ExtractDeptAxisCandidate(ex, deptAxisCandidates);
         }
 
-        // ---- 轴2 分配：记录优先，每条条款最多 ProcessAxisCap 份 ----
-        ApplyProcessAxis(clauses, processAxisCandidates);
+        // ---- 轴2 分配：记录优先；仅对「召回计划含 RM2」的条款执行，且受该条款体裁白名单约束 ----
+        ApplyProcessAxis(clauses, processAxisCandidates, recallByClause);
+
+        // ---- 轴3 部门轴（RM3）：仅 f2 执行族条款；检查项部门 ∩ 文档部门，记录优先 ----
+        ApplyDeptAxis(clauses, deptAxisCandidates, deptNames, recallByClause);
 
         // ---- 6. 手册纲领：把 EvidenceSources（应读章节/负责部门/前置事实）挂到每条条款 ----
         LoadManualGuidance(clauses, extractions, warnings);
@@ -647,14 +742,27 @@ public sealed class CertCheckContextBuilder
         var noHit = clauses.Where(c => !c.HasDocContent).Select(c => c.ClauseNumber).ToList();
         if (noHit.Count > 0)
             warnings.Add($"以下条款在企业文档中未提取到对应内容：{string.Join(",", noHit)}");
+
+        // ---- 7. 召回路径记账（改造4）：逐条款记「RM 计划轴 + 来源份数」，供快照核对「不遗漏、不虚增」 ----
+        foreach (var c in clauses)
+        {
+            var axes = recallByClause.TryGetValue(c.ClauseNumber, out var ps) && ps.Count > 0
+                ? string.Join(",", ps.Select(p => p.Axis))
+                : "无(条款属性缺失)";
+            var docCount = c.Slices.Select(s => s.FileCode).Distinct(StringComparer.Ordinal).Count();
+            recallTrace.Add($"{c.ClauseNumber}|RM计划={axes}|来源份数={docCount}");
+        }
     }
 
     /// <summary>过程轴每条款最多补充的文档数（记录优先）。⛔ 不设上限时 8.1 这类多过程条款会把整库文档卷进上下文。</summary>
     private const int ProcessAxisCap = 10;
 
+    /// <summary>访谈轴（RM6）锚点：面谈类证据（面谈最高管理者/负责人）在条款块中的定位标签。</summary>
+    private const string InterviewAnchor = "interview";
+
     /// <summary>过程轴候选：一份文档按 <c>ProcessArea</c> 可能被召回到多个条款，先收集再统一分配。</summary>
     private readonly record struct ProcessAxisCandidate(
-        string FileCode, string FileName, string ProcessArea, string Excerpt, bool IsRecord);
+        string FileCode, string FileName, string ProcessArea, string Excerpt, string Mode, bool IsRecord);
 
     /// <summary>
     /// 解析一份文档的过程轴候选。记录 / 程序 / 作业指导书这类文档不带条款号，条款轴召不回；
@@ -676,9 +784,12 @@ public sealed class CertCheckContextBuilder
             var fileName = GetObject(root, "DocMeta", "docMeta") is { } meta
                 ? GetString(meta, "FileName", "fileName") ?? ""
                 : "";
+            // ★ P2：候选携带归一后的体裁（与条款轴 axis1 同源提取器），供 ApplyProcessAxis 按该条款 RM2 白名单收敛，
+            //   避免把与该条款体裁不符的文档卷进来。
+            var normMode = EnterpriseDocExtractionRouter.NormalizeMode(mode);
             sink.Add(new ProcessAxisCandidate(
-                ex.FileCode, fileName, processArea, excerpt,
-                string.Equals(mode, "record_profile", StringComparison.OrdinalIgnoreCase)));
+                ex.FileCode, fileName, processArea, excerpt, normMode,
+                string.Equals(normMode, "record_profile", StringComparison.OrdinalIgnoreCase)));
         }
         catch (JsonException)
         {
@@ -691,8 +802,11 @@ public sealed class CertCheckContextBuilder
     /// <para><b>记录先于程序/指导书</b>（实施证据优先于制度证据），每条条款最多 <see cref="ProcessAxisCap"/> 份：
     /// 记录族挂"同过程记录"，其余挂"同过程程序/指导书"。</para>
     /// <para>⛔ 条款归属由「被匹配的条款」决定，<b>永不从文档反推条款号</b>（见 <see cref="ProcessAreaRecall"/> 硬约束）。</para>
+    /// <para>★ 仅对「召回计划含 RM2（过程轴）」的条款执行；候选体裁须命中该条款 RM2 白名单（唯一判据 = <see cref="RecallPathResolver"/>）。</para>
     /// </summary>
-    private static void ApplyProcessAxis(List<ClauseContext> clauses, List<ProcessAxisCandidate> candidates)
+    private static void ApplyProcessAxis(
+        List<ClauseContext> clauses, List<ProcessAxisCandidate> candidates,
+        Dictionary<string, List<RecallPath>> recallByClause)
     {
         if (candidates.Count == 0) return;
 
@@ -701,12 +815,26 @@ public sealed class CertCheckContextBuilder
 
         foreach (var clause in clauses)
         {
-            var keywords = ProcessAreaRecall.KeywordsFor(ProcessAreaRecall.ParseKeys(clause.Attr("Process")));
-            if (keywords.Count == 0) continue;
+            // ★ P2 收敛：仅当该条款的召回计划含过程轴（RM2）时才执行 —— 轴由解析器给，⛔ 不自己猜。
+            //   （修 R2 根因：原实现无条件执行，与 ApplyDeptAxis / 15 号 Resolve 公式矛盾。）
+            if (!recallByClause.TryGetValue(clause.ClauseNumber, out var paths)) continue;
+            var processPath = paths.FirstOrDefault(p =>
+                string.Equals(p.Axis, RecallAxis.Process, StringComparison.Ordinal));
+            if (processPath == null) continue;
+
+            // ★ 候选体裁须命中该条款 RM2 白名单（与条款轴 axis1 同一来源 Resolve 产出，空 ⇒ 不过滤）
+            var allowed = processPath.DocTypes is { Count: > 0 }
+                ? new HashSet<string>(processPath.DocTypes, StringComparer.OrdinalIgnoreCase)
+                : null;
+
+            // ★ RM2 归一：条款 Process 码 ∩ 文档 ProcessArea 归一码（不再靠中文关键词包含碰运气）
+            var processKeys = ProcessAreaRecall.ParseKeys(clause.Attr("Process"));
+            if (processKeys.Count == 0) continue;
 
             foreach (var cand in ordered)
             {
-                if (!ProcessAreaRecall.Matches(cand.ProcessArea, keywords)) continue;
+                if (allowed is { Count: > 0 } && !allowed.Contains(cand.Mode)) continue;
+                if (!ProcessAreaRecall.MatchesProcessAxis(cand.ProcessArea, processKeys)) continue;
                 // 同一份文档对同一条款已由条款轴挂上 ⇒ 不重复
                 if (clause.Slices.Any(s => string.Equals(s.FileCode, cand.FileCode, StringComparison.Ordinal)))
                     continue;
@@ -720,6 +848,93 @@ public sealed class CertCheckContextBuilder
                     FileCode = cand.FileCode,
                     FileName = cand.FileName,
                     Anchor = cand.IsRecord ? ProcessAreaRecall.RecordAnchor : ProcessAreaRecall.ProgramAnchor,
+                    Excerpts = new List<string> { cand.Excerpt },
+                    ExcerptStatuses = new List<string> { "matched" }
+                });
+            }
+        }
+    }
+
+    /// <summary>部门轴（RM3）每条款最多补充的文档数（记录优先）。</summary>
+    private const int DeptAxisCap = 6;
+
+    /// <summary>部门轴候选：一份文档按其责任部门可能被召回到多个条款，先收集再统一分配。</summary>
+    private readonly record struct DeptAxisCandidate(
+        string FileCode, string FileName, List<string> Depts, string Excerpt, bool IsRecord);
+
+    /// <summary>
+    /// 解析一份文档的部门轴候选（RM3）：读文档自身已提取的 <c>ModeOutput.DeptNames</c>（缺则退回 <c>OwnerDept</c>）。
+    /// <para>★ 2 层结构：只在文档内部取已提取字段，⛔ 不在装配阶段二次解析企业文档原文。</para>
+    /// </summary>
+    private void ExtractDeptAxisCandidate(DocumentExtraction ex, List<DeptAxisCandidate> sink)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(ex.ContentJson!);
+            var root = doc.RootElement;
+            var mode = GetString(root, "ExtractionMode", "extractionMode") ?? "";
+            if (GetObject(root, "ModeOutput", "modeOutput") is not { } output) return;
+            output = ModeOutputProjector.ForProjection(output, mode);
+
+            var depts = DocDeptNames.Collect(output);
+            if (depts.Count == 0) return;
+
+            var excerpt = BuildModeExcerpt(output, mode);
+            if (string.IsNullOrWhiteSpace(excerpt)) return;
+            var fileName = GetObject(root, "DocMeta", "docMeta") is { } meta
+                ? GetString(meta, "FileName", "fileName") ?? ""
+                : "";
+            sink.Add(new DeptAxisCandidate(
+                ex.FileCode, fileName, depts, excerpt,
+                string.Equals(mode, "record_profile", StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (JsonException)
+        {
+            // 产物损坏 ⇒ 跳过该文档的部门轴候选，不影响条款轴 / 过程轴
+        }
+    }
+
+    /// <summary>
+    /// 把部门轴候选分配到各条款：<b>检查项部门 ∩ 文档责任部门</b>，命中即召回。
+    /// <para>仅对「召回计划含 RM3（部门轴）」的条款执行（唯一判据 = <see cref="RecallPathResolver"/>，f2 执行族）。</para>
+    /// <para><b>记录先于程序 / 文件</b>（实施证据优先于制度证据），每条条款最多 <see cref="DeptAxisCap"/> 份。</para>
+    /// <para>⛔ 条款归属由「被匹配的条款」决定，永不从文档反推条款号；部门名精确匹配（⛔ 不模糊，不虚增）。</para>
+    /// </summary>
+    private static void ApplyDeptAxis(
+        List<ClauseContext> clauses, List<DeptAxisCandidate> candidates,
+        string? deptNames, Dictionary<string, List<RecallPath>> recallByClause)
+    {
+        if (candidates.Count == 0) return;
+
+        var wantedDepts = new HashSet<string>(StringComparer.Ordinal);
+        DocDeptNames.AddText(deptNames, wantedDepts);
+        if (wantedDepts.Count == 0) return;
+
+        var ordered = candidates.OrderByDescending(c => c.IsRecord).ToList();
+
+        foreach (var clause in clauses)
+        {
+            // ★ 仅当该条款的召回计划含部门轴（RM3）时才执行 —— 轴由解析器给，⛔ 不自己猜。
+            if (!recallByClause.TryGetValue(clause.ClauseNumber, out var paths)
+                || !paths.Any(p => string.Equals(p.Axis, RecallAxis.Dept, StringComparison.Ordinal)))
+                continue;
+
+            foreach (var cand in ordered)
+            {
+                if (!cand.Depts.Any(wantedDepts.Contains)) continue;
+                // 同一份文档对本条款已挂过（条款轴 / 过程轴）⇒ 不重复
+                if (clause.Slices.Any(s => string.Equals(s.FileCode, cand.FileCode, StringComparison.Ordinal)))
+                    continue;
+                // 本条款的部门轴补充已达上限 ⇒ 停（已按记录优先排序，先到的是记录）
+                if (clause.Slices.Count(s => s.Anchor == DocDeptNames.DeptRecordAnchor
+                                            || s.Anchor == DocDeptNames.DeptFileAnchor) >= DeptAxisCap)
+                    break;
+
+                clause.Slices.Add(new ClauseDocSlice
+                {
+                    FileCode = cand.FileCode,
+                    FileName = cand.FileName,
+                    Anchor = cand.IsRecord ? DocDeptNames.DeptRecordAnchor : DocDeptNames.DeptFileAnchor,
                     Excerpts = new List<string> { cand.Excerpt },
                     ExcerptStatuses = new List<string> { "matched" }
                 });
@@ -861,14 +1076,17 @@ public sealed class CertCheckContextBuilder
     }
 
     /// <summary>解析 <c>ContentJson</c>，只挑出 <paramref name="wantedNumbers"/> 里的条款切片。</summary>
+    /// <param name="mode">带出该文档的提取体裁（<c>ExtractionMode</c>，未归一），供 RM1 体裁白名单过滤。</param>
     private List<(string ClauseNumber, ParsedSlice Slice)> ParseClauseSlices(
-        string contentJson, HashSet<string> wantedNumbers, List<string> warnings)
+        string contentJson, HashSet<string> wantedNumbers, List<string> warnings, out string mode)
     {
+        mode = string.Empty;
         var result = new List<(string, ParsedSlice)>();
         try
         {
             using var doc = JsonDocument.Parse(contentJson);
             var root = doc.RootElement;
+            mode = GetString(root, "ExtractionMode", "extractionMode") ?? "";
 
             var fileName = GetObject(root, "DocMeta", "docMeta") is { } meta
                 ? GetString(meta, "FileName", "fileName") ?? ""

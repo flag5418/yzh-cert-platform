@@ -67,6 +67,18 @@ public interface ICoreResourceQuery
     Task<ISOStandard?> GetStandardByCodeAsync(string? standardCode);
 
     /// <summary>
+    /// 按 <c>Code</c> 单查标准（<b>含已停用</b> <c>IsValid == 0</c>，仅排除软删行）。
+    /// <para><b>★ 用途</b>：条款 / 标准标识校验需要能命中已停用标准（原端内 <c>!s.IsDeleted</c> 即此语义）。</para>
+    /// </summary>
+    Task<ISOStandard?> GetStandardIncludeDisabledByCodeAsync(string? standardCode);
+
+    /// <summary>
+    /// <b>标准短码 / 标准 Code 双键解析</b>：<paramref name="standardKey"/> 命中 <c>StandardCode</c>
+    /// （如 <c>iso9001</c>）或 <c>Code</c>（GUID）任一即返回，仅取有效行（未命中 <c>null</c>）。
+    /// </summary>
+    Task<ISOStandard?> ResolveStandardAsync(string? standardKey);
+
+    /// <summary>
     /// 取全部 <b>叶子标准</b>（<c>IsLeaf == true</c> 且未删）。
     /// <para><b>★ 语义</b>：等价于端内 <c>_db.Client.Queryable&lt;ISOStandard&gt;().Where(x => x.IsLeaf == true).OrderBy(x => x.Sort)</c>；
     /// 排序口径在端内完成（与 <see cref="GetStandardsAsync"/> 一致，本方法不固化排序）。</para>
@@ -78,6 +90,33 @@ public interface ICoreResourceQuery
 
     /// <summary>按条款 <c>Code</c> 单查条款（未命中返回 <c>null</c>）。</summary>
     Task<ISOClause?> GetClauseByCodeAsync(string? clauseCode);
+
+    /// <summary>
+    /// 按条款 <c>Code</c> 单查 <b>原始行</b>（⛔ 不加 <c>IsDeleted</c> / <c>IsValid</c> 过滤）。
+    /// <para><b>★ 用途</b>：手工新增条款前的稳定 <c>Code</c> 冲突检测 —— 「已存在或<b>曾被删除</b>」
+    /// 都要拦（<c>cert_iso_clause.Code</c> 无唯一索引，被删行仍占位），故必须含软删行。</para>
+    /// </summary>
+    Task<ISOClause?> FindClauseRawByCodeAsync(string? clauseCode);
+
+    /// <summary>
+    /// 按条款 <c>Code</c> 单查（<b>含已停用</b> <c>IsValid == 0</c>，仅排除软删行）。
+    /// <para><b>★ 用途</b>：条款更新校验需命中已停用条款（原端内 <c>!c.IsDeleted</c> 即此语义）。</para>
+    /// </summary>
+    Task<ISOClause?> GetClauseIncludeDisabledByCodeAsync(string? clauseCode);
+
+    /// <summary>
+    /// 取指定标准下<b>全部条款原始行</b>（⛔ 不加 <c>IsDeleted</c> / <c>IsValid</c> 过滤，含软删）。
+    /// <para><b>★ 用途</b>：条款重建前的存在性判断 + 「含已删行」的 <c>Code</c> 跨标准冲突检测。</para>
+    /// </summary>
+    Task<List<ISOClause>> GetClausesRawAsync(string standardCode);
+
+    /// <summary>
+    /// 按条款 <c>Code</c> 集合取<b>全部原始行</b>（⛔ 不加 <c>IsDeleted</c> / <c>IsValid</c> 过滤，含软删；空集合返回空）。
+    /// </summary>
+    Task<List<ISOClause>> GetClausesRawByCodesAsync(IEnumerable<string> clauseCodes);
+
+    /// <summary>取指定标准下条款（<b>含已停用</b> <c>IsValid == 0</c>，仅排除软删行，按 <c>Sort</c> 升序）。</summary>
+    Task<List<ISOClause>> GetClausesIncludeDisabledAsync(string? standardCode);
 
     /// <summary>
     /// 按条款 <c>Code</c> 集合批量取条款（空集合直接返回空，⛔ 不发查询）。
@@ -449,6 +488,25 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         return r.Data;
     }
 
+    public async Task<ISOStandard?> GetStandardIncludeDisabledByCodeAsync(string? standardCode)
+    {
+        // 含已停用（IsValid == 0）；仅排除软删行 —— 与端内原 `!s.IsDeleted` 等价
+        if (string.IsNullOrWhiteSpace(standardCode)) return null;
+        var sc = standardCode;
+        return await _db.Client.Queryable<ISOStandard>()
+            .Where(x => x.Code == sc && !x.IsDeleted).FirstAsync();
+    }
+
+    public async Task<ISOStandard?> ResolveStandardAsync(string? standardKey)
+    {
+        // 标准短码（StandardCode）或标准 Code（GUID）双键解析，仅取有效行
+        var k = (standardKey ?? "").Trim();
+        if (k.Length == 0) return null;
+        return await _db.Client.Queryable<ISOStandard>()
+            .Where(x => (x.StandardCode == k || x.Code == k) && !x.IsDeleted && x.IsValid == 1)
+            .FirstAsync();
+    }
+
     public async Task<List<ISOStandard>> GetLeafStandardsAsync()
     {
         // 等价于端内 `_db.Client.Queryable<ISOStandard>().Where(x => x.IsLeaf == true)`；
@@ -472,6 +530,57 @@ public sealed class CoreResourceQuery : ICoreResourceQuery
         var cc = clauseCode;
         var r = await _db.GetOneAsync<ISOClause>(x => x.Code == cc);
         return r.Data;
+    }
+
+    public async Task<ISOClause?> FindClauseRawByCodeAsync(string? clauseCode)
+    {
+        // 原始行 = ⛔ 不加 IsDeleted / IsValid 过滤（手工新增的稳定 Code 冲突检测需要已删行）
+        if (string.IsNullOrWhiteSpace(clauseCode)) return null;
+        var cc = clauseCode;
+        return await _db.Client.Queryable<ISOClause>().Where(x => x.Code == cc).FirstAsync();
+    }
+
+    public async Task<List<ISOClause>> GetClausesIncludeDisabledAsync(string? standardCode)
+    {
+        // 含已停用（IsValid == 0）；仅排除软删行 —— 与端内原 `!c.IsDeleted` 等价，按 Sort 升序
+        if (string.IsNullOrWhiteSpace(standardCode)) return new List<ISOClause>();
+        var sc = standardCode;
+        return await _db.Client.Queryable<ISOClause>()
+            .Where(x => x.StandardCode == sc && !x.IsDeleted)
+            .OrderBy(x => x.Sort)
+            .ToListAsync();
+    }
+
+    public async Task<ISOClause?> GetClauseIncludeDisabledByCodeAsync(string? clauseCode)
+    {
+        // 含已停用（IsValid == 0）；仅排除软删行 —— 与端内原 `!c.IsDeleted` 等价
+        if (string.IsNullOrWhiteSpace(clauseCode)) return null;
+        var cc = clauseCode;
+        return await _db.Client.Queryable<ISOClause>()
+            .Where(x => x.Code == cc && !x.IsDeleted).FirstAsync();
+    }
+
+    public async Task<List<ISOClause>> GetClausesRawAsync(string standardCode)
+    {
+        // 原始行 = ⛔ 不加 IsDeleted / IsValid 过滤（含软删）
+        if (string.IsNullOrWhiteSpace(standardCode)) return new List<ISOClause>();
+        var sc = standardCode;
+        return await _db.Client.Queryable<ISOClause>()
+            .Where(x => x.StandardCode == sc)
+            .ToListAsync();
+    }
+
+    public async Task<List<ISOClause>> GetClausesRawByCodesAsync(IEnumerable<string> clauseCodes)
+    {
+        // 原始行 = ⛔ 不加 IsDeleted / IsValid 过滤（含软删）
+        var codes = new List<string>();
+        foreach (var c in clauseCodes)
+            if (!string.IsNullOrWhiteSpace(c)) codes.Add(c);
+        if (codes.Count == 0) return new List<ISOClause>();
+
+        return await _db.Client.Queryable<ISOClause>()
+            .Where(x => codes.Contains(x.Code!))
+            .ToListAsync();
     }
 
     public async Task<List<ISOClause>> GetClausesByCodesAsync(IEnumerable<string> clauseCodes)

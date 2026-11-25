@@ -247,6 +247,37 @@ export function sortClauses(list: EntDocClauseHit[]): EntDocClauseHit[] {
   return [...list].sort((a, b) => compareClauseNo(a.ClauseNumber ?? '', b.ClauseNumber ?? ''))
 }
 
+/** 章节概要行（`ModeOutput.Sections[]` 的展示投影）。 */
+export interface ModeSection {
+  /** 章节名（后端逐字抄画像 Toc 的 Title） */
+  Label: string
+  /** 该节实际写了什么（≤40 字的概要） */
+  Summary: string
+}
+
+/**
+ * `ModeOutput.Sections[]` → 章节概要列表。
+ *
+ * ★ V4「章节级产物」：章节骨架与原文偏移（`CharStart/CharEnd`）由后端按画像 `Toc`
+ *   确定性生成，模型只给概要 ⇒ 页面这里只展示「章节名 + 概要」，
+ *   ⛔ 不展示偏移（偏移供报告期按原文原样回取）。
+ *   `Sections` 缺失 / 非数组 ⇒ 返回 `[]`（旧链产物没有该字段，页面不该报错）。
+ */
+export function modeSections(modeOutput?: Record<string, unknown> | null): ModeSection[] {
+  const raw = (modeOutput?.Sections ?? modeOutput?.sections) as unknown
+  if (!Array.isArray(raw)) return []
+  const out: ModeSection[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const o = item as Record<string, unknown>
+    const label = String(o.Label ?? o.label ?? '').trim()
+    const summary = String(o.Summary ?? o.summary ?? '').trim()
+    if (label.length === 0 && summary.length === 0) continue
+    out.push({ Label: label, Summary: summary })
+  }
+  return out
+}
+
 /**
  * 任意 JSON 值 → 可读的多行文本。
  *

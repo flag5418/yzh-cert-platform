@@ -20,7 +20,8 @@
  */
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElButton, ElTag, ElDescriptions, ElDescriptionsItem } from 'element-plus'
+import { ElButton, ElDescriptions, ElDescriptionsItem } from 'element-plus'
+import { YzhStatusBadge, YzhEmptyState } from '@yzh-core'
 import { yzhApi } from '@yzh-core/api/client'
 import { entDocPreviewBlob } from '@share/api/ent/enterprise-doc'
 
@@ -113,14 +114,14 @@ onBeforeUnmount(releasePreview)
     <div class="doc-preview__header">
       <div class="doc-preview__title">{{ isFileMode ? '企业文档原文' : '证据原文预览' }}</div>
       <div class="doc-preview__meta" v-if="isFileMode">
-        <el-tag size="small" effect="plain">{{ anchor ? `条款 ${anchor}` : '全文' }}</el-tag>
+        <YzhStatusBadge type="info" size="small">{{ anchor ? `条款 ${anchor}` : '全文' }}</YzhStatusBadge>
       </div>
       <div class="doc-preview__meta" v-else-if="doc">
-        <el-tag size="small" effect="plain">{{ doc.SourceName || doc.Code }}</el-tag>
-        <el-tag v-if="doc.EvidenceKind" size="small" type="info" effect="plain">{{ doc.EvidenceKind }}</el-tag>
-        <el-tag v-if="doc.CapturedIn" size="small" type="success" effect="plain">{{ doc.CapturedIn }}</el-tag>
+        <YzhStatusBadge type="info" size="small">{{ doc.SourceName || doc.Code }}</YzhStatusBadge>
+        <YzhStatusBadge v-if="doc.EvidenceKind" type="info" size="small">{{ doc.EvidenceKind }}</YzhStatusBadge>
+        <YzhStatusBadge v-if="doc.CapturedIn" type="success" size="small">{{ doc.CapturedIn }}</YzhStatusBadge>
       </div>
-      <el-button size="small" @click="closeWindow" v-if="canCloseWindow">关闭窗口</el-button>
+      <el-button type="default" size="small" @click="closeWindow" v-if="canCloseWindow">关闭窗口</el-button>
     </div>
 
     <!-- 文档元信息 -->
@@ -138,22 +139,22 @@ onBeforeUnmount(releasePreview)
     <div class="doc-preview__content" v-loading="loading">
       <template v-if="isFileMode">
         <iframe v-if="previewUrl" :src="previewUrl" class="doc-preview__frame" title="PDF 预览" />
-        <el-empty v-else-if="error" :description="error" :image-size="80" />
-        <el-empty v-else-if="!loading" description="PDF 预览还在生成" :image-size="80" />
+        <YzhEmptyState v-else-if="error" :title="error" :image-size="80" />
+        <YzhEmptyState v-else-if="!loading" title="PDF 预览还在生成" :image-size="80" />
       </template>
       <template v-else-if="hasContent">
         <div class="doc-preview__text">
           {{ fullText }}
         </div>
       </template>
-      <el-empty v-else-if="error" :description="error" :image-size="80" />
-      <el-empty v-else-if="!loading" description="文档暂无全文内容" :image-size="80" />
+      <YzhEmptyState v-else-if="error" :title="error" :image-size="80" />
+      <YzhEmptyState v-else-if="!loading" title="文档暂无全文内容" :image-size="80" />
       <div v-else class="doc-preview__placeholder">加载文档中...</div>
     </div>
 
     <!-- 片段锚点提示 -->
     <div class="doc-preview__anchor-bar" v-if="anchor">
-      <el-tag type="warning" size="small">锚点：{{ anchor }}</el-tag>
+      <YzhStatusBadge type="warning" size="small">锚点：{{ anchor }}</YzhStatusBadge>
       <span class="doc-preview__anchor-tip">该片段在文档中对应位置已通过 LLM 关联</span>
     </div>
   </div>
@@ -171,12 +172,12 @@ onBeforeUnmount(releasePreview)
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
   border-bottom: 1px solid var(--el-border-color-lighter);
   flex-shrink: 0;
 }
 .doc-preview__title {
-  font-size: 15px;
+  font-size: var(--yzh-font-size-lg, 16px);
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
@@ -186,14 +187,14 @@ onBeforeUnmount(releasePreview)
   flex: 1;
 }
 .doc-preview__info {
-  padding: 12px 16px;
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-4, 16px);
   flex-shrink: 0;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 .doc-preview__content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: var(--yzh-space-4, 16px);
   background: var(--el-bg-color-page);
 }
 .doc-preview__frame {
@@ -206,7 +207,7 @@ onBeforeUnmount(releasePreview)
   background: var(--el-bg-color);
 }
 .doc-preview__text {
-  font-size: 13px;
+  font-size: var(--yzh-font-size-sm, 13px);
   line-height: 1.8;
   color: var(--el-text-color-regular);
   white-space: pre-wrap;
@@ -215,25 +216,25 @@ onBeforeUnmount(releasePreview)
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
-  padding: 16px;
+  padding: var(--yzh-space-4, 16px);
 }
 .doc-preview__placeholder {
-  padding: 32px;
+  padding: var(--yzh-space-8, 32px);
   text-align: center;
   color: var(--el-text-color-placeholder);
-  font-size: 13px;
+  font-size: var(--yzh-font-size-sm, 13px);
 }
 .doc-preview__anchor-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
   border-top: 1px solid var(--el-border-color-lighter);
   background: var(--el-color-warning-light-9);
   flex-shrink: 0;
 }
 .doc-preview__anchor-tip {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-text-color-secondary);
 }
 </style>

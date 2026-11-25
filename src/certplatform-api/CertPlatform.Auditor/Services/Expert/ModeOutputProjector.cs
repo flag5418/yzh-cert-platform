@@ -68,6 +68,16 @@ namespace CertPlatform.Auditor.Services.Expert
             foreach (var name in new[] { "DocumentTitle", "documentTitle", "PolicyTitle", "policyTitle", "CatalogSummary", "catalogSummary" })
                 if (output.TryGetProperty(name, out var v)) Add("文档信息", v);
 
+            // ★ V4 章节级产物：文档章节结构（标签：概要）—— 审核员先看结构，再看细节。
+            //   骨架（标签 + 原文偏移）由代码按画像 Toc 确定性生成（DocSectionsBuilder）。
+            foreach (var name in new[] { "Sections", "sections" })
+            {
+                if (!output.TryGetProperty(name, out var secEl)) continue;
+                var secText = SectionsText(secEl, 12).Trim();
+                if (secText.Length > 0 && seen.Add(secText)) parts.Add(secText);
+                break;
+            }
+
             foreach (var name in new[] { "KeyControls", "keyControls", "KeyRules", "keyRules", "KeySteps", "keySteps" })
                 if (output.TryGetProperty(name, out var v)) Add("关键要求/步骤", v, 5);
 
@@ -342,6 +352,32 @@ namespace CertPlatform.Auditor.Services.Expert
                 var body = summary;
                 if (points.Length > 0) body = body.Length > 0 ? $"{body}（{points}）" : $"（{points}）";
                 var line = head.Length > 0 ? $"{head}：{body}" : body;
+                if (line.Trim().Length > 0) lines.Add(line.Trim());
+            }
+            return string.Join("\n", lines);
+        }
+
+        /// <summary>
+        /// V4 章节级产物：<c>Sections[]</c>（对象数组）→ 人可读的「标签：概要」逐行。
+        /// <para>骨架（标签 + 原文偏移 CharStart/CharEnd）由代码按画像 <c>Toc</c> 确定性生成
+        /// （<c>DocSectionsBuilder</c>）；本方法只投影概要，⛔ 不展示偏移 —— 审核员先看结构，
+        /// 偏移供报告期按原文原样回取。</para>
+        /// </summary>
+        private static string SectionsText(JsonElement arr, int maxItems)
+        {
+            if (arr.ValueKind != JsonValueKind.Array) return string.Empty;
+
+            var lines = new List<string>();
+            foreach (var sec in arr.EnumerateArray())
+            {
+                if (lines.Count >= maxItems) break;
+                if (sec.ValueKind != JsonValueKind.Object) continue;
+
+                var label = Prop(sec, "Label");
+                var summary = Prop(sec, "Summary");
+                var line = summary.Length > 0
+                    ? (label.Length > 0 ? $"{label}：{summary}" : summary)
+                    : label;
                 if (line.Trim().Length > 0) lines.Add(line.Trim());
             }
             return string.Join("\n", lines);

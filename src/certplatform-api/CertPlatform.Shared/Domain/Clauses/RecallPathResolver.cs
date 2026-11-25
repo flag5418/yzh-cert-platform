@@ -28,7 +28,9 @@ namespace CertPlatform.Shared.Domain.Clauses
         {
             // ★ manual_chapter（手册章节模式）与 clause_full 等价占位：手册/方针改为「整篇按章节」后，
             //   旧的 clause_full 记录读时归一为 manual_chapter ⇒ 两者必须同时在白名单，否则 r1/r2 手册证据全被过滤掉。
-            ["r1"] = new[] { "clause_full", "manual_chapter", "context_list" },
+            // ★ P2：r1（情境章 4.1/4.2/4.4）补 process_profile —— 15 号 §4.2 的 4.4 示例即用 procedure 体裁；
+            //   否则《组织环境程序》被 r1 白名单挡掉，4.1 只能拿到手册 + 清单，制度依据整类缺失。
+            ["r1"] = new[] { "clause_full", "manual_chapter", "context_list", "process_profile" },
             ["r2"] = new[] { "clause_full", "manual_chapter", "policy_profile", "document_control" },
             ["r3"] = new[] { "context_list", "record_profile", "policy_profile" },
             ["r4"] = new[] { "record_profile", "work_instruction_citation", "document_control" },
@@ -126,6 +128,12 @@ namespace CertPlatform.Shared.Domain.Clauses
                 default:
                     Add(RecallAxis.Clause, input.ClauseNumber,
                         "证据族 f1（制度族）⇒ 条款轴 RM1（按条款号找制度）");
+                    // ★ P2/§4.2：r1（情境章 4.1/4.2/4.4）的组织环境清单 / 程序常不带条款号，
+                    //   仅靠 RM1 会整类漏召回 ⇒ 追加过程轴 RM2（体裁仍受 Role 白名单约束，
+                    //   不会把内审检查表 / 管评记录 / 变更单这类记录卷进来）。
+                    if (string.Equals(role, "r1", StringComparison.OrdinalIgnoreCase))
+                        Add(RecallAxis.Process, Join(input.ProcessKeys),
+                            "r1 情境章 ⇒ 追加过程轴 RM2（组织环境清单 / 程序不带条款号，需过程键召回）");
                     break;
             }
 

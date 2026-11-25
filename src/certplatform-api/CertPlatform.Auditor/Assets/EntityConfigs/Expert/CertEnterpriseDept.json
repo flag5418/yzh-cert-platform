@@ -136,15 +136,33 @@
       "Align": "center"
     },
     {
+      "FieldName": "DeptDuty",
+      "DesName": "部门职能",
+      "Type": "Memo",
+      "Sxh": 8,
+      "XsFlag": true,
+      "BcFlag": true,
+      "Yxk": true,
+      "Width": 320,
+      "Row": 4,
+      "Col": 0,
+      "RowSpan": 2,
+      "ColSpan": 2,
+      "GroupIndex": "0",
+      "Mrz": "",
+      "Enable": true,
+      "Placeholder": "由质量手册 0.7 职责权限自动同步，可在此手工完善（一行一条）"
+    },
+    {
       "FieldName": "Remark",
       "DesName": "备注",
       "Type": "Memo",
-      "Sxh": 8,
+      "Sxh": 9,
       "XsFlag": false,
       "BcFlag": true,
       "Yxk": true,
       "Width": 200,
-      "Row": 4,
+      "Row": 6,
       "Col": 0,
       "RowSpan": 2,
       "ColSpan": 2,
@@ -191,11 +209,7 @@
   ],
   "RowButtons": {
     "Edit": true,
-    "Delete": true,
-    "Enable": false,
-    "CustomButtons": {
-      "disable": "禁用",
-      "enable": "启用"
-    }
+    "Delete": false,
+    "Enable": false
   }
 }

@@ -20,10 +20,11 @@
  */
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import {
-  ElButton, ElTable, ElTableColumn, ElTag, ElDrawer, ElInput,
-  ElEmpty, ElMessageBox, ElMessage,
+  ElButton, ElInput, ElMessage,
   ElPopover, ElForm, ElFormItem, ElSelect, ElOption,
 } from 'element-plus'
+import { YzhTable, YzhStatusBadge, YzhEmptyState, YzhDrawer, confirmOrFalse } from '@yzh-core'
+import type { YzhTableColumn } from '@yzh-core/components/table/types'
 import {
   getPlanChecklist, getPlanCheckItemDetail, exportPlanReport,
   lockConclusion, unlockConclusion, saveCheckResult, addEvidence, updateEvidence,
@@ -47,7 +48,6 @@ const rows = ref<CertPlanCheckItemRow[]>([])
 const drawerVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<CertPlanCheckItemDetail | null>(null)
-const selectedDetailCode = ref('')
 const editingConclusion = ref(false)
 const editForm = reactive({
   conclusion: '',
@@ -200,7 +200,6 @@ async function loadChecklist() {
 }
 
 async function openDetail(row: CertPlanCheckItemRow) {
-  selectedDetailCode.value = row.DetailCode
   detailLoading.value = true
   drawerVisible.value = true
   detail.value = null
@@ -232,12 +231,37 @@ function onRowClick(row: any) {
   openDetail(row as CertPlanCheckItemRow)
 }
 
-function rowClassName({ row }: { row: any }) {
-  const cls: string[] = []
-  if (row.IsLocked) cls.push('wb-row-locked')
-  if (row.DetailCode && row.DetailCode === selectedDetailCode.value) cls.push('wb-row-active')
-  return cls.join(' ')
+/** 结论 → 状态色（S08：状态/结果一律走徽章，不用按钮色） */
+const CONCLUSION_TYPES: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
+  pass: 'success',
+  ofi: 'warning',
+  nc: 'danger',
+  na: 'info',
 }
+function conclusionType(v: string) {
+  return CONCLUSION_TYPES[v] || 'info'
+}
+
+/** 严重度 → 状态色 */
+function severityType(v: string) {
+  return v === 'major' ? 'danger' : 'warning'
+}
+
+/** 主表列定义（纯展示列的 prop 省略，必须给 slotKey + slot 才有插槽内容） */
+const columns: YzhTableColumn<RowView>[] = [
+  { slotKey: 'Idx', slot: true, label: '#', width: 48, align: 'center' },
+  { slotKey: 'Clause', slot: true, label: '检查项', minWidth: 200 },
+  { slotKey: 'Dept', slot: true, label: '部门', width: 120 },
+  { slotKey: 'Contacts', slot: true, label: '部门联系人', width: 170 },
+  { slotKey: 'Status', slot: true, label: '状态', width: 92, align: 'center' },
+  { slotKey: 'Prep', slot: true, label: 'PrepState / 结论', width: 140, align: 'center' },
+  { slotKey: 'Severity', slot: true, label: '严重度', width: 90, align: 'center' },
+  { slotKey: 'Nc', slot: true, label: '建议NC', width: 80, align: 'center' },
+  { prop: 'RawEvidenceCount', label: '原始证据', width: 88, align: 'center', formatter: (v: any) => String(v ?? 0) },
+  { prop: 'CheckEvidenceCount', label: '检查证据', width: 88, align: 'center', formatter: (v: any) => String(v ?? 0) },
+  { slotKey: 'Doubt', slot: true, label: '疑点', width: 70, align: 'center' },
+  { slotKey: 'Op', slot: true, label: '操作', width: 80, align: 'center', fixed: 'right' },
+]
 
 // ════════════════════════════════════════════════════════════
 // 全局操作
@@ -245,15 +269,13 @@ function rowClassName({ row }: { row: any }) {
 
 async function handleAutoAnalyze() {
   if (busy.analyze) return
-  try {
-    await ElMessageBox.confirm(
-      '将创建新的认证准备任务并启动队列分析，是否继续？',
-      '启动自动分析',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'info' },
-    )
-  } catch {
-    return // 用户取消
-  }
+  // F-4：取消/关闭不是错误，confirmOrFalse 静默返回 false
+  const ok = await confirmOrFalse(
+    '将创建新的认证准备任务并启动队列分析，是否继续？',
+    '启动自动分析',
+    { type: 'info' },
+  )
+  if (!ok) return
 
   busy.analyze = true
   try {
@@ -482,8 +504,8 @@ onBeforeUnmount(() => {
       </div>
       <div class="wb-toolbar-right">
         <el-button type="primary" :loading="busy.analyze" :disabled="pageLocked" @click="handleAutoAnalyze">自动分析</el-button>
-        <el-button @click="handleSaveReport">保存报告</el-button>
-        <el-button @click="handleExport">导出报告</el-button>
+        <el-button type="default" @click="handleSaveReport">保存报告</el-button>
+        <el-button type="default" @click="handleExport">导出报告</el-button>
       </div>
     </div>
 
@@ -494,111 +516,83 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 主表 -->
-    <div class="wb-table-wrap">
-      <el-table
+    <div class="wb-table-wrap" v-loading="loading">
+      <YzhTable
+        :columns="columns"
         :data="rowsView"
-        border
-        stripe
-        size="small"
-        v-loading="loading"
+        :show-pagination="false"
+        :toolbar="false"
+        select-mode="single"
         height="100%"
-        empty-text="暂无检查项"
+        size="small"
+        no-padding
         row-key="DetailCode"
-        highlight-current-row
-        :row-class-name="rowClassName"
+        empty-text="暂无检查项"
         @row-click="onRowClick"
       >
-        <el-table-column label="#" width="48" align="center">
-          <template #default="{ $index }">{{ $index + 1 }}</template>
-        </el-table-column>
-        <el-table-column label="检查项" prop="ClauseNumbers" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span class="wb-clause">{{ row.ClauseNumbers || '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="部门" prop="DeptName" width="120" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.DeptName">{{ row.DeptName }}</span>
-            <span v-else class="wb-muted">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="部门联系人" width="170">
-          <template #default="{ row }">
-            <div v-if="row.contacts.length" class="wb-contacts">
-              <span
-                v-for="c in row.contacts.slice(0, 2)"
-                :key="(c.name || '') + (c.phone || '')"
-                class="wb-contact-chip"
-                :title="[c.name, c.position, c.phone].filter(Boolean).join(' · ')"
-              >
-                <span class="wb-avatar">{{ (c.name || '?').charAt(0) }}</span>
-                <span class="wb-contact-name">{{ c.name || '未命名' }}</span>
-              </span>
-              <el-popover
-                v-if="row.contacts.length > 2"
-                placement="right"
-                :width="240"
-                trigger="hover"
-              >
-                <template #reference>
-                  <span class="wb-contact-more">+{{ row.contacts.length - 2 }}</span>
-                </template>
-                <div v-for="c in row.contacts" :key="(c.name || '') + (c.phone || '')" class="wb-contact-line">
-                  {{ c.name || '未命名' }}<span v-if="c.position"> · {{ c.position }}</span><span v-if="c.phone"> · {{ c.phone }}</span>
-                </div>
-              </el-popover>
-            </div>
-            <span v-else class="wb-muted">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="92" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.IsLocked" size="small" type="warning" effect="plain">🔒 已锁定</el-tag>
-            <el-tag v-else-if="row.Conclusion" size="small" type="success" effect="plain">已分析</el-tag>
-            <el-tag v-else size="small" type="info" effect="plain">待分析</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="PrepState / 结论" width="140" align="center">
-          <template #default="{ row }">
-            <span v-if="row.PrepState" class="wb-prep-state">{{ row.PrepState }}</span>
-            <span v-if="row.Conclusion" class="wb-conclusion">
-              {{ labelOf(CONCLUSION_LABELS, row.Conclusion) }}
+        <template #column-Idx="{ index }">{{ index + 1 }}</template>
+        <template #column-Clause="{ row }">
+          <span class="wb-clause">{{ row.ClauseNumbers || '-' }}</span>
+        </template>
+        <template #column-Dept="{ row }">
+          <span v-if="row.DeptName">{{ row.DeptName }}</span>
+          <span v-else class="wb-muted">—</span>
+        </template>
+        <template #column-Contacts="{ row }">
+          <div v-if="row.contacts.length" class="wb-contacts">
+            <span
+              v-for="c in row.contacts.slice(0, 2)"
+              :key="(c.name || '') + (c.phone || '')"
+              class="wb-contact-chip"
+              :title="[c.name, c.position, c.phone].filter(Boolean).join(' · ')"
+            >
+              <span class="wb-avatar">{{ (c.name || '?').charAt(0) }}</span>
+              <span class="wb-contact-name">{{ c.name || '未命名' }}</span>
             </span>
-            <span v-if="!row.PrepState && !row.Conclusion" class="wb-muted">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="严重度" width="90" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.Severity" size="small" :type="row.Severity === 'major' ? 'danger' : 'warning'" effect="plain">
-              {{ row.Severity }}
-            </el-tag>
-            <span v-else class="wb-muted">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="建议NC" width="80" align="center">
-          <template #default="{ row }">
-            <el-tag v-if="row.NcSuggested" size="small" type="danger">NC</el-tag>
-            <span v-else class="wb-muted">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="原始证据" width="88" align="center">
-          <template #default="{ row }">{{ row.RawEvidenceCount || 0 }}</template>
-        </el-table-column>
-        <el-table-column label="检查证据" width="88" align="center">
-          <template #default="{ row }">{{ row.CheckEvidenceCount || 0 }}</template>
-        </el-table-column>
-        <el-table-column label="疑点" width="70" align="center">
-          <template #default="{ row }">
-            <span v-if="row.DoubtCount" class="wb-doubt">{{ row.DoubtCount }}</span>
-            <span v-else class="wb-muted">0</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="80" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" size="small" @click.stop="onRowClick(row)">详情</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+            <el-popover
+              v-if="row.contacts.length > 2"
+              placement="right"
+              :width="240"
+              trigger="hover"
+            >
+              <template #reference>
+                <span class="wb-contact-more">+{{ row.contacts.length - 2 }}</span>
+              </template>
+              <div v-for="c in row.contacts" :key="(c.name || '') + (c.phone || '')" class="wb-contact-line">
+                {{ c.name || '未命名' }}<span v-if="c.position"> · {{ c.position }}</span><span v-if="c.phone"> · {{ c.phone }}</span>
+              </div>
+            </el-popover>
+          </div>
+          <span v-else class="wb-muted">—</span>
+        </template>
+        <template #column-Status="{ row }">
+          <YzhStatusBadge v-if="row.IsLocked" type="warning" text="已锁定" />
+          <YzhStatusBadge v-else-if="row.Conclusion" type="success" text="已分析" />
+          <YzhStatusBadge v-else type="info" text="待分析" />
+        </template>
+        <template #column-Prep="{ row }">
+          <span v-if="row.PrepState" class="wb-prep-state">{{ row.PrepState }}</span>
+          <span v-if="row.Conclusion" class="wb-conclusion">
+            {{ labelOf(CONCLUSION_LABELS, row.Conclusion) }}
+          </span>
+          <span v-if="!row.PrepState && !row.Conclusion" class="wb-muted">—</span>
+        </template>
+        <template #column-Severity="{ row }">
+          <YzhStatusBadge v-if="row.Severity" :type="severityType(row.Severity)" :text="row.Severity" />
+          <span v-else class="wb-muted">—</span>
+        </template>
+        <template #column-Nc="{ row }">
+          <YzhStatusBadge v-if="row.NcSuggested" type="danger" text="NC" />
+          <span v-else class="wb-muted">—</span>
+        </template>
+        <template #column-Doubt="{ row }">
+          <span v-if="row.DoubtCount" class="wb-doubt">{{ row.DoubtCount }}</span>
+          <span v-else class="wb-muted">0</span>
+        </template>
+        <template #column-Op="{ row }">
+          <el-button link type="primary" size="small" @click.stop="onRowClick(row)">详情</el-button>
+        </template>
+      </YzhTable>
     </div>
 
     <!-- 底部队列进度栏 -->
@@ -616,9 +610,8 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 右侧侧边栏 Drawer -->
-    <el-drawer
+    <YzhDrawer
       v-model="drawerVisible"
-      direction="rtl"
       size="480px"
       :title="detail?.ClauseNumbers || '检查项详情'"
       :close-on-click-modal="true"
@@ -629,9 +622,7 @@ onBeforeUnmount(() => {
           <div class="wb-summary">
             <div class="wb-summary-row">
               <span class="wb-summary-label">结论：</span>
-              <el-tag v-if="detail.Conclusion" size="small" type="primary">
-                {{ labelOf(CONCLUSION_LABELS, detail.Conclusion) }}
-              </el-tag>
+              <YzhStatusBadge v-if="detail.Conclusion" :type="conclusionType(detail.Conclusion)" :text="labelOf(CONCLUSION_LABELS, detail.Conclusion)" />
               <span v-else class="wb-muted">待分析</span>
               <el-button
                 link
@@ -643,16 +634,16 @@ onBeforeUnmount(() => {
             </div>
             <div class="wb-summary-row">
               <span class="wb-summary-label">严重程度：</span>
-              <el-tag v-if="detail.Severity" size="small" :type="detail.Severity === 'major' ? 'danger' : 'warning'">{{ detail.Severity }}</el-tag>
+              <YzhStatusBadge v-if="detail.Severity" :type="severityType(detail.Severity)" :text="detail.Severity" />
               <span v-else class="wb-muted">-</span>
             </div>
             <div class="wb-summary-row">
               <span class="wb-summary-label">NC建议：</span>
-              <el-tag v-if="detail.NcSuggested" size="small" type="danger">是</el-tag>
+              <YzhStatusBadge v-if="detail.NcSuggested" type="danger" text="是" />
               <span v-else class="wb-muted">否</span>
             </div>
             <div class="wb-summary-row" v-if="detail.IsLocked">
-              <el-tag size="small" type="warning">已锁定 ({{ detail.LockedBy || '—' }})</el-tag>
+              <YzhStatusBadge type="warning" :text="`已锁定 (${detail.LockedBy || '—'})`" />
             </div>
           </div>
 
@@ -668,7 +659,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
-            <el-empty v-else description="暂无部门" :image-size="40" />
+            <YzhEmptyState v-else title="暂无部门" compact />
           </div>
 
           <!-- 现场证据：审核员补录 -->
@@ -683,7 +674,7 @@ onBeforeUnmount(() => {
                 <div class="wb-ev-snippet">{{ e.Snippet || e.LlmSummary || '(空)' }}</div>
               </div>
             </div>
-            <el-empty v-else description="暂无现场证据" :image-size="40" />
+            <YzhEmptyState v-else title="暂无现场证据" compact />
           </div>
 
           <!-- 审核发现：企业原始文档提取事实，只读 -->
@@ -695,11 +686,11 @@ onBeforeUnmount(() => {
                   <span class="wb-ev-kind">{{ e.Anchor || e.EvidenceKind }}</span>
                   <span class="wb-ev-source">{{ e.SourceName || '-' }}</span>
                 </div>
-                <div>{{ e.SourceMatchStatus === 'section_candidate' ? '章节原文候选，相关性待核实' : e.SourceMatchStatus === 'matched' ? '已匹配转换文本' : e.SourceMatchStatus === 'ambiguous' ? '原文位置不唯一，待核实' : '未核验原文，待核实' }}</div>
+                <div>{{ e.SourceMatchStatus === 'section_candidate' ? '章节原文' : e.SourceMatchStatus === 'matched' ? '原文定位' : e.SourceMatchStatus === 'ambiguous' ? '原文多处出现' : '摘自文档' }}</div>
                 <div class="wb-ev-snippet">{{ e.Snippet || e.LlmSummary || '' }}</div>
               </div>
             </div>
-            <el-empty v-else description="暂无审核发现" :image-size="40" />
+            <YzhEmptyState v-else title="暂无审核发现" compact />
           </div>
 
           <!-- 疑点 -->
@@ -751,7 +742,7 @@ onBeforeUnmount(() => {
             </el-form>
           </div>
         </template>
-        <el-empty v-else-if="!detailLoading" description="请选择一项查看详情" />
+        <YzhEmptyState v-else-if="!detailLoading" title="请选择一项查看详情" compact />
       </div>
 
       <!-- 抽屉底部 -->
@@ -764,17 +755,17 @@ onBeforeUnmount(() => {
             :disabled="!detail?.ResultCode || detail?.IsLocked || pageLocked"
           >保存</el-button>
           <el-button
-            :type="detail?.IsLocked ? 'warning' : 'danger'"
+            :type="detail?.IsLocked ? 'default' : 'danger'"
             :loading="busy.lock"
             :disabled="!detail?.ResultCode || pageLocked"
             @click="toggleLock"
           >
             {{ detail?.IsLocked ? '解锁此项' : '锁定此项' }}
           </el-button>
-          <el-button @click="drawerVisible = false">关闭</el-button>
+          <el-button type="default" @click="drawerVisible = false">关闭</el-button>
         </div>
       </template>
-    </el-drawer>
+    </YzhDrawer>
   </div>
 </template>
 
@@ -784,14 +775,14 @@ onBeforeUnmount(() => {
   flex-direction: column;
   height: 100%;
   background: var(--el-bg-color);
-  border-radius: 4px;
+  border-radius: var(--yzh-radius-sm, 4px);
   overflow: hidden;
 }
 .wb-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: var(--yzh-space-3, 12px) var(--yzh-space-4, 16px);
   border-bottom: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color-page);
   flex-shrink: 0;
@@ -799,11 +790,11 @@ onBeforeUnmount(() => {
 .wb-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--yzh-space-3, 12px);
   flex-wrap: wrap;
 }
 .wb-plan-name {
-  font-size: 15px;
+  font-size: var(--yzh-font-size-md, 14px);
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
@@ -811,30 +802,30 @@ onBeforeUnmount(() => {
 .wb-lock-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
+  gap: var(--yzh-space-2, 8px);
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
   background: var(--el-color-warning-light-9);
   border-bottom: 1px solid var(--el-color-warning-light-7);
   color: var(--el-color-warning-dark-2);
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   flex-shrink: 0;
 }
 .wb-lock-icon {
-  font-size: 13px;
+  font-size: var(--yzh-font-size-sm, 13px);
   line-height: 1;
 }
 .wb-lock-text {
   font-weight: 500;
 }
 .wb-meta {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-text-color-secondary);
 }
 .wb-badge {
-  font-size: 11px;
+  font-size: var(--yzh-font-size-xs, 12px);
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: var(--yzh-space-1, 4px) var(--yzh-space-2, 8px);
+  border-radius: var(--yzh-radius-sm, 4px);
   white-space: nowrap;
 }
 .wb-badge.done {
@@ -851,7 +842,7 @@ onBeforeUnmount(() => {
 }
 .wb-toolbar-right {
   display: flex;
-  gap: 8px;
+  gap: var(--yzh-space-2, 8px);
 }
 .wb-table-wrap {
   flex: 1;
@@ -863,12 +854,12 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-primary);
 }
 .wb-prep-state {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-color-success);
-  margin-right: 4px;
+  margin-right: var(--yzh-space-1, 4px);
 }
 .wb-conclusion {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-color-primary);
   font-weight: 600;
 }
@@ -883,13 +874,13 @@ onBeforeUnmount(() => {
 .wb-contacts {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--yzh-space-1, 4px);
   flex-wrap: wrap;
 }
 .wb-contact-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--yzh-space-1, 4px);
   max-width: 68px;
 }
 .wb-avatar {
@@ -899,7 +890,7 @@ onBeforeUnmount(() => {
   background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
   border: 1px solid var(--el-color-primary-light-7);
-  font-size: 10px;
+  font-size: var(--yzh-font-size-xs, 12px);
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -907,38 +898,31 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 .wb-contact-name {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-text-color-regular);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .wb-contact-more {
-  font-size: 11px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-color-primary);
   cursor: pointer;
 }
 .wb-contact-line {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   line-height: 1.7;
   color: var(--el-text-color-regular);
-}
-/* 行状态 */
-:deep(.wb-row-locked) > td {
-  background: var(--el-color-warning-light-9) !important;
-}
-:deep(.wb-row-active) > td {
-  background: var(--el-color-primary-light-9) !important;
 }
 /* 队列栏 */
 .wb-queue-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 16px;
+  gap: var(--yzh-space-3, 12px);
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
   border-top: 1px solid var(--el-border-color-lighter);
   background: var(--el-color-warning-light-9);
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   flex-shrink: 0;
 }
 .wb-queue-bar.idle {
@@ -957,47 +941,47 @@ onBeforeUnmount(() => {
 }
 /* Drawer */
 .wb-drawer {
-  padding: 16px;
+  padding: var(--yzh-space-4, 16px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--yzh-space-4, 16px);
   min-height: 100%;
   overflow-y: auto;
 }
 .wb-summary {
   background: var(--el-color-primary-light-9);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: var(--yzh-radius-md, 8px);
+  padding: var(--yzh-space-3, 12px);
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 16px;
+  gap: var(--yzh-space-2, 8px) var(--yzh-space-4, 16px);
 }
 .wb-summary-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: var(--yzh-space-2, 8px);
+  font-size: var(--yzh-font-size-xs, 12px);
 }
 .wb-summary-label {
   color: var(--el-text-color-secondary);
 }
 .wb-zone {
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: var(--yzh-radius-md, 8px);
+  padding: var(--yzh-space-3, 12px);
 }
 .wb-zone-title {
-  font-size: 13px;
+  font-size: var(--yzh-font-size-sm, 13px);
   font-weight: 600;
   color: var(--el-text-color-primary);
-  margin-bottom: 8px;
-  padding-bottom: 6px;
+  margin-bottom: var(--yzh-space-2, 8px);
+  padding-bottom: var(--yzh-space-2, 8px);
   border-bottom: 1px dashed var(--el-border-color-lighter);
 }
 .wb-zone-empty {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-text-color-placeholder);
-  padding: 4px 0;
+  padding: var(--yzh-space-1, 4px) 0;
 }
 .text-muted {
   color: var(--el-text-color-placeholder);
@@ -1006,10 +990,10 @@ onBeforeUnmount(() => {
 .wb-dept-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--yzh-space-2, 8px);
 }
 .wb-dept {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   line-height: 1.6;
 }
 .wb-dept-name {
@@ -1021,17 +1005,17 @@ onBeforeUnmount(() => {
 }
 .wb-dept-contact {
   color: var(--el-text-color-regular);
-  padding-left: 8px;
+  padding-left: var(--yzh-space-2, 8px);
 }
 /* Evidence */
 .wb-evidence-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--yzh-space-2, 8px);
 }
 .wb-evidence {
-  padding: 6px 8px;
-  border-radius: 4px;
+  padding: var(--yzh-space-2, 8px);
+  border-radius: var(--yzh-radius-sm, 4px);
   background: var(--el-bg-color-page);
   border-left: 2px solid var(--el-color-primary);
 }
@@ -1042,8 +1026,8 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
-  font-size: 11px;
+  margin-bottom: var(--yzh-space-1, 4px);
+  font-size: var(--yzh-font-size-xs, 12px);
 }
 .wb-ev-kind {
   color: var(--el-color-info);
@@ -1065,7 +1049,7 @@ onBeforeUnmount(() => {
   text-decoration: underline;
 }
 .wb-ev-snippet {
-  font-size: 11px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-text-color-regular);
   line-height: 1.5;
 }
@@ -1073,36 +1057,36 @@ onBeforeUnmount(() => {
 .wb-doubt-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--yzh-space-1, 4px);
 }
 .wb-doubt-item {
-  font-size: 12px;
+  font-size: var(--yzh-font-size-xs, 12px);
   color: var(--el-color-danger);
   background: var(--el-color-danger-light-9);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: var(--yzh-space-1, 4px) var(--yzh-space-2, 8px);
+  border-radius: var(--yzh-radius-sm, 4px);
   line-height: 1.5;
 }
 /* Supplement */
 .wb-supplement-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: var(--yzh-space-1, 4px);
+  margin-bottom: var(--yzh-space-2, 8px);
 }
 .wb-sup-item {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  font-size: 12px;
-  padding: 4px 8px;
+  font-size: var(--yzh-font-size-xs, 12px);
+  padding: var(--yzh-space-1, 4px) var(--yzh-space-2, 8px);
   background: var(--el-bg-color-page);
-  border-radius: 4px;
+  border-radius: var(--yzh-radius-sm, 4px);
 }
 .wb-supplement-add {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--yzh-space-2, 8px);
   align-items: flex-end;
 }
 .wb-supplement-add .el-input {
@@ -1111,7 +1095,7 @@ onBeforeUnmount(() => {
 /* Drawer footer */
 .wb-drawer-footer {
   display: flex;
-  gap: 8px;
+  gap: var(--yzh-space-2, 8px);
   justify-content: flex-end;
 }
 </style>

@@ -3,8 +3,9 @@
  * 企业机构管理（左树右表，配置驱动，路由 /enterprise-dept）
  *
  * - 左树：本工作区企业（根，只读）+ 企业部门（可增删改启停），底部「新增部门」
- * - 右表：选中部门下的人员（新增需先选部门）
+ * - 右表：选中节点的「下级部门」，只读 + 编辑（用于完善部门职能）
  *
+ * ⚠️ 本页不管理企业人员（人员不出现在审核报告中）。
  * 企业节点只读（无编辑/删除/启停），仅可「新增下级」建顶层部门 —— 见 logic.resolveTreeActions。
  */
 import { Plus } from '@element-plus/icons-vue'
@@ -80,29 +81,20 @@ const { logic, tableRef, treeTableRef } = useTreeTable(EnterpriseDeptLogic)
       </template>
     </YzhTreeTableLayout>
 
-    <!-- 人员新增/编辑弹窗 -->
+    <!-- 右表行「编辑」弹窗（下级部门：改部门职能 / 负责人等；新增与删除走左树） -->
     <YzhFormDialog
       v-model:visible="logic.dialogVisible.value"
       v-model="logic.formData"
       :mode="logic.dialogMode.value"
-      entity-name="人员"
+      entity-name="部门"
       :fields="logic.formFields"
       :loading="logic.submitting.value"
       :cols="logic.formLayoutCols as any"
-      width="600px"
+      width="700px"
       @submit="logic.submitForm()"
-    >
-      <template #prepend>
-        <div class="enterprise-dept-form-header">
-          <span class="enterprise-dept-form-header__label">所属部门：</span>
-          <span class="enterprise-dept-form-header__value">
-            {{ logic.selectedNode?.Name ?? '未选择' }}
-          </span>
-        </div>
-      </template>
-    </YzhFormDialog>
+    />
 
-    <!-- 部门新增/编辑弹窗（上级节点由树的 add-child / 底部新增按钮注入） -->
+    <!-- 部门新增/编辑弹窗（左树 add-child / 底部新增；上级节点由树注入） -->
     <YzhFormDialog
       v-model:visible="logic.treeDialogVisible.value"
       v-model="logic.treeFormData"
@@ -148,23 +140,5 @@ const { logic, tableRef, treeTableRef } = useTreeTable(EnterpriseDeptLogic)
 .enterprise-dept-switch__label {
   font-size: var(--yzh-font-size-sm, 13px);
   color: var(--el-text-color-regular);
-}
-
-.enterprise-dept-form-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--yzh-space-3, 12px);
-}
-
-.enterprise-dept-form-header__label {
-  font-size: var(--yzh-font-size-base, 14px);
-  color: var(--el-text-color-regular);
-  font-weight: 500;
-}
-
-.enterprise-dept-form-header__value {
-  font-size: var(--yzh-font-size-base, 14px);
-  color: var(--el-text-color-primary);
-  font-weight: 500;
 }
 </style>

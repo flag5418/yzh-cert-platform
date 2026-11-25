@@ -24,11 +24,12 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import {
-  ElButton, ElSelect, ElOption, ElDialog, ElTable, ElTableColumn,
-  ElTree, ElTag, ElSteps, ElStep, ElDescriptions, ElDescriptionsItem, ElMessage,
+  ElButton, ElSelect, ElOption,
+  ElTree, ElSteps, ElStep, ElDescriptions, ElDescriptionsItem, ElMessage,
 } from 'element-plus'
 import { yzhApi } from '@yzh-core/api/client'
-import { confirmOrFalse } from '@yzh-core'
+import { YzhTable, YzhStatusBadge, YzhDialog, confirmOrFalse } from '@yzh-core'
+import type { YzhAction, YzhTableColumn } from '@yzh-core/components/table/types'
 import router from '@/router'
 import {
   closeAuditPlan, getMemberOptions, type CertMemberOption,
@@ -431,6 +432,65 @@ function openOnsite(row: any) {
   router.push(`/audit-onsite/${row.Code}`)
 }
 
+// ──── 表格列与行动作（R6：列表统一用 YzhTable） ────
+const planColumns: YzhTableColumn<PlanRow>[] = [
+  { prop: 'Name', label: '计划名称', minWidth: 220, showOverflowTooltip: true },
+  { slotKey: 'Enterprise', slot: true, label: '企业', minWidth: 160 },
+  { slotKey: 'Stage', slot: true, label: '阶段', width: 140 },
+  { slotKey: 'Standards', slot: true, label: '认证标准', minWidth: 200 },
+  { prop: 'CreateTime', slot: true, label: '建立时间', width: 170, align: 'center', sortable: true },
+  { slotKey: 'Status', slot: true, label: '状态', width: 90, align: 'center' },
+]
+
+const selectionColumns: YzhTableColumn<Selection>[] = [
+  { slotKey: 'Depts', slot: true, label: '部门', minWidth: 160 },
+  { slotKey: 'Clauses', slot: true, label: '条款', minWidth: 260 },
+  { slotKey: 'Owner', slot: true, label: '负责审核员', width: 200 },
+]
+
+const detailColumns: YzhTableColumn<Selection>[] = [
+  { slotKey: 'Clauses', slot: true, label: '条款序号（标准简称 + 编号）', minWidth: 280 },
+  { slotKey: 'Depts', slot: true, label: '部门名称', minWidth: 180 },
+  { slotKey: 'Owner', slot: true, label: '负责审核员', width: 120 },
+]
+
+const viewColumns: YzhTableColumn<any>[] = [
+  { slotKey: 'Clauses', slot: true, label: '条款序号', minWidth: 280 },
+  { slotKey: 'Depts', slot: true, label: '部门名称', minWidth: 180 },
+  { slotKey: 'Owner', slot: true, label: '负责审核员', width: 120 },
+]
+
+/** 主表行动作（S03：按钮色只用 primary/default/danger，状态色归 S08 徽章） */
+function planRowActions(row: PlanRow): YzhAction[] {
+  const closed = row.Status === 'closed'
+  return [
+    { key: 'view', text: '查看', type: 'primary' },
+    { key: 'edit', text: '调整', type: 'primary', disabled: closed },
+    { key: 'prep', text: '认证准备', type: 'default' },
+    { key: 'onsite', text: '认证检查', type: 'default' },
+    { key: 'close', text: '关闭', type: 'danger', visible: !closed },
+  ]
+}
+function onPlanAction(key: string, row: PlanRow) {
+  switch (key) {
+    case 'view': void openView(row); break
+    case 'edit': void openEdit(row); break
+    case 'prep': openPrep(row); break
+    case 'onsite': openOnsite(row); break
+    case 'close': void closePlan(row); break
+  }
+}
+
+/** 已选组合删除（YzhTable 行动作） */
+const selectionRowActions: YzhAction[] = [{ key: 'del', text: '删除', type: 'danger' }]
+function onSelectionAction(key: string, row: Selection) {
+  if (key === 'del') removeSelection(row)
+}
+function removeSelection(row: Selection) {
+  const i = selections.value.indexOf(row)
+  if (i >= 0) selections.value.splice(i, 1)
+}
+
 // ──── 查看详情（独立） ────
 const viewVisible = ref(false)
 const viewPlan = ref<PlanRow | null>(null)
@@ -451,46 +511,41 @@ async function openView(row: any) {
       <el-button type="primary" @click="openWizard">+ 新建计划</el-button>
     </div>
 
-    <el-table :data="plans" border stripe size="default">
-      <el-table-column prop="Name" label="计划名称" min-width="220" show-overflow-tooltip />
-      <el-table-column label="企业" min-width="160">
-        <template #default="{ row }">{{ entName(row.EnterpriseCode) }}</template>
-      </el-table-column>
-      <el-table-column label="阶段" width="140">
-        <template #default="{ row }">{{ stageName(row.StageCode) }}</template>
-      </el-table-column>
-      <el-table-column label="认证标准" min-width="200">
-        <template #default="{ row }">
-          <el-tag v-for="c in splitCsv(row.Standards)" :key="c" size="small" class="ap-tag">{{ stdName(c) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="CreateTime" label="建立时间" width="170" align="center" sortable>
-        <template #default="{ row }">{{ fmtTime(row.CreateTime) }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="90" align="center">
-        <template #default="{ row }">
-          <el-tag v-if="row.Status === 'closed'" type="info" size="small">已关闭</el-tag>
-          <el-tag v-else :type="row.IsValid === 1 ? 'success' : 'info'" size="small">{{ row.IsValid === 1 ? '启用' : '停用' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="360" align="center">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openView(row)">查看</el-button>
-          <el-button link type="primary" :disabled="row.Status === 'closed'" @click="openEdit(row as PlanRow)">调整</el-button>
-          <el-button link type="warning" @click="openPrep(row)">认证准备</el-button>
-          <el-button link type="success" @click="openOnsite(row)">认证检查</el-button>
-          <el-button
-            v-if="row.Status !== 'closed'"
-            link
-            type="danger"
-            @click="closePlan(row as PlanRow)"
-          >关闭</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <YzhTable
+      :columns="planColumns"
+      :data="plans"
+      :show-pagination="false"
+      :toolbar="false"
+      row-key="Code"
+      :row-action-buttons="planRowActions"
+      :action-max-inline="3"
+      empty-text="暂无认证计划"
+      @row-action="onPlanAction"
+    >
+      <template #column-Enterprise="{ row }">{{ entName(row.EnterpriseCode) }}</template>
+      <template #column-Stage="{ row }">{{ stageName(row.StageCode) }}</template>
+      <template #column-Standards="{ row }">
+        <YzhStatusBadge
+          v-for="c in splitCsv(row.Standards)"
+          :key="c"
+          type="info"
+          class="ap-tag"
+          :text="stdName(c)"
+        />
+      </template>
+      <template #column-CreateTime="{ row }">{{ fmtTime(row.CreateTime) }}</template>
+      <template #column-Status="{ row }">
+        <YzhStatusBadge v-if="row.Status === 'closed'" type="info" text="已关闭" />
+        <YzhStatusBadge
+          v-else
+          :type="row.IsValid === 1 ? 'success' : 'info'"
+          :text="row.IsValid === 1 ? '启用' : '停用'"
+        />
+      </template>
+    </YzhTable>
 
     <!-- 新建 / 调整向导 -->
-    <el-dialog v-model="wizardVisible" :title="wizardTitle" width="1000px" :close-on-click-modal="false" destroy-on-close>
+    <YzhDialog v-model="wizardVisible" :title="wizardTitle" width="1000px" :close-on-click-modal="false" destroy-on-close>
       <el-steps :active="step - 1" simple class="ap-steps">
         <el-step title="基本信息" />
         <el-step title="选择条款与部门" />
@@ -579,45 +634,43 @@ async function openView(row: any) {
         </div>
         <div class="ap-selected">
           <div class="ap-box-title">已选页面（可删除）</div>
-          <el-table :data="selections" border size="small">
-            <el-table-column label="部门" min-width="160">
-              <template #default="{ row }">
-                <template v-if="row.deptNames.length">
-                  <el-tag v-for="(n, i) in row.deptNames" :key="i" size="small" class="ap-tag">{{ n }}</el-tag>
-                </template>
-                <el-tag v-else type="info" size="small">（无部门）</el-tag>
+          <YzhTable
+            :columns="selectionColumns"
+            :data="selections"
+            :show-pagination="false"
+            :toolbar="false"
+            size="small"
+            :row-action-buttons="selectionRowActions"
+            empty-text="尚未加入任何选择组合"
+            @row-action="onSelectionAction"
+          >
+            <template #column-Depts="{ row }">
+              <template v-if="row.deptNames.length">
+                <YzhStatusBadge v-for="(n, i) in row.deptNames" :key="i" type="info" class="ap-tag" :text="n" />
               </template>
-            </el-table-column>
-            <el-table-column label="条款" min-width="260">
-              <template #default="{ row }">
-                <el-tag v-for="(n, i) in row.clauseNumbers" :key="i" size="small" class="ap-tag">{{ n }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="负责审核员" width="200">
-              <template #default="{ row }">
-                <el-select
-                  v-model="row.ownerCode"
-                  size="small"
-                  filterable
-                  clearable
-                  placeholder="未分配"
-                  @change="onOwnerChange(row as Selection)"
-                >
-                  <el-option
-                    v-for="m in members"
-                    :key="m.Code"
-                    :label="m.Name + (m.Title ? ' · ' + m.Title : '')"
-                    :value="m.Code"
-                  />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="80" align="center">
-              <template #default="{ $index }">
-                <el-button link type="danger" @click="selections.splice($index, 1)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+              <YzhStatusBadge v-else type="info" text="（无部门）" />
+            </template>
+            <template #column-Clauses="{ row }">
+              <YzhStatusBadge v-for="(n, i) in row.clauseNumbers" :key="i" type="info" class="ap-tag" :text="n" />
+            </template>
+            <template #column-Owner="{ row }">
+              <el-select
+                v-model="row.ownerCode"
+                size="small"
+                filterable
+                clearable
+                placeholder="未分配"
+                @change="onOwnerChange(row as Selection)"
+              >
+                <el-option
+                  v-for="m in members"
+                  :key="m.Code"
+                  :label="m.Name + (m.Title ? ' · ' + m.Title : '')"
+                  :value="m.Code"
+                />
+              </el-select>
+            </template>
+          </YzhTable>
           <div v-if="!selections.length" class="ap-hint">尚未加入任何选择组合</div>
         </div>
       </div>
@@ -632,39 +685,40 @@ async function openView(row: any) {
           <el-descriptions-item label="认证标准">{{ draft.standards.map(stdName).join('、') }}</el-descriptions-item>
         </el-descriptions>
         <div class="ap-box-title">计划明细（{{ selections.length }} 项）</div>
-        <el-table :data="selections" border size="small">
-          <el-table-column label="条款序号（标准简称 + 编号）" min-width="280">
-            <template #default="{ row }">
-              <el-tag v-for="(n, i) in row.clauseNumbers" :key="i" size="small" class="ap-tag">{{ n }}</el-tag>
+        <YzhTable
+          :columns="detailColumns"
+          :data="selections"
+          :show-pagination="false"
+          :toolbar="false"
+          size="small"
+          empty-text="暂无计划明细"
+        >
+          <template #column-Clauses="{ row }">
+            <YzhStatusBadge v-for="(n, i) in row.clauseNumbers" :key="i" type="info" class="ap-tag" :text="n" />
+          </template>
+          <template #column-Depts="{ row }">
+            <template v-if="row.deptNames.length">
+              <YzhStatusBadge v-for="(n, i) in row.deptNames" :key="i" type="info" class="ap-tag" :text="n" />
             </template>
-          </el-table-column>
-          <el-table-column label="部门名称" min-width="180">
-            <template #default="{ row }">
-              <template v-if="row.deptNames.length">
-                <el-tag v-for="(n, i) in row.deptNames" :key="i" size="small" class="ap-tag">{{ n }}</el-tag>
-              </template>
-              <el-tag v-else type="info" size="small">（无部门）</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="负责审核员" width="120">
-            <template #default="{ row }">
-              <el-tag v-if="row.ownerName" size="small" class="ap-tag">{{ row.ownerName }}</el-tag>
-              <el-tag v-else type="warning" size="small">未分配</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+            <YzhStatusBadge v-else type="info" text="（无部门）" />
+          </template>
+          <template #column-Owner="{ row }">
+            <YzhStatusBadge v-if="row.ownerName" type="info" class="ap-tag" :text="row.ownerName" />
+            <YzhStatusBadge v-else type="warning" text="未分配" />
+          </template>
+        </YzhTable>
       </div>
 
       <template #footer>
-        <el-button @click="wizardVisible = false">取消</el-button>
-        <el-button v-if="step > 1" @click="step--">上一步</el-button>
+        <el-button type="default" @click="wizardVisible = false">取消</el-button>
+        <el-button v-if="step !== 1" type="default" @click="step--">上一步</el-button>
         <el-button v-if="step < 3" type="primary" @click="next">下一步</el-button>
         <el-button v-if="step === 3" type="primary" :loading="saving" @click="savePlan">保存计划</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
 
     <!-- 查看详情 -->
-    <el-dialog v-model="viewVisible" :title="viewPlan?.Name || '计划详情'" width="900px">
+    <YzhDialog v-model="viewVisible" :title="viewPlan?.Name || '计划详情'" width="900px">
       <template v-if="viewPlan">
         <el-descriptions :column="2" border size="small" class="ap-desc">
           <el-descriptions-item label="企业">{{ entName(viewPlan.EnterpriseCode) }}</el-descriptions-item>
@@ -672,32 +726,33 @@ async function openView(row: any) {
           <el-descriptions-item label="认证标准" :span="2">{{ splitCsv(viewPlan.Standards).map(stdName).join('、') }}</el-descriptions-item>
         </el-descriptions>
         <div class="ap-box-title">计划明细（{{ viewDetails.length }} 项）</div>
-        <el-table :data="viewDetails" border size="small">
-          <el-table-column label="条款序号" min-width="280">
-            <template #default="{ row }">
-              <el-tag v-for="(n, i) in splitCsv(row.ClauseNumbers)" :key="i" size="small" class="ap-tag">{{ n }}</el-tag>
+        <YzhTable
+          :columns="viewColumns"
+          :data="viewDetails"
+          :show-pagination="false"
+          :toolbar="false"
+          size="small"
+          empty-text="暂无计划明细"
+        >
+          <template #column-Clauses="{ row }">
+            <YzhStatusBadge v-for="(n, i) in splitCsv(row.ClauseNumbers)" :key="i" type="info" class="ap-tag" :text="n" />
+          </template>
+          <template #column-Depts="{ row }">
+            <template v-if="splitCsv(row.DeptNames).length">
+              <YzhStatusBadge v-for="(n, i) in splitCsv(row.DeptNames)" :key="i" type="info" class="ap-tag" :text="n" />
             </template>
-          </el-table-column>
-          <el-table-column label="部门名称" min-width="180">
-            <template #default="{ row }">
-              <template v-if="splitCsv(row.DeptNames).length">
-                <el-tag v-for="(n, i) in splitCsv(row.DeptNames)" :key="i" size="small" class="ap-tag">{{ n }}</el-tag>
-              </template>
-              <el-tag v-else type="info" size="small">（无部门）</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="负责审核员" width="120">
-            <template #default="{ row }">
-              <el-tag v-if="row.OwnerName" size="small" class="ap-tag">{{ row.OwnerName }}</el-tag>
-              <el-tag v-else type="warning" size="small">未分配</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+            <YzhStatusBadge v-else type="info" text="（无部门）" />
+          </template>
+          <template #column-Owner="{ row }">
+            <YzhStatusBadge v-if="row.OwnerName" type="info" class="ap-tag" :text="row.OwnerName" />
+            <YzhStatusBadge v-else type="warning" text="未分配" />
+          </template>
+        </YzhTable>
       </template>
       <template #footer>
-        <el-button @click="viewVisible = false">关闭</el-button>
+        <el-button type="default" @click="viewVisible = false">关闭</el-button>
       </template>
-    </el-dialog>
+    </YzhDialog>
   </div>
 </template>
 

@@ -151,7 +151,7 @@
     {
       "FieldName": "ParentCode",
       "DesName": "上级菜单",
-      "Type": "Custom",
+      "Type": "CustomSlot",
       "Sxh": 9,
       "XsFlag": true,
       "BcFlag": true,

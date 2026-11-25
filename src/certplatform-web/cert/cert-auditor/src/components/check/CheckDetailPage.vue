@@ -429,12 +429,12 @@ async function doAutoAnalyze() {
       const esc = (s: string) => s
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       const list = failures
-        .map((f, i) => `<li style="margin-bottom:6px"><b>${i + 1}. ${esc(f.label)}</b><br/>${esc(f.reason)}</li>`)
+        .map((f, i) => `<li style="margin-bottom:var(--yzh-space-2, 8px)"><b>${i + 1}. ${esc(f.label)}</b><br/>${esc(f.reason)}</li>`)
         .join('')
       ElMessageBox.alert(
         `<div style="max-height:320px;overflow:auto;line-height:1.6">`
           + `<p>成功 ${ok} 项，失败 ${failures.length} 项。逐项失败原因：</p>`
-          + `<ol style="padding-left:18px;margin:0">${list}</ol></div>`,
+          + `<ol style="padding-left:var(--yzh-space-5, 20px);margin:0">${list}</ol></div>`,
         '自动分析结果',
         {
           dangerouslyUseHTMLString: true,
@@ -1645,8 +1645,8 @@ onMounted(loadAll)
               <el-table-column label="来源 / 标题" min-width="150" show-overflow-tooltip>
                 <template #default="{ row }">
                   <div class="cd-evi-name">{{ row.SourceName || '未命名来源' }}</div>
-                  <div>{{ row.SourceMatchStatus === 'section_candidate' ? '章节原文候选，相关性待核实' : row.SourceMatchStatus === 'matched' ? '已匹配转换文本' : row.SourceMatchStatus === 'ambiguous' ? '原文位置不唯一，待核实' : '未核验原文，待核实' }}</div>
-                  <div v-if="row.SourceAnchor">定位片段：{{ row.SourceAnchor }}</div>
+                  <div>{{ row.SourceMatchStatus === 'section_candidate' ? '章节原文' : row.SourceMatchStatus === 'matched' ? '原文定位' : row.SourceMatchStatus === 'ambiguous' ? '原文多处出现' : '摘自文档' }}</div>
+                  <div v-if="row.SourceAnchor">召回依据：{{ row.SourceAnchor === '语义召回' ? '语义召回（按条款释义匹配）' : row.SourceAnchor }}</div>
                 </template>
               </el-table-column>
               <el-table-column label="原文事实（概括）" min-width="280" show-overflow-tooltip>

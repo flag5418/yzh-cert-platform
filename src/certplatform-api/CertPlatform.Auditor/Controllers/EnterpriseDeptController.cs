@@ -20,7 +20,7 @@ namespace CertPlatform.Auditor.Controllers;
 ///
 /// <para><b>路由</b>：<c>api/Auditor/EnterpriseDept</c></para>
 /// <para><b>左树</b>：<c>cert_enterprise</c>（根，多企业并列）+ <c>cert_enterprise_dept</c>（子，不限层级）</para>
-/// <para><b>右表</b>：<c>cert_enterprise_dept_member</c>（选中部门后维护该部门人员）</para>
+/// <para><b>右表</b>：<c>cert_enterprise_dept</c>（选中节点后列出其「下级部门」，用于查看 / 完善部门职能）</para>
 ///
 /// <para><b>用途</b>：入场计划「准备阶段派沟通任务、计划阶段排日程、现场阶段定访谈对象」。</para>
 ///
@@ -31,11 +31,14 @@ namespace CertPlatform.Auditor.Controllers;
 ///   <item><b>禁止删除有子部门的部门</b>（基类 AllowDeleteWithChildren=false + 钩子）</item>
 ///   <item><b>部门名称同企业同层级唯一</b></item>
 /// </list>
+///
+/// <para>⚠️ 本页<b>不管理企业人员</b> —— 人员不出现在审核报告中（用户裁定）；
+/// <c>cert_enterprise_dept_member</c> 实体/表保留但不在此页使用。</para>
 /// </summary>
 [ApiController]
 [Route("api/Auditor/[controller]")]
 public class EnterpriseDeptController
-    : TreeTableControllerBase<CertEnterpriseDept, CertEnterpriseDeptMember>
+    : TreeTableControllerBase<CertEnterpriseDept, CertEnterpriseDept>
 {
     private readonly WorkspaceContextService _workspace;
     private readonly ICoreResourceQuery _coreResource;
@@ -52,7 +55,7 @@ public class EnterpriseDeptController
 
     public EnterpriseDeptController(
         EntityService<CertEnterpriseDept> treeEntityService,
-        EntityService<CertEnterpriseDeptMember> tableEntityService,
+        EntityService<CertEnterpriseDept> tableEntityService,
         IUserContext userContext,
         WorkspaceContextService workspace,
         ICoreResourceQuery coreResource,
@@ -67,7 +70,8 @@ public class EnterpriseDeptController
         TreeConfig.NameField = "DeptName";
         TreeConfig.CodeField = "Code";
         TreeConfig.ParentCodeField = "ParentCode";
-        TreeConfig.RelateField = "DeptCode";
+        // 右表 = 「下级部门」：关联字段 = 部门的 ParentCode（值 = 选中节点 Code）
+        TreeConfig.RelateField = "ParentCode";
         TreeConfig.EnableField = "IsValid";
         TreeConfig.Lazy = true;
         TreeConfig.AllowAddChild = true;
@@ -82,11 +86,7 @@ public class EnterpriseDeptController
         // 树节点表单（部门）
         TreeFormConfigName = "Expert/CertEnterpriseDept";
 
-        // 右表（人员）行操作
-        RegisterRowAction("disable", DisableMemberAsync);
-        RegisterRowAction("enable", EnableMemberAsync);
-
-        // 左树（部门）节点操作
+        // 左树（部门）节点操作：禁用 / 启用
         RegisterTreeAction("disable", DisableDeptAsync);
         RegisterTreeAction("enable", EnableDeptAsync);
     }
@@ -94,10 +94,10 @@ public class EnterpriseDeptController
     /// <summary>缺 EntityConfig 时直接抛错</summary>
     protected override bool StrictConfigLoad => true;
 
-    /// <summary>右表（部门人员）配置</summary>
+    /// <summary>右表（下级部门）配置 —— 与左树同源 <c>Expert/CertEnterpriseDept</c></summary>
     protected override EntityConfig LoadConfig()
     {
-        return EntityConfigHelper.GetConfig<CertEnterpriseDeptMember>();
+        return EntityConfigHelper.GetConfig<CertEnterpriseDept>();
     }
 
     // ========================================================
@@ -112,15 +112,48 @@ public class EnterpriseDeptController
         if (!ws.Success || ws.Data == null)
             throw new InvalidOperationException(ws.Error ?? "无法定位当前工作区");
 
-        // 防御：伪造 DeptCode 直连 /filter 时仍收敛在本工作区企业集合内
-        filters.RemoveAll(f => f.Field == "EnterpriseCode");
+        // 基类 TreeTableControllerBase.FilterCore 注入的关联条件（RelateField=ParentCode，值 = 选中节点 Code）
+        var nodeCode = filters.FirstOrDefault(f => f.Field == TreeConfig.RelateField)?.Value?.ToString();
+
+        // 去掉可能残留的同名字段，下面统一按「节点类型」重建
+        filters.RemoveAll(f => f.Field == "EnterpriseCode" || f.Field == TreeConfig.RelateField);
+
+        if (string.IsNullOrWhiteSpace(nodeCode))
+        {
+            // 理论上到不了这里（未选中 → 基类已按 NoSelectionBehavior=empty 短路）；保险起见收敛到工作区
+            filters.Add(new FilterItem
+            {
+                Field = "EnterpriseCode",
+                Operator = "in",
+                Value = WorkspaceEnterpriseCodes(ws.Data.Code),
+            });
+            return filters;
+        }
+
+        if (IsWorkspaceEnterprise(nodeCode, ws.Data.Code))
+        {
+            // ★ 选中「企业」节点 → 右表列该企业的「顶层部门」（ParentCode IS NULL）
+            filters.Add(new FilterItem { Field = "EnterpriseCode", Operator = "eq", Value = nodeCode });
+            filters.Add(new FilterItem { Field = "ParentCode", Operator = "isnull", Value = null });
+            return filters;
+        }
+
+        // ★ 选中「部门」节点 → 右表列该部门的「下级部门」（ParentCode = 节点 Code），并收敛在本工作区企业内
         filters.Add(new FilterItem
         {
             Field = "EnterpriseCode",
             Operator = "in",
             Value = WorkspaceEnterpriseCodes(ws.Data.Code),
         });
+        filters.Add(new FilterItem { Field = "ParentCode", Operator = "eq", Value = nodeCode });
         return filters;
+    }
+
+    /// <summary>节点 Code 是否为本工作区内的有效企业（同步 —— OnBuildingFilter 是同步钩子）</summary>
+    private bool IsWorkspaceEnterprise(string code, string workspaceCode)
+    {
+        return _db.Client.Queryable<Ent>()
+            .Any(p => p.Code == code && p.OrgCode == workspaceCode && p.IsValid == 1 && !p.IsDeleted);
     }
 
     /// <summary>本工作区有效企业 Code 集合（同步 —— OnBuildingFilter 是同步钩子）</summary>
@@ -298,6 +331,8 @@ public class EnterpriseDeptController
         dto.Extra["LeaderTitle"] = entity.LeaderTitle ?? string.Empty;
         dto.Extra["LeaderPhone"] = entity.LeaderPhone ?? string.Empty;
         dto.Extra["Remark"] = entity.Remark ?? string.Empty;
+        // ★ 部门职能：由手册「0.7 职责权限」自动同步，也可在表单里手工完善（B）
+        dto.Extra["DeptDuty"] = entity.DeptDuty ?? string.Empty;
         return dto;
     }
 
@@ -397,52 +432,32 @@ public class EnterpriseDeptController
     }
 
     // ========================================================
-    // 四、右表（人员）钩子
+    // 四、右表（下级部门）钩子
     // ========================================================
 
-    protected override async Task<(bool ok, string? msg)> OnBeforeAdd(CertEnterpriseDeptMember entity)
+    /// <summary>右表只开放「编辑」（改部门职能/负责人），新增走左树 —— 直连 /add 一律拒绝。</summary>
+    protected override Task<(bool ok, string? msg)> OnBeforeAdd(CertEnterpriseDept entity)
     {
-        if (string.IsNullOrWhiteSpace(entity.Name))
-            return (false, "姓名不能为空");
-
-        if (string.IsNullOrWhiteSpace(entity.DeptCode))
-            return (false, "请先选择部门");
-
-        if (entity.IsValid == 0) entity.IsValid = 1;
-
-        var dept = await TreeEntity.GetByCode(entity.DeptCode);
-        if (!dept.Success || dept.Data == null)
-            return (false, "所属部门不存在或已删除");
-
-        // 企业归属以库中部门为准（不信任前端传入）
-        entity.EnterpriseCode = dept.Data.EnterpriseCode;
-
-        var ws = _workspace.Resolve(UserContext.UserCode);
-        if (!ws.Success || ws.Data == null)
-            return (false, ws.Error ?? "无法定位当前工作区");
-
-        var owner = await _coreResource.GetEnterpriseByCodeAsync(entity.EnterpriseCode);
-        if (owner == null || owner.OrgCode != ws.Data.Code)
-            return (false, "该企业不属于当前工作区，无权操作");
-
-        return (true, null);
+        return Task.FromResult<(bool, string?)>(
+            (false, "新增部门请在左侧树上操作（选中上级节点后点『新增部门』）"));
     }
 
-    protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(CertEnterpriseDeptMember entity)
+    /// <summary>右表编辑：以库中记录为准补回表单未提交的 EnterpriseCode / ParentCode，并做同层同名校验。</summary>
+    protected override async Task<(bool ok, string? msg)> OnBeforeUpdate(CertEnterpriseDept entity)
     {
         if (string.IsNullOrWhiteSpace(entity.Code))
             return (false, "更新失败：缺少业务键 Code");
 
-        if (string.IsNullOrWhiteSpace(entity.Name))
-            return (false, "姓名不能为空");
+        if (string.IsNullOrWhiteSpace(entity.DeptName))
+            return (false, "部门名称不能为空");
 
         var existing = await Entity.GetByCodeAny(entity.Code);
         if (!existing.Success || existing.Data == null)
-            return (false, "人员不存在或已删除");
+            return (false, "部门不存在或已删除");
 
-        // 表单不含 DeptCode / EnterpriseCode，均以库中为准
-        entity.DeptCode = existing.Data.DeptCode;
+        // ★ 右表表单不含 EnterpriseCode / ParentCode；基类 Update 写全列，不回填会把这两列刷成 NULL
         entity.EnterpriseCode = existing.Data.EnterpriseCode;
+        entity.ParentCode = existing.Data.ParentCode;
 
         var ws = _workspace.Resolve(UserContext.UserCode);
         if (!ws.Success || ws.Data == null)
@@ -452,82 +467,28 @@ public class EnterpriseDeptController
         if (owner == null || owner.OrgCode != ws.Data.Code)
             return (false, "该企业不属于当前工作区，无权操作");
 
-        return (true, null);
-    }
-
-    protected override async Task<(bool ok, string? msg)> OnBeforeDelete(string[] codes)
-    {
-        if (codes == null || codes.Length == 0)
-            return (false, "未指定要删除的记录");
-
-        var ws = _workspace.Resolve(UserContext.UserCode);
-        if (!ws.Success || ws.Data == null)
-            return (false, ws.Error ?? "无法定位当前工作区");
-
-        foreach (var code in codes)
-        {
-            if (string.IsNullOrWhiteSpace(code)) continue;
-
-            var row = await Entity.GetByCodeAny(code);
-            if (!row.Success || row.Data == null)
-                return (false, "记录不存在或已删除");
-
-            var owner = await _coreResource.GetEnterpriseByCodeAsync(row.Data.EnterpriseCode);
-            if (owner == null || owner.OrgCode != ws.Data.Code)
-                return (false, "该企业不属于当前工作区，无权操作");
-        }
+        // 同级同企业部门名称唯一（排除自身）
+        var dup = await Entity.ExistsAsync(p =>
+            p.Code != entity.Code &&
+            p.EnterpriseCode == entity.EnterpriseCode &&
+            p.ParentCode == entity.ParentCode &&
+            p.DeptName == entity.DeptName &&
+            !p.IsDeleted);
+        if (dup.Data)
+            return (false, $"部门名称【{entity.DeptName}】在该层级下已存在");
 
         return (true, null);
     }
 
-    // ========================================================
-    // 五、行操作：人员 禁用 / 启用
-    // ========================================================
-
-    private async Task<Result<ApiResponse<object?>>> DisableMemberAsync(CertEnterpriseDeptMember entity)
+    /// <summary>右表不开放删除（避免绕过「有子部门不可删」规则）—— 删除走左树。</summary>
+    protected override Task<(bool ok, string? msg)> OnBeforeDelete(string[] codes)
     {
-        return await SetMemberValidAsync(entity.Code, 0);
-    }
-
-    private async Task<Result<ApiResponse<object?>>> EnableMemberAsync(CertEnterpriseDeptMember entity)
-    {
-        return await SetMemberValidAsync(entity.Code, 1);
-    }
-
-    private async Task<Result<ApiResponse<object?>>> SetMemberValidAsync(string? code, int isValid)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-            return Result<ApiResponse<object?>>.Fail("缺少业务键 Code");
-
-        var result = await Entity.GetByCodeAny(code);
-        if (!result.Success || result.Data == null)
-            return Result<ApiResponse<object?>>.Fail("记录不存在");
-
-        var target = result.Data;
-
-        var ws = _workspace.Resolve(UserContext.UserCode);
-        if (!ws.Success || ws.Data == null)
-            return Result<ApiResponse<object?>>.Fail(ws.Error ?? "无法定位当前工作区");
-
-        var owner = await _coreResource.GetEnterpriseByCodeAsync(target.EnterpriseCode);
-        if (owner == null || owner.OrgCode != ws.Data.Code)
-            return Result<ApiResponse<object?>>.Fail("该企业不属于当前工作区，无权操作");
-
-        if (target.IsValid == isValid)
-            return Result<ApiResponse<object?>>.Ok(
-                ApiResponse<object?>.Ok(isValid == 1 ? "该人员已是启用状态" : "该人员已是禁用状态"));
-
-        target.IsValid = isValid;
-        var upd = await Entity.Update(target, UserContext.ClientIp);
-        if (!upd.Success)
-            return Result<ApiResponse<object?>>.Fail(upd.Error);
-
-        return Result<ApiResponse<object?>>.Ok(
-            ApiResponse<object?>.Ok(isValid == 1 ? "已启用" : "已禁用"));
+        return Task.FromResult<(bool, string?)>(
+            (false, "删除部门请在左侧树上操作"));
     }
 
     // ========================================================
-    // 六、树操作：部门 禁用 / 启用
+    // 五、树操作：部门 禁用 / 启用
     // ========================================================
 
     private async Task<object?> DisableDeptAsync(CertEnterpriseDept entity)

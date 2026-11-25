@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using YZH.Core.Api.Attributes;
+using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Models;
 using YZH.Core.Stand.Models.Result;
@@ -23,9 +24,8 @@ namespace CertPlatform.Auditor.Controllers;
 /// 用 <see cref="EntityService{T}"/> 只读查询，无需跨端引用。</para>
 /// </summary>
 [ApiController]
-[YZHAuthorize]
 [Route("api/Auditor/[controller]")]
-public class CertQueryController : ControllerBase
+public class CertQueryController : WebControllerBase
 {
     private readonly EntityService<ISOStandard> _stdSvc;
     private readonly EntityService<ISOClause> _clauseSvc;

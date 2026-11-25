@@ -1,6 +1,6 @@
 using SqlSugar;
 
-namespace CertPlatform.Shared.Entities.Cert;
+namespace CertPlatform.Auditor.Entities.Cert;
 
 /// <summary>
 /// <b>只读投影</b>：<c>cert_prompt_template</c>（提示词统一表）的最小列集，给专家端读取用。
@@ -8,7 +8,7 @@ namespace CertPlatform.Shared.Entities.Cert;
 /// <para><b>★★ 为什么不复用 Admin 的 <c>PromptTemplate</c></b>：那是后台端独占实体
 /// （<c>CertPlatform.Admin/Entities/Cert/</c>），而 <c>Auditor ⛔ 引 Admin</c>。
 /// 专家端的「按标准提取条款」要读 <c>doc_clause_extract</c> 提示词正文，
-/// 只能靠本投影（策略与 <see cref="ClauseAttrRow"/> 一致：只读、列集最小、不写库）。</para>
+/// 只能靠本投影（策略与 <c>ClauseAttrRow</c> 一致：只读、列集最小、不写库）。</para>
 ///
 /// <para><b>★ 与 <c>wf_prompt_template</c> 的区别</b>：本表是 V2 条款主链的提示词唯一来源
 /// （<c>clause_attr_gen</c> / <c>doc_extract</c> / <c>doc_clause_extract</c>）；
@@ -17,6 +17,8 @@ namespace CertPlatform.Shared.Entities.Cert;
 /// <para><b>作用域解析</b>：本投影只取<b>平台级</b>行（<c>OrgCode IS NULL AND ScopeKey IS NULL</c>）
 /// —— 条款提取的判据是全平台统一的，按机构/标准分叉只会让同一份文档在不同机构出不同结果。
 /// 需要按标准覆盖时，改用 <c>ScopeKey = 标准短码</c> 的解析顺序（见 <c>DocExtractPromptService</c>）。</para>
+///
+/// <para><b>★ 归属</b>：仅 Auditor 端引用（Admin=0）⇒ 按 24 号 §一 下沉至 <c>CertPlatform.Auditor.Entities</c>（R17）。</para>
 /// </summary>
 [SugarTable("cert_prompt_template")]
 public class CertPromptTemplateRow

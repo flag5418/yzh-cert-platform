@@ -1,19 +1,21 @@
 using System;
 using System.Text.Json;
+using CertPlatform.Shared.DocExtraction;
 
 namespace CertPlatform.Auditor.Services.Ent
 {
     /// <summary>
     /// 文档画像 → 提取模式路由。
     ///
-    /// <para><b>唯一判据</b>：先读 <c>cert_enterprise_doc.DocProfileJson</c> 的 <c>ExtractionMode</c>；
-    /// 旧画像没有该字段时，退回 <c>DocType</c> 中文类型；再没有才按文件名兜底。</para>
+    /// <para><b>唯一判据</b>：<c>cert_enterprise_doc.DocProfileJson.ExtractionMode</c>
+    /// （V4 由结构指纹确定性产出，见 <c>DocFingerprintExtractor</c>）。
+    /// 画像里没有模式 ⇒ <see cref="Unclassified"/>（待人工确认）。</para>
     ///
-    /// <para>两处让位（都是「画像退化」而非「模型判断」）：① 文件名命中文件控制/作业指导/制度/因素清单
-    /// 时优先；② 画像给 <c>index_only</c>（最丢信息的兜底桶）而文件名能给出更具体模式时。</para>
+    /// <para>⛔ V4 起**不再**按 <c>DocType</c> 关键词或**文件名**兜底 —— 那是「猜」，
+    /// 与「专家花钱买严谨」相悖（见 <c>docs/80-v4/17-文档分类：结构指纹与角色定位-V1.md</c> 五）。</para>
     ///
-    /// <para>⛔ 本类只做路由，不判断文档是否与标准相关；相关性由画像字段
-    /// <c>StandardRelevance</c> / <c>ExtractionMode=none</c> 决定。</para>
+    /// <para>⛔ 本类只做路由，不判断文档是否与标准相关；相关性由
+    /// <c>ExtractionMode=none</c> 决定。</para>
     /// </summary>
     public static class EnterpriseDocExtractionRouter
     {
@@ -36,58 +38,42 @@ namespace CertPlatform.Auditor.Services.Ent
         public const string None = "none";
         public const string Legacy = "legacy";
 
+        /// <summary>★ V4：判不出类型（未命中任何结构指纹）⇒ 待人工确认；⛔ 不按文件名/关键词猜。</summary>
+        public const string Unclassified = "unclassified";
+
         /// <summary>新提示词已覆盖的模式（含手册章节模式；旧「手册逐条款」链已由 <see cref="ManualChapter"/> 取代）。</summary>
         public static bool IsModePrompt(string? mode)
             => mode is ManualChapter or ProcessProfile or RecordProfile or IndexOnly or DocumentControl
                 or WorkInstructionCitation or PolicyProfile or ContextList or AuditProfile;
 
-        public static bool IsSkip(string? mode) => mode == None;
+        /// <summary>是否跳过提取：<c>none</c>（无标准相关性）与 <c>unclassified</c>（待人工确认）都不跑模型。</summary>
+        public static bool IsSkip(string? mode) => mode == None || mode == Unclassified;
 
         public static string Resolve(string? docProfileJson, string? fileName)
         {
-            // ★ 文件控制/作业指导/制度/因素清单优先看文件名：旧画像常把“体系文件/文件索引”混在一起
-            var fromName = FromFileName(fileName);
-            if (fromName is DocumentControl or WorkInstructionCitation or PolicyProfile or ContextList)
-                return fromName;
+            // ⛔ V4：分类唯一判据 = 画像里的 ExtractionMode（由结构指纹确定性产出）。
+            //    fileName 仅为签名兼容保留 —— ⛔ 不再参与任何判断（文件名兜底已删除）。
+            _ = fileName;
 
-            var fromJson = ReadProfile(docProfileJson);
-            if (!string.IsNullOrWhiteSpace(fromJson.Mode))
-            {
-                var mode = NormalizeMode(fromJson.Mode!, fromJson.DocType);
+            var mode = ReadProfile(docProfileJson);
+            if (string.IsNullOrWhiteSpace(mode))
+                return Unclassified; // 旧画像无模式 ⇒ 待人工确认，⛔ 不猜
 
-                // ★ 弱模式让位：<c>index_only</c> 只是「知道是清单/目录、不知道装了什么」的兜底桶。
-                // 文件名能给出更具体模式时以文件名为准 —— 否则「合格供应商清单」这类
-                // 画像生成的旧 index_only 永远进不了记录画像（97 号 G1：IndexEntries 为空 ⇒ 供应商全丢）。
-                if (mode == IndexOnly && fromName != null && fromName != IndexOnly && fromName != None)
-                    return fromName;
-
-                return mode;
-            }
-
-            var fromDocType = FromDocType(fromJson.DocType);
-            if (!string.IsNullOrEmpty(fromDocType)) return fromDocType;
-
-            return fromName ?? None;
+            return NormalizeMode(mode);
         }
 
-        public static string PromptCodeForMode(string mode) => mode switch
-        {
-            ManualChapter => "doc_extract_manual_chapter",
-            ProcessProfile => "doc_extract_process_profile",
-            RecordProfile => "doc_extract_record_profile",
-            IndexOnly => "doc_extract_index",
-            DocumentControl => "doc_extract_document_control",
-            WorkInstructionCitation => "doc_extract_work_instruction_citation",
-            PolicyProfile => "doc_extract_policy_profile",
-            ContextList => "doc_extract_context_list",
-            AuditProfile => "doc_extract_audit",
-            _ => string.Empty,
-        };
+        /// <summary>
+        /// 模式 → 提示词 Code。★ 映射唯一事实源 = <see cref="DocExtractionPromptCatalog"/>
+        /// （Admin 页面下拉与运行时共用，避免漂移）。
+        /// </summary>
+        public static string PromptCodeForMode(string mode)
+            => DocExtractionPromptCatalog.PromptCodeForMode(mode);
 
         /// <summary>
-        /// 模式名归一：兼容新画像英文枚举、旧画像中文 `ExtractionMode`、以及直接取到的 `DocType`。
+        /// 模式名归一：兼容新画像英文枚举、旧画像中文 <c>ExtractionMode</c>。
+        /// <para>⛔ V4：无法归一 ⇒ <see cref="Unclassified"/>（待人工确认）；⛔ 不再按 DocType 关键词猜。</para>
         /// </summary>
-        public static string NormalizeMode(string mode, string? docType = null)
+        public static string NormalizeMode(string mode)
         {
             var m = (mode ?? string.Empty).Trim().ToLowerInvariant();
             switch (m)
@@ -142,116 +128,26 @@ namespace CertPlatform.Auditor.Services.Ent
                     return None;
                 case Legacy:
                     return Legacy;
+                case Unclassified:
+                    return Unclassified;
                 default:
-                    return FromDocType(docType) ?? FromDocType(mode) ?? Legacy;
+                    // ⛔ V4：模式字符串无法归一 ⇒ 待人工确认（⛔ 不按 DocType / 文件名兜底）。
+                    return Unclassified;
             }
         }
 
-        private static string? FromDocType(string? docType)
+        private static string? ReadProfile(string? json)
         {
-            var t = (docType ?? string.Empty).Trim();
-            if (t.Length == 0) return null;
-
-            // 新画像英文枚举
-            switch (t.ToLowerInvariant())
-            {
-                case "manual":
-                    return ManualChapter;
-                case "policy":
-                    return PolicyProfile;
-                case "procedure":
-                    return ProcessProfile;
-                case "work_instruction":
-                    return WorkInstructionCitation;
-                case "record":
-                case "form":
-                    return RecordProfile;
-                case "audit_record":
-                case "review_record":
-                    return AuditProfile;
-                case "index":
-                    return IndexOnly;
-                case "other":
-                    return Legacy;
-            }
-
-            // 旧画像中文类型（EnterpriseDocProfileBuilder.GuessDocType）
-            if (t.Contains("文件索引") || t.Contains("封面") || t.Contains("目录")
-                || t.Contains("汇编") || t.Contains("清单")) return IndexOnly;
-            if (t.Contains("审核") || t.Contains("评审")) return AuditProfile;
-            if (t.Contains("手册")) return ManualChapter;
-            if (t.Contains("方针") || t.Contains("目标")) return PolicyProfile;
-            if (t.Contains("作业指导") || t.Contains("操作规程") || t.Contains("指导书")) return WorkInstructionCitation;
-            if (t.Contains("制度") || t.Contains("规范") || t.Contains("管理办法")) return PolicyProfile;
-            if (t.Contains("程序")) return ProcessProfile;
-            if (t.Contains("记录") || t.Contains("表单") || t.Contains("台账")
-                || t.Contains("表格")) return RecordProfile;
-            return null;
-        }
-
-        private static string? FromFileName(string? fileName)
-        {
-            var fn = (fileName ?? string.Empty).Trim();
-            if (fn.Length == 0) return null;
-
-            // 与 QMS 无直接关系的制度：直接跳过，不耗一次 LLM
-            if (fn.Contains("财务") || fn.Contains("考勤") || fn.Contains("宿舍")
-                || fn.Contains("报销") || fn.Contains("薪资") || fn.Contains("工资"))
-                return None;
-
-            // ★ 合格供应商清单 / 供方名录：条目本身就是 8.4.1 的证据。
-            // 若落到 index_only，IndexEntries 为空 ⇒ 供应商名称/产品/承认日期/评审人全丢（97 号 G1）。
-            if ((fn.Contains("供应商") || fn.Contains("供方"))
-                && (fn.Contains("清单") || fn.Contains("名录")))
-                return RecordProfile;
-
-            // 文件控制类：封面/清单本身就是 7.5.3 证据，不能降级成普通索引
-            if (fn.Contains("程序文件汇编") || fn.Contains("三阶文件汇编")
-                || fn.Contains("受控文件清单") || fn.Contains("记录清单")
-                || fn.Contains("外来文件清单") || fn.Contains("文件发放")
-                || fn.Contains("文件回收") || fn.Contains("文件销毁")
-                || fn.Contains("文件记录销毁")) return DocumentControl;
-
-            // 组织环境/因素清单：支撑 4.1，不是 7.5.3 文件控制
-            if ((fn.Contains("外部因素") || fn.Contains("内部因素")) && fn.Contains("清单"))
-                return ContextList;
-            if (fn.Contains("相关方") && fn.Contains("清单")) return ContextList;
-
-            // 作业指导书/操作规程：报告只引用+关键步骤，不按过程链展开
-            if (fn.Contains("作业指示书") || fn.Contains("作业指导书")
-                || fn.Contains("操作规程") || fn.Contains("指导书")) return WorkInstructionCitation;
-
-            // 制度/规范/管理办法：报告只取摘要、责任和关键规则
-            if (fn.Contains("制度") || fn.Contains("规范") || fn.Contains("管理办法"))
-                return PolicyProfile;
-
-            if (fn.Contains("封面") || fn.Contains("目录") || fn.Contains("汇编")
-                || fn.Contains("清单")) return IndexOnly;
-            if (fn.Contains("程序")) return ProcessProfile;
-            if (fn.Contains("内审") || fn.Contains("管理评审")) return AuditProfile;
-            if (fn.Contains("手册")) return ManualChapter;
-            if (fn.Contains("方针") || fn.Contains("目标")) return PolicyProfile;
-            if (fn.Contains("作业指导") || fn.Contains("操作规程") || fn.Contains("指导书"))
-                return WorkInstructionCitation;
-            if (fn.Contains("职责") || fn.Contains("权限")) return PolicyProfile;
-            if (fn.Contains("记录") || fn.Contains("表单") || fn.Contains("台账")
-                || fn.Contains("表格")) return RecordProfile;
-            // 未知类型不再回退到逐条款链；逐条款只保留给手册。
-            return None;
-        }
-
-        private static (string? Mode, string? DocType) ReadProfile(string? json)
-        {
-            if (string.IsNullOrWhiteSpace(json)) return (null, null);
+            if (string.IsNullOrWhiteSpace(json)) return null;
             try
             {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
-                return (Str(root, "ExtractionMode"), Str(root, "DocType"));
+                return Str(root, "ExtractionMode");
             }
             catch (JsonException)
             {
-                return (null, null);
+                return null;
             }
         }
 

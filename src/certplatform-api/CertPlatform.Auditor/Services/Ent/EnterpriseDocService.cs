@@ -1563,6 +1563,19 @@ namespace CertPlatform.Auditor.Services.Ent
                 if (string.IsNullOrWhiteSpace(NodeString(obj, "ExtractionModeName")))
                     obj["ExtractionModeName"] = ModeDisplayName(extractionMode);
 
+                // ★ V4：类型名回写（⛔ 只补「待确认」——结构指纹的确定性结论优先，不覆盖）。
+                var existingDocType = NodeString(obj, "DocType");
+                if (string.IsNullOrWhiteSpace(existingDocType)
+                    || string.Equals(existingDocType, "待确认", StringComparison.Ordinal))
+                {
+                    var docType = FindStringProperty(modeOutput, "DocType");
+                    if (!string.IsNullOrWhiteSpace(docType))
+                    {
+                        obj["DocType"] = docType!.Trim();
+                        obj["ClassSource"] = "llm"; // 类型由提取模型补定，留痕来源
+                    }
+                }
+
                 doc.DocProfileJson = obj.ToJsonString(new JsonSerializerOptions
                 {
                     Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -1668,6 +1681,7 @@ namespace CertPlatform.Auditor.Services.Ent
             EnterpriseDocExtractionRouter.ManualChapter => "手册章节",
             EnterpriseDocExtractionRouter.ClauseFull => "逐条款",
             EnterpriseDocExtractionRouter.None => "不提取",
+            EnterpriseDocExtractionRouter.Unclassified => "待确认",
             _ => mode,
         };
 
@@ -3051,18 +3065,15 @@ namespace CertPlatform.Auditor.Services.Ent
             return n;
         }
 
+        /// <summary>
+        /// 列表过滤用的文档类型。★ V4：只认画像 <c>DocType</c>，⛔ 不再按文件名子串兜底（那是猜）。
+        /// 画像缺失/未定 ⇒ 「待确认」（详见 docs/80-v4/17-文档分类：结构指纹与角色定位-V1.md）。
+        /// </summary>
         private static string ResolveFilterDocType(string? docType, string? fileName)
         {
+            _ = fileName; // ⛔ V4 起不采信文件名
             var t = (docType ?? string.Empty).Trim();
-            if (!string.IsNullOrEmpty(t) && t != "体系文件") return t;
-
-            var fn = (fileName ?? string.Empty).Trim();
-            if (fn.Contains("作业指示书") || fn.Contains("作业指导书") || fn.Contains("操作规程")) return "作业指导书";
-            if (fn.Contains("制度") || fn.Contains("规范") || fn.Contains("管理办法")) return "制度规范";
-            if (fn.Contains("程序")) return "程序文件";
-            if (fn.Contains("手册")) return "质量手册";
-            if (fn.Contains("记录") || fn.Contains("表单") || fn.Contains("台账")) return "记录表单";
-            return t.Length > 0 ? t : "其他";
+            return string.IsNullOrEmpty(t) || t == "体系文件" ? "待确认" : t;
         }
 
         private sealed class DocProfileBrief
@@ -3090,9 +3101,8 @@ namespace CertPlatform.Auditor.Services.Ent
                 return new DocProfileBrief
                 {
                     DocType = docType,
-                    ExtractionMode = Str(root, "ExtractionModeName")
-                        ?? Str(root, "ExtractionMode")
-                        ?? DeriveExtractionMode(docType),
+                    // ★ V4：只读画像自身字段，⛔ 不再按 DocType 中文串推 mode（那是猜）。
+                    ExtractionMode = Str(root, "ExtractionModeName") ?? Str(root, "ExtractionMode"),
                     PrimaryChapter = Str(root, "PrimaryChapter"),
                     OwnerDept = Str(root, "OwnerDept"),
                     SupportDepts = StrArray(root, "SupportDepts"),
@@ -3123,17 +3133,7 @@ namespace CertPlatform.Auditor.Services.Ent
             return list;
         }
 
-        /// <summary>旧画像没有 ExtractionMode 时，按文档类型给一个展示口径（不写库）</summary>
-        private static string? DeriveExtractionMode(string? docType)
-        {
-            var t = docType ?? "";
-            if (t.Contains("文件索引") || t.Contains("封面") || t.Contains("清单") || t.Contains("汇编")) return "仅索引";
-            // ★ 审核/评审先于“记录”：`审核记录` 不能被当成普通记录画像
-            if (t.Contains("审核") || t.Contains("评审")) return "审核画像";
-            if (t.Contains("手册") || t.Contains("方针") || t.Contains("目标")) return "逐条款";
-            if (t.Contains("程序") || t.Contains("作业指导") || t.Contains("规范")) return "过程画像";
-            if (t.Contains("记录") || t.Contains("表单") || t.Contains("表格")) return "记录画像";
-            return null;
-        }
+        // ⛔ 已删除 DeriveExtractionMode（按 DocType 中文串推 mode）：V4 唯一判据 = 画像自带的
+        //    ExtractionMode / ExtractionModeName；缺失即「—」，⛔ 不猜（见 docs/80-v4/17-...）。
     }
 }

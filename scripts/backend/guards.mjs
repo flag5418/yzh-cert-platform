@@ -223,6 +223,9 @@ const IFORMFILE_EXEMPT = {
     'src/certplatform-api/CertPlatform.Auditor/Services/Ent/EnterpriseFileService.cs',
   'src/certplatform-api/CertPlatform.Auditor/Controllers/EnterpriseOriginalController.cs':
     'src/certplatform-api/CertPlatform.Auditor/Services/Ent/EnterpriseOriginalService.cs',
+  // 闸门在 Service 层（upload/init 逐文件 Check，upload/file 按已登记行校验）
+  'src/certplatform-api/CertPlatform.Auditor/Controllers/EnterpriseDocController.cs':
+    'src/certplatform-api/CertPlatform.Auditor/Services/Ent/EnterpriseDocService.cs',
   // 业务收窄：空白模板只认 docx/xlsx，闸门 = ResolveFileKind（收窄逻辑在本控制器内可验证）
   'src/certplatform-api/CertPlatform.Admin/Controllers/Workflow/DocTemplateController.cs': 'SELF:ResolveFileKind',
 }

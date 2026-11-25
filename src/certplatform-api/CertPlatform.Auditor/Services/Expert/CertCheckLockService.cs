@@ -180,7 +180,10 @@ public class CertCheckLockService
             row.UnlockedAt = null;
             row.UpdateBy = userCode;
             row.UpdateTime = now;
-            await _db.UpdateAsync(row);
+            await _db.UpdateAsync(row,
+                nameof(row.IsActive), nameof(row.LockedBy), nameof(row.LockedAt), nameof(row.LockReason),
+                nameof(row.LockSource), nameof(row.UnlockedBy), nameof(row.UnlockedAt),
+                nameof(row.UpdateBy), nameof(row.UpdateTime));
             return Result.Ok();
         }
 
@@ -231,7 +234,9 @@ public class CertCheckLockService
         row.UnlockedAt = DateTime.Now;
         row.UpdateBy = userCode;
         row.UpdateTime = DateTime.Now;
-        await _db.UpdateAsync(row);
+        await _db.UpdateAsync(row,
+            nameof(row.IsActive), nameof(row.UnlockedBy), nameof(row.UnlockedAt),
+            nameof(row.UpdateBy), nameof(row.UpdateTime));
 
         _logger.LogInformation("[CertCheckLock] 已解锁 item={Item} stage={Stage} by={User}",
             checkItemCode, stage, userCode);

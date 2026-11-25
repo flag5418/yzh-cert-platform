@@ -54,6 +54,10 @@ public static class FilterOperation
             "startswith" => new SqlCondition(filter.Field, "LIKE", $"{value}%"),
             "endswith" => new SqlCondition(filter.Field, "LIKE", $"%{value}"),
             "in" => new SqlCondition(filter.Field, "IN", value),
+            // ★ 空值判定：SqlSugarDbOrm.BuildConditionsSql 已支持 "IS NULL" / "IS NOT NULL"
+            //（"eq" + null 会生成 `col = NULL`，永不成立 —— 必须走本算子）
+            "isnull" or "is null" => new SqlCondition(filter.Field, "IS NULL", null),
+            "isnotnull" or "is not null" => new SqlCondition(filter.Field, "IS NOT NULL", null),
             _ => new SqlCondition(filter.Field, "=", value)
         };
     }

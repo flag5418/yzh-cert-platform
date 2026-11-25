@@ -228,7 +228,10 @@ public class CertNcService
         nc.Data.UpdateBy = userCode;
         nc.Data.UpdateTime = DateTime.Now;
 
-        await _db.UpdateAsync(nc.Data);
+        await _db.UpdateAsync(nc.Data,
+            nameof(nc.Data.Status), nameof(nc.Data.IssuedBy), nameof(nc.Data.IssuedAt), nameof(nc.Data.Origin),
+            nameof(nc.Data.ClosedBy), nameof(nc.Data.ClosedAt), nameof(nc.Data.CloseEvidenceJson),
+            nameof(nc.Data.Remark), nameof(nc.Data.UpdateBy), nameof(nc.Data.UpdateTime));
 
         return Result<CertNcResult>.Ok(new CertNcResult
         {

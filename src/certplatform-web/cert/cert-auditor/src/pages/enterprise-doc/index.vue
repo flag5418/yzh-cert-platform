@@ -58,13 +58,14 @@ import {
   formatDuration,
   formatSize,
   isFolderNode,
+  modeSections,
   planActionBadge,
   prettyJson,
   queueStatusBadge,
   standardExtractBadge,
   taskTypeText,
 } from './pure'
-import type { TreeRow } from './pure'
+import type { ModeSection, TreeRow } from './pure'
 import type { UploadPlanItem } from './useUpload'
 
 const logic = new EnterpriseDocLogic()
@@ -118,6 +119,11 @@ function openRawJson(tab: ExtractionTab): void {
   rawJsonTitle.value = `${extractionFile.value?.FileName || '提取结果'} / ${tab.standardName}`
   rawJsonText.value = prettyJson(tab.rawJson)
   rawJsonVisible.value = true
+}
+
+// ★ V4 章节级产物：章节骨架 + 概要（审核员先看结构，再看细节；详见 pure.ts modeSections）
+function tabSections(tab: ExtractionTab): ModeSection[] {
+  return modeSections(tab.modeOutput)
 }
 
 async function copyRawJson(): Promise<void> {
@@ -835,6 +841,15 @@ onBeforeUnmount(() => {
               :title="'本份文档按「' + (tab.content?.ExtractionMode || '模式') + '」提取，结果在 ModeOutput；下方为完整字段。'"
             />
 
+            <!-- ★ V4 章节级产物：章节骨架 + 概要（审核员先看结构，再看细节） -->
+            <div v-if="tabSections(tab).length > 0" class="ed-sections">
+              <div class="ed-sections-title">章节概要（{{ tabSections(tab).length }} 节）</div>
+              <div v-for="(sec, i) in tabSections(tab)" :key="i" class="ed-section">
+                <span class="ed-section-label">{{ sec.Label || '（无标题）' }}</span>
+                <span class="ed-section-summary">{{ sec.Summary || '（本节无正文）' }}</span>
+              </div>
+            </div>
+
             <pre v-if="tab.modeOutput" class="ed-mode-json">{{ prettyJson(tab.modeOutput) }}</pre>
 
             <YzhEmptyState
@@ -1345,6 +1360,46 @@ onBeforeUnmount(() => {
 
 .ed-mode-json {
   max-height: 46vh;
+}
+
+/* ★ V4 章节概要：章节名 + 概要 逐行（审核员先看结构） */
+.ed-sections {
+  margin-bottom: var(--yzh-space-2, 8px);
+  border: 1px solid var(--yzh-color-border-light, #f1f5f9);
+  border-radius: var(--yzh-radius-sm, 4px);
+  overflow: hidden;
+}
+
+.ed-sections-title {
+  padding: var(--yzh-space-2, 8px) var(--yzh-space-3, 12px);
+  background: var(--yzh-color-bg-subtle, #f9fafb);
+  font-size: var(--yzh-font-size-xs, 12px);
+  font-weight: 600;
+  color: var(--yzh-color-text-secondary, var(--el-text-color-regular));
+}
+
+.ed-section {
+  display: flex;
+  gap: var(--yzh-space-2, 8px);
+  padding: var(--yzh-space-1, 4px) var(--yzh-space-3, 12px);
+  font-size: var(--yzh-font-size-xs, 12px);
+  line-height: 1.6;
+}
+
+.ed-section-label {
+  flex: none;
+  max-width: 40%;
+  font-weight: 600;
+  color: var(--yzh-color-text-primary, var(--el-text-color-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-section-summary {
+  flex: 1;
+  color: var(--yzh-color-text-body, var(--el-text-color-regular));
+  word-break: break-word;
 }
 
 .ed-json {

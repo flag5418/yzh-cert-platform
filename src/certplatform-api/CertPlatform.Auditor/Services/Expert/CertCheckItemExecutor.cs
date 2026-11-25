@@ -184,7 +184,8 @@ public abstract class CertCheckItemExecutorBase : IYzhTaskExecutor
                     ? (newStatus == "cancelled" ? "任务已取消" : "执行失败")
                     : (message.Length > 500 ? message[..500] : message);
                 item.UpdateTime = DateTime.Now;
-                await db.UpdateAsync(item);
+                await db.UpdateAsync(item,
+                    nameof(item.Status), nameof(item.Message), nameof(item.UpdateTime));
             }
 
             await CertTaskAggregator.RefreshAsync(db, p.TaskCode, _logger);

@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Expert;
+using CertPlatform.Auditor.Entities.Cert;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Clauses;
-using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Services.Workflow;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
@@ -256,7 +257,8 @@ public class CertCheckEngineService
             item.Message = Truncate(result.Message, 500);
             item.UpdateBy = userCode;
             item.UpdateTime = DateTime.Now;
-            await _db.UpdateAsync(item);
+            await _db.UpdateAsync(item,
+                nameof(item.Status), nameof(item.Message), nameof(item.UpdateBy), nameof(item.UpdateTime));
 
             await LogAnalysisAsync(result);
             return Result<CertAnalysisResult>.Ok(result);
@@ -280,7 +282,7 @@ public class CertCheckEngineService
         var clauseRefs = ClauseRefs.Parse(detail?.ClauseRefsJson);
         var context = await _ctxBuilder.BuildAsync(
             planClauseCodes, task?.EnterpriseCode, activeEvidences,
-            clauseRefs.Count > 0 ? clauseRefs : null);
+            clauseRefs.Count > 0 ? clauseRefs : null, detail?.DeptNames);
 
         foreach (var w in context.Warnings)
             _logger.LogWarning("[CertCheck] 装配告警 item={Item} {Warn}", item.CheckItemCode, w);
@@ -352,7 +354,9 @@ public class CertCheckEngineService
             item.Message = Truncate($"LLM 调用失败：{failure}", 500);
             item.UpdateBy = userCode;
             item.UpdateTime = DateTime.Now;
-            await _db.UpdateAsync(item);
+            await _db.UpdateAsync(item,
+                nameof(item.AnalysisState), nameof(item.Status), nameof(item.Message),
+                nameof(item.UpdateBy), nameof(item.UpdateTime));
 
             // 失败也留一条分析行（否则"跑过但失败"在界面上完全看不见）
             await InsertFailedAnalysisAsync(userCode, item, task, stageKind, promptType,
@@ -386,6 +390,8 @@ public class CertCheckEngineService
         //   计划明细的 ClauseNumbers 是导入时的手填串，实测有 "m 1" 这类脏前缀。
         var clausePairs = context.Clauses.Select(c => (c.ClauseCode, (string?)c.ClauseNumber)).ToList();
         var now = DateTime.Now;
+        // ★ 2026-11-25 逐条款审核证据预清洗 + 归一：供「按逻辑条款合并」使用（跨标准同号 / 父子条款）。
+        var evidenceMap = BuildClauseEvidenceMap(conclusion);
 
         using var tran = _db.BeginTransaction();
         try
@@ -431,6 +437,8 @@ public class CertCheckEngineService
                     doc_hit_count = context.DocHitCount,
                     excerpt_count = context.ExcerptCount,
                     assembly_warnings = context.Warnings,
+                    // ★ 召回路径记账（改造4）：逐条款「RM 计划轴 + 来源份数」，供审核员核对「不遗漏、不虚增」
+                    recall_trace = context.RecallTrace,
                     prep_state = conclusion?.PrepState,
                     conclusion = conclusion?.Conclusion,
                     // 原始值 vs 落库值并存：排查「模型说 major_nc，库里却是 nc」时不用再猜
@@ -496,22 +504,23 @@ public class CertCheckEngineService
                     DoubtsJson = isPrep || clausePairs.Count != 1
                         ? null
                         : (conclusion != null && conclusion.Doubts.Count > 0
-                            ? JsonSerializer.Serialize(conclusion.Doubts)
+                            // ★ 2026-11-25 疑点同样过清洗（剥系统痕迹 + 英文字段中文化），但不剥「未标注/缺失」（疑点本就是写这个）
+                            ? JsonSerializer.Serialize(conclusion.Doubts.Select(d => new CertDoubtDto
+                            {
+                                Point = SanitizeDoubtText(d.Point),
+                                Detail = SanitizeDoubtText(d.Detail)
+                            }).ToList())
                             : null),
                     NcSuggested = isPrep ? null : aiConclusion == CertVerdictMapper.ConclusionNc,
                     ConclusionBy = null,
                     ConclusionAt = null,
 
-                    // 审核证据：优先用该条款的 clause_evidence；回退整体 audit_evidence；再回退 summary。
+                    // 审核证据：★ 2026-11-25 改为「按逻辑条款合并 + 写入前清洗」——
+                    //   ① 跨标准同条款号（3 体系的 4.1）/ 父子条款（4 与 4.1）合并为一段；
+                    //   ② 剥除置信度 / 召回标签 / 内部编号 / 元数据缺失注等「系统痕迹」；
+                    //   ③ 优先该条款证据 → 回退整体 audit_evidence → summary。
                     // ⛔ 审核发现（文档原文）不写在这里 —— 它是事实来源，不是审核员署名证据。
-                    Reason = clausePairs.Count == 1
-                        ? ResolveAuditEvidence(conclusion, clauseNumber)
-                        : context.Clauses.Count(c => ClauseRefs.NormalizeNumber(c.ClauseNumber)
-                              == ClauseRefs.NormalizeNumber(clauseNumber)) == 1
-                            ? conclusion.ClauseEvidences.FirstOrDefault(x =>
-                                ClauseRefs.NormalizeNumber(x.ClauseNumber)
-                                == ClauseRefs.NormalizeNumber(clauseNumber))?.AuditEvidence ?? ""
-                            : "",
+                    Reason = ResolveEvidenceForClause(conclusion, clauseNumber, clausePairs, evidenceMap),
                     RollupTo = true,
                     CreateBy = userCode,
                     CreateTime = now
@@ -535,7 +544,10 @@ public class CertCheckEngineService
             item.Message = null;
             item.UpdateBy = userCode;
             item.UpdateTime = now;
-            var itemUpdate = await _db.UpdateAsync(item);
+            var itemUpdate = await _db.UpdateAsync(item,
+                nameof(item.AnalysisState), nameof(item.Status), nameof(item.RerunState),
+                nameof(item.AnalyzeCount), nameof(item.LastAnalyzedAt), nameof(item.EvidenceCount),
+                nameof(item.Message), nameof(item.UpdateBy), nameof(item.UpdateTime));
             if (!itemUpdate.Success)
                 throw new InvalidOperationException(itemUpdate.Error ?? "更新任务状态失败");
 
@@ -910,24 +922,187 @@ public class CertCheckEngineService
         return list;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // 审核证据：写入前清洗 + 按逻辑条款合并（★ 2026-11-25）
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>模型写进证据正文的「置信度」（提示词已禁止，此处兜底剥除）。</summary>
+    private static readonly Regex EvidenceConfidenceRx =
+        new(@"[（(][^）)]{0,8}置信度[^）)]{0,12}[)）]", RegexOptions.Compiled);
+
+    /// <summary>元数据缺失括号注（如「（未标注版本与发布日期）」）—— 提示词要求直接省略，此处兜底剥除。</summary>
+    private static readonly Regex EvidenceMissingMetaRx =
+        new(@"[（(](?:未标注|未注明|未列明|无编号|无日期|无版本|缺失|未附|未提供|不详|未知|未填写|空白)[^）)]{0,24}[)）]", RegexOptions.Compiled);
+
+    /// <summary>内部发现编号引用（「见 F1」「参见 F4/A1」「(F4)」）。</summary>
+    private static readonly Regex EvidenceRefCodeRx =
+        new(@"(?:[（(]?\s*(?:见|参见|详见)\s*[FA]\d+(?:\s*[/、,和]\s*[FA]\d+)*\s*[)）]?)|(?:[（(]\s*[FA]\d+(?:\s*[/、,和]\s*[FA]\d+)*\s*[)）])", RegexOptions.Compiled);
+
+    /// <summary>系统/测试痕迹词（召回、语义召回、定位片段、章节候选、模型评分）—— 括号内出现即整体剥除。</summary>
+    private static readonly Regex EvidenceTestTermRx =
+        new(@"[（(][^）)]{0,12}(?:语义召回|召回|定位片段|章节候选|模型评分|测试语义)[^）)]{0,12}[)）]", RegexOptions.Compiled);
+
     /// <summary>
-    /// 取该条款的审核证据：clause_evidence → audit_evidence → summary。
-    /// <para>条款号按业务键归一（去掉 e/m 前缀），避免模型输出 <c>e 4.1</c> 匹配不上。</para>
+    /// 「查无此物」类否定词（提示词要求只写 doubts，不写进证据正文）。
+    /// ⛔ 表外一律不误伤中性事实（如「未定义具体门牌号」不在表内，原样保留）。
     /// </summary>
-    private static string ResolveAuditEvidence(CertCheckConclusionDto? conclusion, string? clauseNumber)
+    private static readonly string[] EvidenceAbsenceVerbs =
     {
-        if (conclusion == null) return "";
+        "未提供", "未发现", "未附", "未见", "未开展", "未实施", "未执行", "未能提供",
+        "缺乏", "无法证实", "无法证明", "无法确认", "不足以", "均未", "尚未",
+        "未建立", "未形成", "未保留",
+        // ★ P4：补「元数据缺失」类否定（原只有括号注 EvidenceMissingMetaRx 覆盖，句级否定剥离漏掉）
+        "未标注", "未注明", "未列明", "无编号", "无版本", "无日期"
+    };
 
-        var no = ClauseRefs.NormalizeNumber(clauseNumber);
-        var hit = conclusion.ClauseEvidences
-            .FirstOrDefault(x => ClauseRefs.NormalizeNumber(x.ClauseNumber) == no
-                                 && !string.IsNullOrWhiteSpace(x.AuditEvidence));
-        if (hit != null) return hit.AuditEvidence.Trim();
+    private static readonly Regex SentenceDelimRx = new(@"([。；;])", RegexOptions.Compiled);
 
-        if (!string.IsNullOrWhiteSpace(conclusion.AuditEvidence))
-            return conclusion.AuditEvidence.Trim();
+    /// <summary>内部锚点括号注（如「（DocSection：4.1）」「（Section 5.2）」）—— 系统投影痕迹，剥除。</summary>
+    private static readonly Regex EvidenceInternalAnchorRx =
+        new(@"[（(]\s*(?:DocSection|Section|Anchor|片段|锚点)\s*[:：]?\s*[^）)]{0,24}[)）]", RegexOptions.Compiled);
 
-        return conclusion.Summary ?? "";
+    /// <summary>常见英文字段名 → 中文（提示词要求完全中文化，此处兜底）。</summary>
+    private static readonly (Regex Rx, string Repl)[] EvidenceEnFields =
+    {
+        (new Regex(@"\bOwner\b", RegexOptions.Compiled), "责任人"),
+        (new Regex(@"\bImpact\b", RegexOptions.Compiled), "影响"),
+        (new Regex(@"\bMonitor\b", RegexOptions.Compiled), "监视"),
+        (new Regex(@"\bReview\b", RegexOptions.Compiled), "评审"),
+        (new Regex(@"\bFrequency\b", RegexOptions.Compiled), "频次"),
+    };
+
+    /// <summary>
+    /// 审核证据写入前清洗：剥除「系统痕迹」（置信度 / 召回标签 / 内部编号 / 元数据缺失注），
+    /// 保证落库正文是审核员可直接使用的结论。
+    /// <para>⚠️ 只剥「查无此物 / 系统内部」类痕迹，<b>不动中性事实</b>（如「厂房为老厂房，未定义具体门牌号」）。</para>
+    /// </summary>
+    public static string SanitizeEvidence(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        var text = raw;
+        text = EvidenceConfidenceRx.Replace(text, string.Empty);
+        text = EvidenceMissingMetaRx.Replace(text, string.Empty);
+        text = EvidenceTestTermRx.Replace(text, string.Empty);
+        text = EvidenceRefCodeRx.Replace(text, string.Empty);
+        text = EvidenceInternalAnchorRx.Replace(text, string.Empty);
+        text = ApplyEnFields(text);
+        text = RemoveAbsenceSentences(text);
+        return Cleanup(text);
+    }
+
+    /// <summary>疑点文本清洗：剥系统痕迹 + 中文化英文字段名；⛔ 保留「未标注/缺失」类表述（疑点本就是写这个）。</summary>
+    public static string SanitizeDoubtText(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        var text = raw;
+        text = EvidenceConfidenceRx.Replace(text, string.Empty);
+        text = EvidenceTestTermRx.Replace(text, string.Empty);
+        text = EvidenceInternalAnchorRx.Replace(text, string.Empty);
+        text = ApplyEnFields(text);
+        return Cleanup(text);
+    }
+
+    private static string ApplyEnFields(string text)
+    {
+        foreach (var (rx, repl) in EvidenceEnFields)
+            text = rx.Replace(text, repl);
+        return text;
+    }
+
+    /// <summary>清理因剥除产生的空括号 / 多余空白 / 连续标点。</summary>
+    private static string Cleanup(string text)
+    {
+        text = Regex.Replace(text, @"[（(]\s*[)）]", string.Empty);
+        text = Regex.Replace(text, @"[ \t]{2,}", " ");
+        text = Regex.Replace(text, @"[，、；]{2,}", "，");
+        text = Regex.Replace(text, @"[ \t]+([，。；、）)])", "$1");
+        text = Regex.Replace(text, @"([（(])[ \t]+", "$1");
+        return text.Trim();
+    }
+
+    /// <summary>
+    /// 按句剥离「查无此物」类否定句（提示词要求这类信息只写进 doubts，⛔ 不进证据正文）。
+    /// <para>以「。；;」分句，句中出现 <see cref="EvidenceAbsenceVerbs"/> 任一动词 ⇒ 整句丢弃；
+    /// 表外表述（如中性事实「未定义具体门牌号」）原样保留。</para>
+    /// </summary>
+    private static string RemoveAbsenceSentences(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text;
+        // 捕获组 ⇒ Split 结果含分隔符，形如 [句0, 符0, 句1, 符1, ..., 尾句]
+        var parts = SentenceDelimRx.Split(text);
+        var sb = new StringBuilder(text.Length);
+        for (var i = 0; i < parts.Length; i += 2)
+        {
+            var sentence = parts[i];
+            var delim = i + 1 < parts.Length ? parts[i + 1] : string.Empty;
+            if (ContainsAbsenceVerb(sentence)) continue;
+            sb.Append(sentence).Append(delim);
+        }
+        return sb.ToString();
+    }
+
+    private static bool ContainsAbsenceVerb(string sentence)
+    {
+        if (sentence.Length == 0) return false;
+        foreach (var v in EvidenceAbsenceVerbs)
+            if (sentence.Contains(v, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
+    /// <summary>归一化条款号 → 该条款证据（同名多条取最长的一段），值已清洗。</summary>
+    private static Dictionary<string, string> BuildClauseEvidenceMap(CertCheckConclusionDto? conclusion)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (conclusion == null) return map;
+        foreach (var ce in conclusion.ClauseEvidences)
+        {
+            var key = ClauseRefs.NormalizeNumber(ce.ClauseNumber);
+            if (key.Length == 0) continue;
+            var clean = SanitizeEvidence(ce.AuditEvidence);
+            if (clean.Length == 0) continue;
+            if (!map.TryGetValue(key, out var old) || clean.Length > old.Length)
+                map[key] = clean;
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// 取某结果行的审核证据（★ 2026-11-25 合并口径）：
+    /// <list type="number">
+    /// <item>把本条款号归入「同族条款」——父子条款（4 / 4.1）互为前缀 + <c>.</c>；跨标准同号（3 体系的 4.1）归一化后同键；</item>
+    /// <item>按「最细条款号优先」取合并后的证据；</item>
+    /// <item>同族都无证据时，回退整体 <c>audit_evidence</c> → <c>summary</c>。</item>
+    /// </list>
+    /// </summary>
+    private static string ResolveEvidenceForClause(
+        CertCheckConclusionDto? conclusion,
+        string? clauseNumber,
+        List<(string ClauseCode, string? ClauseNumber)> clausePairs,
+        Dictionary<string, string> evidenceMap)
+    {
+        if (conclusion == null) return string.Empty;
+        var norm = ClauseRefs.NormalizeNumber(clauseNumber);
+
+        // ① 同族候选（含自身），按条款号长度降序 = 最细优先
+        var candidates = new List<string>();
+        if (norm.Length > 0) candidates.Add(norm);
+        foreach (var (_, n) in clausePairs)
+        {
+            var m = ClauseRefs.NormalizeNumber(n);
+            if (m.Length == 0 || m == norm) continue;
+            if (m.StartsWith(norm + ".", StringComparison.Ordinal)
+                || norm.StartsWith(m + ".", StringComparison.Ordinal))
+                candidates.Add(m);
+        }
+        foreach (var key in candidates.OrderByDescending(x => x.Length))
+            if (evidenceMap.TryGetValue(key, out var merged) && merged.Length > 0)
+                return merged;
+
+        // ② 回退整体证据 / 概括
+        var fallback = !string.IsNullOrWhiteSpace(conclusion.AuditEvidence)
+            ? conclusion.AuditEvidence
+            : conclusion.Summary ?? string.Empty;
+        return SanitizeEvidence(fallback);
     }
 
     /// <summary>
@@ -1046,7 +1221,7 @@ public class CertCheckEngineService
 
         var context = await _ctxBuilder.BuildAsync(
             clauseCodes, plan.EnterpriseCode, new List<CertEvidence>(),
-            detailRefs.Count > 0 ? detailRefs : null);
+            detailRefs.Count > 0 ? detailRefs : null, detail.DeptNames);
         if (context.Clauses.Count == 0)
             return Result<List<CertOnsitePlanItem>>.Fail(
                 $"条款无法完整装配，请重新选择或修复条款：{string.Join("；", context.Warnings)}");
@@ -1300,7 +1475,8 @@ public class CertCheckEngineService
             old.IsCurrent = null;               // ⛔ 不要写 0
             old.UpdateBy = userCode;
             old.UpdateTime = DateTime.Now;
-            var updated = await _db.UpdateAsync(old);
+            var updated = await _db.UpdateAsync(old,
+                nameof(old.IsCurrent), nameof(old.UpdateBy), nameof(old.UpdateTime));
             if (!updated.Success) throw new InvalidOperationException(updated.Error ?? "更新历史分析失败");
         }
 

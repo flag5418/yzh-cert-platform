@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using YZH.Core.Api.Controllers;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Interfaces;
 using YZH.Core.Stand.Models.Result;
@@ -18,7 +19,7 @@ namespace CertPlatform.Auditor.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/Auditor/[controller]")]
-public class CertTaskController : ControllerBase
+public class CertTaskController : WebControllerBase
 {
     private readonly CertTaskService _taskSvc;
     private readonly CertCheckEngineService _engineSvc;

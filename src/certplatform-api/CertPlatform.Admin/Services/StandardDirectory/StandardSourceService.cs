@@ -13,6 +13,7 @@ using YZH.Core.Stand.Interfaces;
 using CertPlatform.Admin.Entities.Cert;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Clauses;
+using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.Storage;
 using CertPlatform.Shared.Services.DocExtraction;
@@ -32,6 +33,7 @@ namespace CertPlatform.Admin.Services.StandardDirectory;
 public class StandardSourceService
 {
     private readonly IDbOrm _db;
+    private readonly ICoreResourceQuery _core;
     private readonly IObjectStorage _storage;
     private readonly IFileConvertCore _convert;
     private readonly LlmInvokeService _llm;
@@ -51,12 +53,14 @@ public class StandardSourceService
 
     public StandardSourceService(
         IDbOrm db,
+        ICoreResourceQuery core,
         IObjectStorage storage,
         IFileConvertCore convert,
         LlmInvokeService llm,
         ILogger<StandardSourceService> logger)
     {
         _db = db;
+        _core = core;
         _storage = storage;
         _convert = convert;
         _llm = llm;
@@ -214,14 +218,10 @@ public class StandardSourceService
     /// <summary>手工新增条款时统一生成并检查稳定标识。</summary>
     public async Task<(bool ok, string? message)> PrepareManualClauseAsync(ISOClause clause)
     {
-        var standard = await _db.Client.Queryable<ISOStandard>()
-            .Where(s => s.Code == clause.StandardCode && !s.IsDeleted && s.IsValid == 1)
-            .FirstAsync();
+        var standard = await _core.GetStandardByCodeAsync(clause.StandardCode);
         if (standard == null) return (false, "所属标准不存在或已停用");
 
-        var existing = await _db.Client.Queryable<ISOClause>()
-            .Where(c => c.StandardCode == standard.Code && !c.IsDeleted)
-            .ToListAsync();
+        var existing = await _core.GetClausesIncludeDisabledAsync(standard.Code);
         try
         {
             if (existing.Any(c => !string.Equals(c.Code,
@@ -237,9 +237,7 @@ public class StandardSourceService
             return (false, $"条款标识无效：{ex.Message}");
         }
 
-        var conflict = await _db.Client.Queryable<ISOClause>()
-            .Where(c => c.Code == clause.Code)
-            .FirstAsync();
+        var conflict = await _core.FindClauseRawByCodeAsync(clause.Code);
         return conflict == null
             ? (true, null)
             : (false, "相同稳定 Code 的条款已存在或曾被删除，请通过标准原文同步恢复");
@@ -248,17 +246,13 @@ public class StandardSourceService
     /// <summary>更新条款时禁止修改构成稳定标识的标准和编号。</summary>
     public async Task<(bool ok, string? message)> ValidateManualClauseUpdateAsync(ISOClause clause)
     {
-        var current = await _db.Client.Queryable<ISOClause>()
-            .Where(c => c.Code == clause.Code && !c.IsDeleted)
-            .FirstAsync();
+        var current = await _core.GetClauseIncludeDisabledByCodeAsync(clause.Code);
         if (current == null) return (false, "条款不存在");
         if (current.StandardCode != clause.StandardCode
             || !string.Equals(current.ClauseNumber.Trim(), clause.ClauseNumber?.Trim(), StringComparison.OrdinalIgnoreCase))
             return (false, "条款的所属标准和编号不能直接修改，请新建正确条款");
 
-        var standard = await _db.Client.Queryable<ISOStandard>()
-            .Where(s => s.Code == current.StandardCode && !s.IsDeleted)
-            .FirstAsync();
+        var standard = await _core.GetStandardIncludeDisabledByCodeAsync(current.StandardCode);
         if (standard == null) return (false, "所属标准不存在");
         try
         {
@@ -286,17 +280,13 @@ public class StandardSourceService
     /// <summary>有条款的标准不得直接变更稳定标识所依赖的短码和版本。</summary>
     public async Task<(bool ok, string? message)> ValidateStandardIdentityUpdateAsync(ISOStandard standard)
     {
-        var current = await _db.Client.Queryable<ISOStandard>()
-            .Where(s => s.Code == standard.Code && !s.IsDeleted)
-            .FirstAsync();
+        var current = await _core.GetStandardIncludeDisabledByCodeAsync(standard.Code);
         if (current == null) return (false, "标准不存在");
         if (string.Equals(current.StandardCode?.Trim(), standard.StandardCode?.Trim(), StringComparison.OrdinalIgnoreCase)
             && current.VersionYear == standard.VersionYear)
             return (true, null);
 
-        var hasClauses = await _db.Client.Queryable<ISOClause>()
-            .Where(c => c.StandardCode == current.Code)
-            .AnyAsync();
+        var hasClauses = (await _core.GetClausesRawAsync(current.Code!)).Count > 0;
         return hasClauses
             ? (false, "标准已有条款，不能直接修改标准编号或版本年份")
             : (true, null);
@@ -329,9 +319,7 @@ public class StandardSourceService
             return StandardClauseApplyResult.Fail($"条款标识生成失败：{ex.Message}");
         }
 
-        var existing = await _db.Client.Queryable<ISOClause>()
-            .Where(c => c.StandardCode == std.Code)
-            .ToListAsync();
+        var existing = await _core.GetClausesRawAsync(std.Code!);
         try
         {
             if (existing.Where(c => !c.IsDeleted).Any(c =>
@@ -349,9 +337,7 @@ public class StandardSourceService
         var identityCodes = plannedCodes
             .Concat(existing.Where(c => !c.IsDeleted).Select(c => c.Code!))
             .Distinct(StringComparer.Ordinal).ToList();
-        var conflicts = await _db.Client.Queryable<ISOClause>()
-            .Where(c => identityCodes.Contains(c.Code!))
-            .ToListAsync();
+        var conflicts = await _core.GetClausesRawByCodesAsync(identityCodes);
         if (conflicts.Any(c => c.StandardCode != std.Code)
             || conflicts.GroupBy(c => c.Code, StringComparer.Ordinal).Any(g => g.Count() > 1))
             return StandardClauseApplyResult.Fail("稳定条款 Code 存在重复或跨标准冲突，请先处理无效数据");
@@ -543,10 +529,7 @@ public class StandardSourceService
     /// </summary>
     private async Task<(string Path, int Chars, int Count)> WriteClauseMarkdownAsync(ISOStandard std)
     {
-        var clauses = await _db.Client.Queryable<ISOClause>()
-            .Where(c => c.StandardCode == std.Code && !c.IsDeleted && c.IsValid == 1)
-            .OrderBy(c => c.Sort)
-            .ToListAsync();
+        var clauses = await _core.GetClausesAsync(std.Code!);
 
         if (clauses == null || clauses.Count == 0)
             throw new InvalidOperationException("该标准还没有有效条款，无法生成条款 Markdown");
@@ -924,23 +907,12 @@ public class StandardSourceService
     // 基础设施
     // ════════════════════════════════════════════════════════════════════
 
-    private async Task<ISOStandard?> ResolveStandardAsync(string key)
-    {
-        var k = (key ?? "").Trim();
-        if (k.Length == 0) return null;
-        var list = await _db.Client.Ado.SqlQueryAsync<ISOStandard>(
-            "SELECT * FROM cert_iso_standard WHERE (StandardCode = @k OR Code = @k) AND IsDeleted = 0 AND IsValid = 1 LIMIT 1",
-            new { k });
-        return list?.FirstOrDefault();
-    }
+    // ★ A-R6：标准短码 / Code 双键解析——唯一入口 = CoreResourceQuery
+    private Task<ISOStandard?> ResolveStandardAsync(string key) => _core.ResolveStandardAsync(key);
 
+    // ★ A-R6：含已停用（IsValid==0）、仅排软删的条款计数
     private async Task<int> CountExistingAsync(string stdGuid)
-    {
-        var list = await _db.Client.Queryable<ISOClause>()
-            .Where(c => c.StandardCode == stdGuid && !c.IsDeleted)
-            .ToListAsync();
-        return list.Count;
-    }
+        => (await _core.GetClausesIncludeDisabledAsync(stdGuid)).Count;
 
     private async Task<string> ReadMarkdownAsync(string markdownPath)
     {

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Admin.Services.StandardDirectory;
+using CertPlatform.Shared.Storage;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
@@ -150,6 +151,12 @@ public class ISOStandardController : YzhControllerBase<ISOStandard>
         if (string.IsNullOrWhiteSpace(req.StandardCode))
             return Ok(ApiResponse.Fail("缺少标准编码"));
 
+        // ★ 上传契约闸门（唯一事实源 UploadFilePolicy）——前端 accept 可绕过，此处硬拦
+        var fileName = string.IsNullOrWhiteSpace(req.File.FileName) ? "standard.pdf" : req.File.FileName;
+        var verdict = UploadFilePolicy.Check(fileName);
+        if (!verdict.Ok)
+            return Ok(ApiResponse.Fail(verdict.Message));
+
         byte[] bytes;
         using (var ms = new MemoryStream())
         {
@@ -157,7 +164,7 @@ public class ISOStandardController : YzhControllerBase<ISOStandard>
             bytes = ms.ToArray();
         }
 
-        var r = await _source.UploadAsync(req.StandardCode, string.IsNullOrWhiteSpace(req.File.FileName) ? "standard.pdf" : req.File.FileName, bytes);
+        var r = await _source.UploadAsync(req.StandardCode, fileName, bytes);
         return r.Success
             ? Ok(ApiResponse<object>.Ok(r.Data, r.Message))
             : Ok(ApiResponse.Fail(r.Message));

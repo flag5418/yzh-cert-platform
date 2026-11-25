@@ -62,18 +62,41 @@ public static class EnterpriseDocProfileBuilder
     public static string Build(
         string markdown, string fileName, string relFolderPath, string sha256, int versionNumber)
     {
+        // ⚠️ fileName / relFolderPath 保留仅为签名兼容：V4 起分类**不采信文件名/目录**，
+        //    唯一判据 = 结构指纹（判不出 ⇒ unclassified 待人工确认，⛔ 不猜、⛔ 不兜底）。
+        _ = fileName;
+        _ = relFolderPath;
+
         var text = markdown ?? string.Empty;
         var headings = ParseHeadings(text);
-        var docType = GuessDocType(fileName, relFolderPath);
         var intro = BuildIntro(text, headings);
         var purpose = ExtractSectionText(text, headings, "目的");
         var scope = ExtractSectionText(text, headings, "适用范围") ?? ExtractSectionText(text, headings, "范围");
 
         var toc = BuildToc(text, headings);
+        // ★ 表格型文档兜底（2026-11-25）：内审检查表 / 巡检表 / 检验记录正文全是表格、无任何 # 标题
+        //   ⇒ Toc 恒空 ⇒ DocSectionsBuilder 直接返回 ⇒ 章节概要恒空。无标题但有表格时，
+        //   按「内容列」数据行生成伪小节（Level=2），让这类文档也能产出「章节概要」。
+        if (toc.Count == 0)
+            toc = BuildTableToc(text);
+
+        // ★ V4「结构指纹 + 角色定位」：从原文提客观结构证据（零模型成本），据指纹定 DocType/ExtractionMode。
+        //   详情见 docs/80-v4/17-文档分类：结构指纹与角色定位-V1.md。
+        var docHeadings = toc
+            .Select(t => new DocHeading(t.Title, t.Level, t.HasContent))
+            .ToList();
+        var fingerprints = DocFingerprintExtractor.Extract(text, docHeadings);
+        var cls = DocFingerprintExtractor.Classify(fingerprints);
 
         var profile = new DocProfile
         {
-            DocType = docType,
+            DocType = cls.DocTypeName,
+            DocTypeCode = cls.DocType,
+            ExtractionMode = cls.Mode,
+            ExtractionModeName = DocFingerprintExtractor.ModeName(cls.Mode),
+            ClassSource = "fingerprint",
+            ClassConfidence = cls.Confidence,
+            ClassReason = cls.Reason,
             Intro = intro,
             Purpose = purpose,
             Scope = scope,
@@ -81,6 +104,9 @@ public static class EnterpriseDocProfileBuilder
             SourceSha256 = sha256 ?? string.Empty,
             VersionNumber = versionNumber,
             GeneratedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+            Fingerprints = fingerprints
+                .Select(f => new FingerprintItem { Key = f.Key, Weight = f.Weight, Evidence = f.Evidence })
+                .ToList(),
             Toc = toc,
         };
 
@@ -218,6 +244,105 @@ public static class EnterpriseDocProfileBuilder
         return toc;
     }
 
+    /// <summary>
+    /// ★ 表格型文档兜底目录（2026-11-25）：无 Markdown 标题但有表格时，按「内容列」数据行生成伪小节。
+    /// <para>为什么需要：内审检查表 / 制程巡检表 / 检验记录正文全是表格，没有 <c>#</c> 标题 ⇒ <c>Toc</c> 恒空
+    /// ⇒ 章节概要恒空。此兜底让这类文档也能产出「章节概要」。</para>
+    /// <para>口径：<b>按行保留</b>（一行 = 一个小节），标题取内容列单元格原文，供提取器逐字对齐；
+    /// 行内实测值 / 判定 / 操作员 / 审核等仍由提取提示词按 <c>Rows</c> 逐行保留。</para>
+    /// </summary>
+    private static List<TocItem> BuildTableToc(string text)
+    {
+        const int maxTableSections = 40;
+        var toc = new List<TocItem>();
+        var lines = text.Replace("\r", string.Empty).Split('\n');
+        var offsets = new int[lines.Length];
+        var off = 0;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            offsets[i] = off;
+            off += lines[i].Length + 1;
+        }
+
+        for (var i = 0; i < lines.Length && toc.Count < maxTableSections; i++)
+        {
+            if (!IsTableSeparator(lines[i])) continue;
+
+            // 分隔行的上一行是表头；数据行从分隔行之后开始
+            var header = i - 1 >= 0 ? SplitCells(lines[i - 1]) : new List<string>();
+            var contentCol = FindContentColumn(header);
+
+            var j = i + 1;
+            while (j < lines.Length && toc.Count < maxTableSections
+                   && lines[j].TrimStart().StartsWith("|", StringComparison.Ordinal))
+            {
+                var cells = SplitCells(lines[j]);
+                var title = contentCol >= 0 && contentCol < cells.Count
+                    ? cells[contentCol]
+                    : cells.FirstOrDefault(c => c.Length > 0);
+                title = (title ?? string.Empty).Trim();
+                if (title.Length > 0)
+                {
+                    toc.Add(new TocItem
+                    {
+                        Title = Truncate(title, 40),
+                        Level = 2,
+                        CharStart = offsets[j],
+                        CharEnd = j + 1 < lines.Length ? offsets[j + 1] : text.Length,
+                        Line = j + 1,
+                        HasContent = true,
+                        ChildCount = 0,
+                    });
+                }
+                j++;
+            }
+
+            i = j - 1;
+        }
+
+        return toc;
+    }
+
+    /// <summary>在表头里定位「内容列」（检查内容/审核内容/检查项目…）；找不到返回 -1。</summary>
+    private static int FindContentColumn(List<string> header)
+    {
+        string[] keys =
+        {
+            "检查内容", "检查项目", "审核内容", "审核记录", "巡检项目", "巡核项目",
+            "检查项", "控制要求", "项目内容", "检查要点", "项目名称", "名称", "项目",
+        };
+        for (var c = 0; c < header.Count; c++)
+        {
+            foreach (var k in keys)
+            {
+                if (header[c].Contains(k, StringComparison.Ordinal)) return c;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>拆 Markdown 表格行单元格（去首尾竖线与空白）。</summary>
+    private static List<string> SplitCells(string line)
+    {
+        var t = line.Trim();
+        if (t.StartsWith("|", StringComparison.Ordinal)) t = t.Substring(1);
+        if (t.EndsWith("|", StringComparison.Ordinal)) t = t.Substring(0, t.Length - 1);
+        return t.Split('|').Select(c => c.Trim()).ToList();
+    }
+
+    /// <summary>Markdown 表格分隔行（|---|:--:|）判定。</summary>
+    private static bool IsTableSeparator(string line)
+    {
+        var t = line.Trim();
+        if (t.Length == 0 || t[0] != '|') return false;
+        foreach (var c in t)
+        {
+            if (c is '|' or '-' or ':' or ' ' or '\t') continue;
+            return false;
+        }
+        return true;
+    }
+
     private static int CountDirectChildren(List<Heading> headings, int index)
     {
         var level = headings[index].Level;
@@ -307,25 +432,7 @@ public static class EnterpriseDocProfileBuilder
     private static string Truncate(string value, int max)
         => value.Length <= max ? value : value.Substring(0, max) + "…";
 
-    private static string GuessDocType(string fileName, string folder)
-    {
-        var fn = fileName ?? "";
-        // ★ 索引类只看「文件名」：文件夹名里的“封面人名手写”是上传目录说明，
-        //   拼进判定会把同目录下的《管理评审控制程序》也误判成索引。
-        if (fn.Contains("封面") || fn.Contains("目录") || fn.Contains("汇编") || fn.Contains("清单"))
-            return "文件索引";
-        var s = $"{folder}/{fileName}";
-        // ★ 文件名带“程序”优先：`24管理评审控制程序` 是程序文件，
-        //   不能因为“管理评审”四个字被当成评审记录。
-        if (fn.Contains("程序")) return "程序文件";
-        if (s.Contains("手册")) return "质量手册";
-        if (s.Contains("内审")) return "审核记录";
-        if (s.Contains("管理评审")) return "评审记录";
-        if (s.Contains("作业指导") || s.Contains("操作规程") || s.Contains("指导书")) return "作业指导书";
-        if (s.Contains("记录") || s.Contains("表单") || s.Contains("表格")) return "记录表单";
-        if (s.Contains("方针") || s.Contains("目标")) return "方针目标";
-        return "体系文件";
-    }
+    // ⛔ 已删除 GuessDocType（文件名子串猜测）：V4 分类唯一判据 = 结构指纹，见 DocFingerprintExtractor。
 
     // ──── L1 章节索引（标准条款 → 手册小节）────
 
@@ -410,7 +517,31 @@ public static class EnterpriseDocProfileBuilder
     }
 
     private sealed class DocProfile
-    {        public string DocType { get; set; } = "体系文件";
+    {
+        /// <summary>中文类型名（上屏用，如「质量手册」）。</summary>
+        public string DocType { get; set; } = "待确认";
+
+        /// <summary>英文类型码（路由/落库用，如 <c>manual</c>）；判不出 = <c>unclassified</c>。</summary>
+        public string DocTypeCode { get; set; } = "unclassified";
+
+        /// <summary>提取模式（= <c>DocExtractionPromptCatalog</c> 的模式键）；判不出 = <c>unclassified</c>。</summary>
+        public string ExtractionMode { get; set; } = "unclassified";
+
+        /// <summary>提取模式中文名（上屏用）。</summary>
+        public string ExtractionModeName { get; set; } = "待确认";
+
+        /// <summary>分类来源：<c>fingerprint</c>（结构指纹）/ <c>llm</c>（doc_profile 提示词）/ <c>manual</c>（人工确认）。</summary>
+        public string ClassSource { get; set; } = "fingerprint";
+
+        /// <summary>分类置信度 0~1。</summary>
+        public double ClassConfidence { get; set; }
+
+        /// <summary>分类理由（命中/未命中哪些指纹，供审核员复核）。</summary>
+        public string ClassReason { get; set; } = string.Empty;
+
+        /// <summary>命中的结构指纹清单（Key/Weight/Evidence），是分类的客观证据。</summary>
+        public List<FingerprintItem> Fingerprints { get; set; } = new();
+
         public string Intro { get; set; } = string.Empty;
         public string? Purpose { get; set; }
         public string? Scope { get; set; }
@@ -419,6 +550,14 @@ public static class EnterpriseDocProfileBuilder
         public int VersionNumber { get; set; }
         public string GeneratedAt { get; set; } = string.Empty;
         public List<TocItem> Toc { get; set; } = new();
+    }
+
+    /// <summary>结构指纹条目（PascalCase，与前端字段逐字一致）。</summary>
+    private sealed class FingerprintItem
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Weight { get; set; } = string.Empty;
+        public string Evidence { get; set; } = string.Empty;
     }
 
     private sealed class TocItem

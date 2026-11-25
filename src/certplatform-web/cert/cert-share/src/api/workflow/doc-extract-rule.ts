@@ -145,6 +145,27 @@ export async function savePrompt(data: DocExtractPromptSaveRequest): Promise<voi
   })
 }
 
+// ── 提示词类型目录（2026-11-25：与运行时提取路由同一事实源） ──
+
+/** 可选提示词类型（页面下拉数据源） */
+export interface DocExtractPromptTypeDto {
+  PromptCode: string
+  /** 对应的画像 ExtractionMode（画像总闸为空串） */
+  Mode: string
+  DisplayName: string
+  Group: string
+  Sort: number
+}
+
+/**
+ * 读取可选提示词类型。
+ * ★ 数据源 = 后端 DocExtractionPromptCatalog（与 Auditor 运行时路由同一映射），前端不再硬编码，杜绝漂移。
+ */
+export async function getPromptTypes(): Promise<DocExtractPromptTypeDto[]> {
+  const res = await yzhApi.get<ApiResponse<DocExtractPromptTypeDto[]>>(`${DOC_EXTRACT_RULE_BASE}/prompt/types`)
+  return res.data ?? []
+}
+
 // ── 页面内试跑（2026-11-10）──────────────────────────────────────────────
 
 /** 试跑结果（后端 DocExtractRuleController.TestPrompt） */
@@ -166,34 +187,35 @@ export interface DocExtractTestResult {
   Truncated: boolean
   MarkdownHead: string
   FileName: string
-  /** Section / Whole */
+  /** 试跑用的提示词 Code（doc_profile / doc_extract_xxx / doc_clause_extract） */
   Mode?: string
   AllClauseCount?: number
   SkippedByDocCheckMode?: number
-  SectionTotal?: number
-  SectionSucceeded?: number
-  SectionFailed?: number
-  SectionTruncated?: number
-  MissingSections?: number
   Note?: string | null
+  /** 画像整链：doc_profile 试跑时续跑得到的画像 JSON 原文（供核对分流），未续跑也有值 */
+  ProfileOutput?: string | null
+  /** 画像整链：画像判定的 ExtractionMode（如 manual_chapter） */
+  RoutedMode?: string | null
+  /** 画像整链：自动续跑用的「按类型提取」提示词 Code（如 doc_extract_manual_chapter） */
+  RoutedPromptCode?: string | null
 }
 
 /**
- * 上传文档 → 转 Markdown → 用「页面当前正文」跑一次（不落库）。
+ * 上传文档 → 转 Markdown → 用「页面当前正文」跑一次（不落库，全文口径）。
  * @param params.template 页面上未保存的编辑内容（边改边试）
- * @param params.mode Section=章节索引+小节并发（默认）；Whole=整篇一次大 JSON（仅对比）
+ * @param params.promptCode 当前提示词 Code，后端据此按家族渲染占位符
  */
 export async function testDocExtractPrompt(params: {
   file: File
   standardCode: string
   template: string
-  mode?: 'Section' | 'Whole'
+  promptCode: string
 }): Promise<DocExtractTestResult> {
   const fd = new FormData()
   fd.append('File', params.file, params.file.name)
   fd.append('StandardCode', params.standardCode)
   fd.append('Template', params.template)
-  fd.append('Mode', params.mode ?? 'Section')
+  fd.append('PromptCode', params.promptCode)
 
   const res = await yzhApi.upload<ApiResponse<DocExtractTestResult>>(`${DOC_EXTRACT_RULE_BASE}/prompt/test`, fd)
   if (!res) throw new Error('试跑失败：无响应')
