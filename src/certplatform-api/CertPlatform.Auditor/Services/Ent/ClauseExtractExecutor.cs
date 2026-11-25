@@ -625,8 +625,10 @@ namespace CertPlatform.Auditor.Services.Ent
             }
 
             // 记录类要逐行枚举表格（33 行培训/19 行台账），4000 输出额度会被截断 ⇒ 判 failed 并把旧结果作废。
-            // 只给记录模式加额度，其他模式维持原值（手册/程序输出量本来就小）。
-            var maxOut = extractionMode == EnterpriseDocExtractionRouter.RecordProfile ? 8000 : 4000;
+            // 手册章节模式要逐章给摘要+要点（手册可能 10+ 章），同样给更大额度。
+            var maxOut = extractionMode is EnterpriseDocExtractionRouter.RecordProfile
+                    or EnterpriseDocExtractionRouter.ManualChapter
+                ? 8000 : 4000;
 
             var markdownHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(markdown))).ToLowerInvariant();
             var fingerprint = DocumentExtractionFingerprint.Compute(
@@ -706,6 +708,18 @@ namespace CertPlatform.Auditor.Services.Ent
 
                 // 审核/评审只删系统结论字段；过程/记录/索引不动原文
                 modeOutput = DocExtractGuard.Sanitize(extractionMode, resp.Json.RootElement);
+
+                // ★ 手册章节模式：条款号由代码从手册目录（ManualIndexParser）确定性挂载，
+                //   ⛔ 不采信模型自报的条款号（那是串条款/漏条款的根源）。
+                if (extractionMode == EnterpriseDocExtractionRouter.ManualChapter)
+                {
+                    var node = JsonNode.Parse(modeOutput.GetRawText())?.AsObject();
+                    if (node != null)
+                    {
+                        AttachManualChapterClauses(node, markdown);
+                        modeOutput = JsonSerializer.SerializeToElement(node);
+                    }
+                }
 
                 // 文件控制类：模型只交元数据，目录条目/总数由代码从 Markdown 表格解析，避免漏行/算错/输出过长
                 if (extractionMode == EnterpriseDocExtractionRouter.DocumentControl)
@@ -790,6 +804,101 @@ namespace CertPlatform.Auditor.Services.Ent
                 ExtractRowStatus.Done, doc.Code, standard.StandardCode, extractionMode);
 
             return new TaskExecutionResult { Success = true, Message = message, Retryable = false };
+        }
+
+        // ========================================================
+        // 手册章节模式：手册章号 → ISO 条款号的确定性挂载
+        // ========================================================
+
+        /// <summary>章节号头部：<c>4.1</c> / <c>7.1.1</c>（从「4.1理解组织及其环境」这类串里取号）</summary>
+        private static readonly Regex ChapterHead = new Regex(@"^(\d+(?:\.\d+){0,2})", RegexOptions.Compiled);
+
+        /// <summary>
+        /// 手册章节模式（<c>manual_chapter</c>）专用：把模型按章节组织的内容（<c>Chapters[]</c>）
+        /// 按手册「0.0 目录与标准条款对应表」映射为 ISO 条款号，<b>确定性挂载</b>到
+        /// <c>ModeOutput.PrimaryClauses</c>，供下游投影（<see cref="ModeOutputProjector.ClauseNumbers"/>）
+        /// 与召回（RM1 条款轴）读取。
+        ///
+        /// <para><b>★ 为什么由代码挂载</b>：手册章号与 ISO 条款号<b>不是一一对应</b>
+        /// （如实测 <c>4.5 → 7.5.1</c>、<c>9.1.4 → 空</c>），只有手册自己的目录表知道这层映射。
+        /// 模型自报条款号正是「串条款 / 漏条款」的根源 ⇒ ⛔ 一律不采信，只信目录表。</para>
+        ///
+        /// <para><b>章号取法</b>：<c>Section</c>/<c>Chapter</c>/<c>Clause</c>/<c>Number</c> 任一字段；
+        /// 取不到时按「<c>4.4.2 → 4.4 → 4</c>」逐级向上找到最近的目录映射（只取<b>最具体</b>的一级）。</para>
+        /// </summary>
+        private static void AttachManualChapterClauses(JsonObject node, string markdown)
+        {
+            var index = ManualIndexParser.Parse(markdown);
+            if (index == null || index.TocMapping.Count == 0) return;
+
+            // 章号 → ISO 条款号（同一章号只认第一次；目录表里 IsoClause 为空的条目跳过）
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var row in index.TocMapping)
+            {
+                var section = (row.Section ?? string.Empty).Trim().TrimEnd('.');
+                var clause = (row.IsoClause ?? string.Empty).Trim();
+                if (section.Length == 0 || clause.Length == 0) continue;
+                if (!map.ContainsKey(section)) map[section] = clause;
+            }
+            if (map.Count == 0) return;
+
+            var chapters = node["Chapters"] as JsonArray;
+            if (chapters == null) return;
+
+            var clauses = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+
+            void Consider(string? rawSection)
+            {
+                var section = (rawSection ?? string.Empty).Trim().TrimEnd('.');
+                if (section.Length == 0) return;
+                var m = ChapterHead.Match(section);
+                if (m.Success) section = m.Groups[1].Value;
+
+                // 逐级向上取「最近的目录映射」：4.4.2 → 4.4 → 4，命中即止（最具体优先）
+                var cur = section;
+                while (cur.Length > 0)
+                {
+                    if (map.TryGetValue(cur, out var clause))
+                    {
+                        if (seen.Add(clause)) clauses.Add(clause);
+                        return;
+                    }
+                    var dot = cur.LastIndexOf('.');
+                    if (dot <= 0) return;
+                    cur = cur[..dot];
+                }
+            }
+
+            foreach (var item in chapters)
+            {
+                switch (item)
+                {
+                    case JsonObject co:
+                        Consider(FirstString(co, "Section", "Chapter", "Clause", "Number", "SectionNo"));
+                        break;
+                    case JsonValue v when v.TryGetValue<string>(out var s):
+                        Consider(s);
+                        break;
+                }
+            }
+
+            if (clauses.Count == 0) return;
+
+            var outArr = new JsonArray();
+            foreach (var c in clauses) outArr.Add(c);
+            node["PrimaryClauses"] = outArr;
+            node.Remove("SupportClauses");
+        }
+
+        private static string? FirstString(JsonObject obj, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (obj[name] is JsonValue v && v.TryGetValue<string>(out var s)
+                    && !string.IsNullOrWhiteSpace(s)) return s;
+            }
+            return null;
         }
 
         // ========================================================

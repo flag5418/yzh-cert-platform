@@ -225,6 +225,10 @@ export interface CertEvidenceRow {
   MarkdownSha256?: string | null
   Snippet: string | null
   LlmSummary: string | null
+  /** ★ 审核发现概括（2-3 句，LLM 归纳；原文 Snippet 保留，供「查看原文」） */
+  Digest?: string | null
+  /** ★ 所属企业 Code（仅审核发现行有，供「查看原文」跳企业文档） */
+  EnterpriseCode?: string | null
   ContentMD5: string | null
   PrevContentMD5: string | null
   Status: string

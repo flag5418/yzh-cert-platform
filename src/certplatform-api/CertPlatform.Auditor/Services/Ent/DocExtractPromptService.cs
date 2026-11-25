@@ -39,6 +39,9 @@ namespace CertPlatform.Auditor.Services.Ent
         /// <summary>5 条按模式提取提示词代码（与 <c>20261113_doc_prompt_templates_V1.sql</c> 对齐）</summary>
         public const string PromptCodeProfile = "doc_profile";
         public const string PromptCodeClauseFull = "doc_extract_clause_full";
+
+        /// <summary>手册章节模式提示词代码（手册/方针整篇一次按章节组织）。</summary>
+        public const string PromptCodeManualChapter = "doc_extract_manual_chapter";
         public const string PromptCodeProcessProfile = "doc_extract_process_profile";
         public const string PromptCodeRecordProfile = "doc_extract_record_profile";
         public const string PromptCodeIndex = "doc_extract_index";

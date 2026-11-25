@@ -71,6 +71,16 @@ namespace CertPlatform.Auditor.Services.Expert
             foreach (var name in new[] { "KeyControls", "keyControls", "KeyRules", "keyRules", "KeySteps", "keySteps" })
                 if (output.TryGetProperty(name, out var v)) Add("关键要求/步骤", v, 5);
 
+            // 手册章节模式（manual_chapter）：手册「整篇一次」按章节组织，Chapters 是**对象数组**。
+            // 逐章印「章号 标题：摘要（要点）」；非对象（其他模式的字符串章节号）由 ChaptersText 返回空，不误伤。
+            foreach (var name in new[] { "Chapters", "chapters" })
+            {
+                if (!output.TryGetProperty(name, out var chEl)) continue;
+                var chText = ChaptersText(chEl, 6).Trim();
+                if (chText.Length > 0 && seen.Add(chText)) parts.Add(chText);
+                break;
+            }
+
             foreach (var name in new[] { "Findings", "findings", "Records", "records", "Entries", "entries", "IndexEntries", "indexEntries" })
                 if (output.TryGetProperty(name, out var v)) Add("记录摘录", v, 3);
 
@@ -307,6 +317,60 @@ namespace CertPlatform.Auditor.Services.Expert
                 case "EvidencePointers": return "原文位置";
                 default: return name;
             }
+        }
+
+        /// <summary>
+        /// 手册章节模式：<c>Chapters[]</c>（对象数组）→ 人可读的「章号 标题：摘要（要点1；要点2）」。
+        /// <para>⛔ 不能直接 <c>ToString()</c>：那会把 JSON 对象原样丢给审核员。
+        /// 非对象元素直接跳过 ⇒ 其他模式的「字符串章节号」数组在本投影里自然为空。</para>
+        /// </summary>
+        private static string ChaptersText(JsonElement arr, int maxItems)
+        {
+            if (arr.ValueKind != JsonValueKind.Array) return string.Empty;
+
+            var lines = new List<string>();
+            foreach (var ch in arr.EnumerateArray())
+            {
+                if (lines.Count >= maxItems) break;
+                if (ch.ValueKind != JsonValueKind.Object) continue;
+
+                var head = string.Join(" ", new[] { Prop(ch, "Section"), Prop(ch, "Title") }
+                    .Where(x => x.Length > 0));
+                var summary = Prop(ch, "Summary");
+                var points = PropPoints(ch);
+
+                var body = summary;
+                if (points.Length > 0) body = body.Length > 0 ? $"{body}（{points}）" : $"（{points}）";
+                var line = head.Length > 0 ? $"{head}：{body}" : body;
+                if (line.Trim().Length > 0) lines.Add(line.Trim());
+            }
+            return string.Join("\n", lines);
+        }
+
+        /// <summary>对象里按名取非空字符串（大小写不敏感）。</summary>
+        private static string Prop(JsonElement obj, string name)
+        {
+            foreach (var p in obj.EnumerateObject())
+                if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)
+                    && p.Value.ValueKind == JsonValueKind.String)
+                    return (p.Value.GetString() ?? "").Trim();
+            return string.Empty;
+        }
+
+        /// <summary>章要点数组 → 「；」连接的短串（最多 3 条）。</summary>
+        private static string PropPoints(JsonElement obj)
+        {
+            foreach (var p in obj.EnumerateObject())
+            {
+                if (!string.Equals(p.Name, "Points", StringComparison.OrdinalIgnoreCase)
+                    || p.Value.ValueKind != JsonValueKind.Array) continue;
+                return string.Join("；", p.Value.EnumerateArray()
+                    .Where(x => x.ValueKind == JsonValueKind.String)
+                    .Take(3)
+                    .Select(x => (x.GetString() ?? "").Trim())
+                    .Where(x => x.Length > 0));
+            }
+            return string.Empty;
         }
 
         private static string Clip(string text)

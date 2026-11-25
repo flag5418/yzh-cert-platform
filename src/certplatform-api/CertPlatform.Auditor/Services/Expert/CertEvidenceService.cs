@@ -34,6 +34,8 @@ public class CertEvidenceRow
     public string EvidenceKind { get; set; } = "manual";
     public string? SourceCode { get; set; }
     public string? SourceName { get; set; }
+    /// <summary>所属企业 Code（仅审核发现行有，供「查看原文」跳转企业文档）</summary>
+    public string? EnterpriseCode { get; set; }
     public string? Anchor { get; set; }
     public string? SourceAnchor { get; set; }
     public string? SourceMatchStatus { get; set; }
@@ -42,6 +44,8 @@ public class CertEvidenceRow
     public string? MarkdownSha256 { get; set; }
     public string? Snippet { get; set; }
     public string? LlmSummary { get; set; }
+    /// <summary>审核发现概括（2-3 句，LLM 归纳；仅审核发现行有，原文 Snippet 保留）</summary>
+    public string? Digest { get; set; }
     public string? TranscriptText { get; set; }
     public string? ContentMD5 { get; set; }
     public string? PrevContentMD5 { get; set; }

@@ -594,6 +594,10 @@ public sealed class CertCheckContextBuilder
             ?? new List<EnterpriseDoc>();
         var currentFiles = files.GroupBy(d => d.Code, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+
+        // 轴2 过程轴候选先收集、循环结束后统一分配（记录优先），见 ApplyProcessAxis
+        var processAxisCandidates = new List<ProcessAxisCandidate>();
+
         foreach (var ex in extractions)
         {
             if (ex.IsStale) continue;
@@ -607,9 +611,8 @@ public sealed class CertCheckContextBuilder
             if (string.IsNullOrWhiteSpace(ex.ContentJson)) continue;
             if (!wanted.TryGetValue(ex.StandardCode, out var numbers)) continue;
 
+            // ---- 轴1 条款轴：文档自身声明了条款号 ⇒ 精确挂到那条条款 ----
             var slices = ParseClauseSlices(ex.ContentJson!, numbers, warnings);
-            if (slices.Count == 0) continue;
-
             foreach (var (clauseNumber, slice) in slices)
             {
                 var target = clauses.FirstOrDefault(c =>
@@ -627,7 +630,16 @@ public sealed class CertCheckContextBuilder
                     Confidence = slice.Confidence
                 });
             }
+
+            // ---- 轴2 过程轴：记录/程序/作业指导书通常没有条款号，只靠条款轴会整类漏召回 ----
+            // 实测 8.1「运行的策划和控制」漏掉设备台账、首件报告、制程巡检报告等实施记录，
+            // 导致证据只能写"《X》规定…"。候选先收集，循环结束后统一按"记录优先"分配。
+            // ⛔ 只决定"要不要召回这份文档"，条款归属由被匹配的条款决定，永不反推条款号。
+            ExtractProcessAxisCandidate(ex, processAxisCandidates);
         }
+
+        // ---- 轴2 分配：记录优先，每条条款最多 ProcessAxisCap 份 ----
+        ApplyProcessAxis(clauses, processAxisCandidates);
 
         // ---- 6. 手册纲领：把 EvidenceSources（应读章节/负责部门/前置事实）挂到每条条款 ----
         LoadManualGuidance(clauses, extractions, warnings);
@@ -635,6 +647,84 @@ public sealed class CertCheckContextBuilder
         var noHit = clauses.Where(c => !c.HasDocContent).Select(c => c.ClauseNumber).ToList();
         if (noHit.Count > 0)
             warnings.Add($"以下条款在企业文档中未提取到对应内容：{string.Join(",", noHit)}");
+    }
+
+    /// <summary>过程轴每条款最多补充的文档数（记录优先）。⛔ 不设上限时 8.1 这类多过程条款会把整库文档卷进上下文。</summary>
+    private const int ProcessAxisCap = 10;
+
+    /// <summary>过程轴候选：一份文档按 <c>ProcessArea</c> 可能被召回到多个条款，先收集再统一分配。</summary>
+    private readonly record struct ProcessAxisCandidate(
+        string FileCode, string FileName, string ProcessArea, string Excerpt, bool IsRecord);
+
+    /// <summary>
+    /// 解析一份文档的过程轴候选。记录 / 程序 / 作业指导书这类文档不带条款号，条款轴召不回；
+    /// 只有带 <c>ModeOutput.ProcessArea</c> 的文档才产生候选，分配与限额见 <see cref="ApplyProcessAxis"/>。
+    /// </summary>
+    private void ExtractProcessAxisCandidate(DocumentExtraction ex, List<ProcessAxisCandidate> sink)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(ex.ContentJson!);
+            var root = doc.RootElement;
+            var mode = GetString(root, "ExtractionMode", "extractionMode") ?? "";
+            if (GetObject(root, "ModeOutput", "modeOutput") is not { } output) return;
+            output = ModeOutputProjector.ForProjection(output, mode);
+            var processArea = GetString(output, "ProcessArea", "processArea") ?? "";
+            if (string.IsNullOrWhiteSpace(processArea)) return;
+            var excerpt = BuildModeExcerpt(output, mode);
+            if (string.IsNullOrWhiteSpace(excerpt)) return;
+            var fileName = GetObject(root, "DocMeta", "docMeta") is { } meta
+                ? GetString(meta, "FileName", "fileName") ?? ""
+                : "";
+            sink.Add(new ProcessAxisCandidate(
+                ex.FileCode, fileName, processArea, excerpt,
+                string.Equals(mode, "record_profile", StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (JsonException)
+        {
+            // 产物损坏 ⇒ 跳过该文档的过程轴候选，不影响条款轴
+        }
+    }
+
+    /// <summary>
+    /// 把过程轴候选分配到各条款：把「条款属性 <c>Process</c>」翻译成中文关键词，匹配文档 <c>ProcessArea</c>。
+    /// <para><b>记录先于程序/指导书</b>（实施证据优先于制度证据），每条条款最多 <see cref="ProcessAxisCap"/> 份：
+    /// 记录族挂"同过程记录"，其余挂"同过程程序/指导书"。</para>
+    /// <para>⛔ 条款归属由「被匹配的条款」决定，<b>永不从文档反推条款号</b>（见 <see cref="ProcessAreaRecall"/> 硬约束）。</para>
+    /// </summary>
+    private static void ApplyProcessAxis(List<ClauseContext> clauses, List<ProcessAxisCandidate> candidates)
+    {
+        if (candidates.Count == 0) return;
+
+        // 记录优先：同过程下"实际怎么做的"比"文件怎么规定的"更能支撑/反驳结论
+        var ordered = candidates.OrderByDescending(c => c.IsRecord).ToList();
+
+        foreach (var clause in clauses)
+        {
+            var keywords = ProcessAreaRecall.KeywordsFor(ProcessAreaRecall.ParseKeys(clause.Attr("Process")));
+            if (keywords.Count == 0) continue;
+
+            foreach (var cand in ordered)
+            {
+                if (!ProcessAreaRecall.Matches(cand.ProcessArea, keywords)) continue;
+                // 同一份文档对同一条款已由条款轴挂上 ⇒ 不重复
+                if (clause.Slices.Any(s => string.Equals(s.FileCode, cand.FileCode, StringComparison.Ordinal)))
+                    continue;
+                // 本条款的过程轴补充已达上限 ⇒ 停（已按记录优先排序，先到的是记录）
+                if (clause.Slices.Count(s => s.Anchor == ProcessAreaRecall.ProgramAnchor
+                        || s.Anchor == ProcessAreaRecall.RecordAnchor) >= ProcessAxisCap)
+                    break;
+
+                clause.Slices.Add(new ClauseDocSlice
+                {
+                    FileCode = cand.FileCode,
+                    FileName = cand.FileName,
+                    Anchor = cand.IsRecord ? ProcessAreaRecall.RecordAnchor : ProcessAreaRecall.ProgramAnchor,
+                    Excerpts = new List<string> { cand.Excerpt },
+                    ExcerptStatuses = new List<string> { "matched" }
+                });
+            }
+        }
     }
 
     /// <summary>

@@ -17,7 +17,14 @@ namespace CertPlatform.Auditor.Services.Ent
     /// </summary>
     public static class EnterpriseDocExtractionRouter
     {
+        /// <summary>旧「逐条款」模式名（历史产物/画像里仍有该值；<see cref="NormalizeMode"/> 会归一为 <see cref="ManualChapter"/>）。</summary>
         public const string ClauseFull = "clause_full";
+
+        /// <summary>
+        /// ★ 手册章节模式：手册/方针类文档**整篇一次**提取，按章节组织成 JSON（章号/标题/摘要/要点），
+        /// 条款号由手册目录（<c>ManualIndexParser</c>）确定性挂载 —— 彻底替代「手册逐条款」慢链。
+        /// </summary>
+        public const string ManualChapter = "manual_chapter";
         public const string ProcessProfile = "process_profile";
         public const string RecordProfile = "record_profile";
         public const string IndexOnly = "index_only";
@@ -29,9 +36,9 @@ namespace CertPlatform.Auditor.Services.Ent
         public const string None = "none";
         public const string Legacy = "legacy";
 
-        /// <summary>新提示词已覆盖的模式（手册逐条款仍走旧链，暂不在此列）。</summary>
+        /// <summary>新提示词已覆盖的模式（含手册章节模式；旧「手册逐条款」链已由 <see cref="ManualChapter"/> 取代）。</summary>
         public static bool IsModePrompt(string? mode)
-            => mode is ProcessProfile or RecordProfile or IndexOnly or DocumentControl
+            => mode is ManualChapter or ProcessProfile or RecordProfile or IndexOnly or DocumentControl
                 or WorkInstructionCitation or PolicyProfile or ContextList or AuditProfile;
 
         public static bool IsSkip(string? mode) => mode == None;
@@ -65,6 +72,7 @@ namespace CertPlatform.Auditor.Services.Ent
 
         public static string PromptCodeForMode(string mode) => mode switch
         {
+            ManualChapter => "doc_extract_manual_chapter",
             ProcessProfile => "doc_extract_process_profile",
             RecordProfile => "doc_extract_record_profile",
             IndexOnly => "doc_extract_index",
@@ -85,9 +93,12 @@ namespace CertPlatform.Auditor.Services.Ent
             switch (m)
             {
                 case ClauseFull:
+                case ManualChapter:
+                case "手册章节":
                 case "逐条款":
                 case "逐条":
-                    return ClauseFull;
+                    // ★ 2026-11-24：手册不再「逐条款」（慢且漏/串条款），统一归一为章节模式。
+                    return ManualChapter;
                 case ProcessProfile:
                 case "过程画像":
                     return ProcessProfile;
@@ -145,7 +156,7 @@ namespace CertPlatform.Auditor.Services.Ent
             switch (t.ToLowerInvariant())
             {
                 case "manual":
-                    return ClauseFull;
+                    return ManualChapter;
                 case "policy":
                     return PolicyProfile;
                 case "procedure":
@@ -168,7 +179,7 @@ namespace CertPlatform.Auditor.Services.Ent
             if (t.Contains("文件索引") || t.Contains("封面") || t.Contains("目录")
                 || t.Contains("汇编") || t.Contains("清单")) return IndexOnly;
             if (t.Contains("审核") || t.Contains("评审")) return AuditProfile;
-            if (t.Contains("手册")) return ClauseFull;
+            if (t.Contains("手册")) return ManualChapter;
             if (t.Contains("方针") || t.Contains("目标")) return PolicyProfile;
             if (t.Contains("作业指导") || t.Contains("操作规程") || t.Contains("指导书")) return WorkInstructionCitation;
             if (t.Contains("制度") || t.Contains("规范") || t.Contains("管理办法")) return PolicyProfile;
@@ -218,7 +229,7 @@ namespace CertPlatform.Auditor.Services.Ent
                 || fn.Contains("清单")) return IndexOnly;
             if (fn.Contains("程序")) return ProcessProfile;
             if (fn.Contains("内审") || fn.Contains("管理评审")) return AuditProfile;
-            if (fn.Contains("手册")) return ClauseFull;
+            if (fn.Contains("手册")) return ManualChapter;
             if (fn.Contains("方针") || fn.Contains("目标")) return PolicyProfile;
             if (fn.Contains("作业指导") || fn.Contains("操作规程") || fn.Contains("指导书"))
                 return WorkInstructionCitation;

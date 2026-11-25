@@ -261,7 +261,15 @@ namespace CertPlatform.Auditor.Services.Ent
                 var kept = new JsonArray();
                 foreach (var item in arr)
                 {
-                    var raw = (item?.ToString() ?? string.Empty).Trim();
+                    // ★ 手册章节模式（manual_chapter）的 Chapters 是**对象数组**（章号/标题/摘要/要点），
+                    //   章号归一由 ClauseExtractExecutor.AttachManualChapterClauses 负责。
+                    //   ⛔ 不能对对象做 ToString() —— 那会把整段 JSON 当章节号截断（静默毁数据）。
+                    if (item is not JsonValue v || !v.TryGetValue<string>(out var raw))
+                    {
+                        if (item != null) kept.Add(item.DeepClone());
+                        continue;
+                    }
+                    raw = (raw ?? string.Empty).Trim();
                     if (raw.Length == 0) continue;
                     var chapter = NormalizeChapter(raw);
                     if (!kept.Any(x => string.Equals(x?.ToString(), chapter, StringComparison.Ordinal)))

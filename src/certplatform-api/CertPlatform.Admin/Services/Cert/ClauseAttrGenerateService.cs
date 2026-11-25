@@ -143,9 +143,13 @@ public sealed class ClauseAttrGenerateService
                 "AI 参数未配置：请在「系统管理 → 系统参数」里填写 ai_api_key 与 ai_base_url");
 
         // 属性池（决定每条属性怎么落值：json 要序列化、prompt 存正文）
-        var pool = await _db.Client.Queryable<ClauseAttrDef>()
+        // ⚠️ 必须剔除「系统派生属性」（ClauseText）：它由标准原文灌入，⛔ 不能交给 LLM 生成，
+        //    否则模型复述会覆盖标准原文、污染 RM7 语义语料（见 ClauseAttrPromptService.DerivedAttrs）。
+        var pool = (await _db.Client.Queryable<ClauseAttrDef>()
             .Where(p => !p.IsDeleted && p.IsValid == 1)
-            .ToListAsync();
+            .ToListAsync())
+            .Where(p => p.Code != null && !ClauseAttrPromptService.DerivedAttrs.Contains(p.Code))
+            .ToList();
         if (pool.Count == 0)
             return ClauseAttrGenerateResult.Fail("属性池为空，请先在「条款属性池」维护属性");
 

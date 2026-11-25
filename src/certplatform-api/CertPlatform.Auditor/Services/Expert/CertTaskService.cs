@@ -10,6 +10,7 @@ using CertPlatform.Auditor.Entities.Expert;
 using CertPlatform.Auditor.Services.Ent;
 using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YZH.Core.DataBase.Interfaces;
 using YZH.Core.Stand.Models.Result;
@@ -586,6 +587,12 @@ namespace CertPlatform.Auditor.Services.Expert
         private readonly CertPlatform.Shared.Domain.Scope.ICoreResourceQuery _core;
         private readonly CertPlatform.Shared.Services.Sys.UserDisplayNameResolver _userNames;
 
+        /// <summary>LLM 调用（用于「审核发现」概括：文档原文 → 2-3 句归纳）</summary>
+        private readonly CertPlatform.Shared.DocExtraction.LlmInvokeService _llm;
+
+        /// <summary>后台预热用：创建独立 scope（⛔ 详情接口不做 LLM 调用，避免一直转圈）</summary>
+        private readonly Microsoft.Extensions.DependencyInjection.IServiceScopeFactory _scopeFactory;
+
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
             PropertyNameCaseInsensitive = true
@@ -597,6 +604,8 @@ namespace CertPlatform.Auditor.Services.Expert
             YZH.Core.DataBase.Services.QueueManager queueManager,
             CertPlatform.Shared.Domain.Scope.ICoreResourceQuery core,
             CertPlatform.Shared.Services.Sys.UserDisplayNameResolver userNames,
+            CertPlatform.Shared.DocExtraction.LlmInvokeService llm,
+            Microsoft.Extensions.DependencyInjection.IServiceScopeFactory scopeFactory,
             ILogger<CertTaskService> logger)
         {
             _db = db;
@@ -604,6 +613,8 @@ namespace CertPlatform.Auditor.Services.Expert
             _queueMgr = queueManager;
             _core = core;
             _userNames = userNames;
+            _llm = llm;
+            _scopeFactory = scopeFactory;
             _logger = logger;
         }
 
@@ -1729,6 +1740,10 @@ namespace CertPlatform.Auditor.Services.Expert
             // ★ 审核发现：企业文档提取结果投影为只读事实行。
             //   ⛔ 不再混进「证据」—— 证据只允许现场/审核员补录。
             var auditFindings = await LoadDocSliceRowsAsync(detail);
+            // ★ 概括只读缓存（⛔ 详情接口不调 LLM，否则首访一直转圈）；
+            //   未命中的行丢后台预热，写完缓存后下次打开即命中。
+            var digestMisses = await FillFindingDigestsFromCacheAsync(auditFindings);
+            QueueWarmFindingDigests(digestMisses);
             var rawRows = rawEvis.Select(e => new CertEvidenceRow
             {
                 Code = e.Code,
@@ -1946,9 +1961,10 @@ namespace CertPlatform.Auditor.Services.Expert
         private async Task<List<CertEvidenceRow>> LoadDocSliceRowsAsync(CertAuditPlanDetail detail)
         {
             var rows = new List<CertEvidenceRow>();
+            CertAuditPlan? plan = null;
             try
             {
-                var plan = (await _db.GetOneAsync<CertAuditPlan>(p =>
+                plan = (await _db.GetOneAsync<CertAuditPlan>(p =>
                     p.Code == detail.PlanCode && !p.IsDeleted)).Data;
                 if (plan == null || string.IsNullOrWhiteSpace(plan.Standards)) return rows;
 
@@ -1978,9 +1994,9 @@ namespace CertPlatform.Auditor.Services.Expert
                 }
                 if (clausesByStandard.Count == 0) return rows;
 
-                // ★ 过程域关键词：由检查项条款的 cert_clause_attr.Process 属性翻译而来，
-                //   用于「条款轴没命中时」按过程召回程序/指导书/记录（不产生条款号）。
-                var processKeywords = await ResolveProcessKeywordsAsync(clauses);
+                // ★ 召回计划：由检查项条款的 cert_clause_attr（Process/Role/EvidenceFamily/EvidenceForm）
+                //   经 RecallPathResolver 解析而来 —— 决定 RM2 过程轴的键、RM1 的体裁白名单、记录族是否启用主轴。
+                var recall = await ResolveClauseRecallAsync(clauses);
 
                 var extractions = (await _db.GetListAsync<DocumentExtraction>(x =>
                     stdCodes.Contains(x.StandardCode)
@@ -1999,12 +2015,15 @@ namespace CertPlatform.Auditor.Services.Expert
                         && matchingFiles.Count == 1 && !string.IsNullOrWhiteSpace(ext.SourceSha256)
                         && string.Equals(ext.SourceSha256, matchingFiles[0].Sha256, StringComparison.OrdinalIgnoreCase)
                         && clausesByStandard.TryGetValue(ext.StandardCode, out var clauseNos))
-                        rows.AddRange(ProjectDocSlices(ext, detail.Code, clauseNos, rows.Count, processKeywords));
+                        rows.AddRange(ProjectDocSlices(ext, detail.Code, clauseNos, rows.Count, recall));
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "投影企业文档切片失败，detail={DetailCode}", detail.Code);
             }
+            // ★ 「查看原文」跳转企业文档需要企业 Code（审核发现行专属）
+            foreach (var r in rows)
+                if (string.IsNullOrWhiteSpace(r.EnterpriseCode)) r.EnterpriseCode = plan?.EnterpriseCode;
             return DedupeNestedSlices(rows);
         }
 
@@ -2042,6 +2061,184 @@ namespace CertPlatform.Auditor.Services.Expert
             }
             return drop.Count == 0 ? rows : rows.Where(r => !drop.Contains(r)).ToList();
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        // 审核发现概括（诉求：原文太长 ⇒ LLM 归纳 2-3 句；原文 Snippet 保留不动）
+        // ══════════════════════════════════════════════════════════════════
+
+        /// <summary>审核发现概括待生成项（后台预热用，不依赖请求作用域实体）。</summary>
+        private sealed class FindingDigestMiss
+        {
+            public string SourceCode { get; set; } = string.Empty;
+            public string Anchor { get; set; } = string.Empty;
+            public string SnippetMd5 { get; set; } = string.Empty;
+            public string Snippet { get; set; } = string.Empty;
+            public string? SourceName { get; set; }
+        }
+
+        /// <summary>
+        /// 审核发现概括 · **只读缓存**：缓存表 <c>cert_finding_digest</c>（键 = <c>SourceCode + Anchor + SnippetMd5</c>）
+        /// 命中即回填 <c>Digest</c>；未命中的行返回给调用方丢后台预热。
+        /// <para>⛔ 本方法**不做任何 LLM 调用** —— 详情接口必须秒回，否则首访一直转圈。</para>
+        /// </summary>
+        private async Task<List<FindingDigestMiss>> FillFindingDigestsFromCacheAsync(List<CertEvidenceRow> rows)
+        {
+            var misses = new List<FindingDigestMiss>();
+            try
+            {
+                var targets = rows
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Snippet) && !string.IsNullOrWhiteSpace(r.SourceCode))
+                    .Select(r =>
+                    {
+                        var md5 = ComputeMd5(r.Snippet!);
+                        return (Row: r, Md5: md5, Key: DigestKey(r.SourceCode!, r.Anchor ?? "", md5));
+                    })
+                    .ToList();
+                if (targets.Count == 0) return misses;
+
+                var sourceCodes = targets.Select(t => t.Row.SourceCode!).Distinct(StringComparer.Ordinal).ToList();
+                var cached = (await _db.GetListAsync<CertFindingDigest>(d =>
+                    sourceCodes.Contains(d.SourceCode) && !d.IsDeleted && d.IsValid == 1)).Data
+                    ?? new List<CertFindingDigest>();
+                var cacheMap = cached
+                    .GroupBy(d => DigestKey(d.SourceCode, d.Anchor, d.SnippetMd5), StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First().Digest, StringComparer.Ordinal);
+
+                foreach (var t in targets)
+                {
+                    if (cacheMap.TryGetValue(t.Key, out var digest) && !string.IsNullOrWhiteSpace(digest))
+                    {
+                        t.Row.Digest = digest;
+                    }
+                    else
+                    {
+                        misses.Add(new FindingDigestMiss
+                        {
+                            SourceCode = t.Row.SourceCode!,
+                            Anchor = t.Row.Anchor ?? "",
+                            SnippetMd5 = t.Md5,
+                            Snippet = t.Row.Snippet!,
+                            SourceName = t.Row.SourceName
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "读取审核发现概括缓存失败");
+            }
+            return misses;
+        }
+
+        /// <summary>
+        /// 后台预热：未命中的行丢到独立作用域异步生成概括并写缓存（下次打开即命中）。
+        /// <para>fire-and-forget + try/catch —— ⛔ 绝不阻塞详情接口；失败仅记日志。</para>
+        /// </summary>
+        private void QueueWarmFindingDigests(List<FindingDigestMiss> misses)
+        {
+            if (misses.Count == 0) return;
+            var snapshot = misses.ToList();
+            _ = Task.Run(async () =>
+            {
+                try { await WarmFindingDigestsAsync(snapshot); }
+                catch (Exception ex) { _logger.LogWarning(ex, "后台预热审核发现概括失败"); }
+            });
+        }
+
+        /// <summary>后台预热实现：独立作用域取 <c>IDbOrm</c> + <c>LlmInvokeService</c>，分批调 LLM 归纳并写缓存。</summary>
+        private async Task WarmFindingDigestsAsync(List<FindingDigestMiss> misses)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IDbOrm>();
+            var llm = scope.ServiceProvider.GetRequiredService<CertPlatform.Shared.DocExtraction.LlmInvokeService>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<CertTaskService>>();
+
+            var settings = await AiConnSettings.ReadAsync(db);
+            if (!settings.IsUsable) return;
+
+            const int batchSize = 8;
+            for (var start = 0; start < misses.Count; start += batchSize)
+            {
+                var batch = misses.Skip(start).Take(batchSize).ToList();
+                var summaries = await RequestDigestsAsync(llm, logger, settings, batch);
+                if (summaries.Count == 0) continue;
+
+                var saved = summaries.Select(s => new CertFindingDigest
+                {
+                    Code = Guid.NewGuid().ToString("N"),
+                    SourceCode = s.Miss.SourceCode,
+                    Anchor = s.Miss.Anchor,
+                    SnippetMd5 = s.Miss.SnippetMd5,
+                    Digest = s.Summary,
+                    Model = settings.Model,
+                    IsValid = 1
+                }).ToList();
+                try { await db.InsertBatchAsync(saved); }
+                catch (Exception ex) { logger.LogWarning(ex, "写入审核发现概括缓存失败"); }
+            }
+        }
+
+        /// <summary>批量请求概括：一次调用归纳多条，返回「待生成项 → 概括」。</summary>
+        private static async Task<List<(FindingDigestMiss Miss, string Summary)>> RequestDigestsAsync(
+            CertPlatform.Shared.DocExtraction.LlmInvokeService llm, ILogger logger,
+            CertPlatform.Auditor.Services.Ent.AiConnSettings settings, List<FindingDigestMiss> misses)
+        {
+            var result = new List<(FindingDigestMiss Miss, string Summary)>();
+            if (misses.Count == 0) return result;
+
+            var payload = misses.Select((m, i) => new
+            {
+                i,
+                doc = m.SourceName ?? "",
+                clause = m.Anchor ?? "",
+                text = Truncate(m.Snippet, 3000)
+            }).ToList();
+
+            var prompt = new StringBuilder()
+                .AppendLine("下面是若干条企业文档原文摘录。请为每一条归纳出 2-3 句言简意赅的事实概述，供审核员快速浏览。")
+                .AppendLine("要求：")
+                .AppendLine("1. 只陈述文档写了什么（谁/做什么/依据什么/什么频次/什么结论），不加评价、不写符合性结论。")
+                .AppendLine("2. 每条不超过 3 句、不超过 120 字。")
+                .AppendLine("3. 保留关键要素：文件名称、条款号、记录名、日期、数值、责任部门等。")
+                .AppendLine("4. 严格输出 JSON：{\"digests\":[{\"i\":0,\"summary\":\"...\"}]}")
+                .AppendLine()
+                .AppendLine("条目：")
+                .Append(JsonSerializer.Serialize(payload))
+                .ToString();
+
+            var resp = await llm.CompleteAsync(new CertPlatform.Shared.DocExtraction.LlmInvokeRequest
+            {
+                BaseUrl = settings.BaseUrl,
+                ApiKey = settings.ApiKey,
+                Model = settings.Model,
+                Temperature = 0.2f,
+                MaxTokens = settings.MaxTokens,
+                SystemPrompt = "你是资深 ISO 管理体系审核员，负责把文档原文精炼成简短事实概述。输出 json。",
+                Prompt = prompt,
+                ForceJson = true
+            });
+            if (!resp.Success || resp.Json == null)
+            {
+                logger.LogWarning("[审核发现] 概括调用失败：{Msg}", resp.Message);
+                return result;
+            }
+
+            if (!resp.Json.RootElement.TryGetProperty("digests", out var arr)
+                || arr.ValueKind != JsonValueKind.Array) return result;
+            foreach (var item in arr.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) continue;
+                if (!item.TryGetProperty("i", out var idxEl) || idxEl.ValueKind != JsonValueKind.Number
+                    || !idxEl.TryGetInt32(out var idx) || idx < 0 || idx >= misses.Count) continue;
+                var summary = GetJsonString(item, "summary");
+                if (string.IsNullOrWhiteSpace(summary)) continue;
+                result.Add((misses[idx], Truncate(summary.Trim(), 300)!));
+            }
+            return result;
+        }
+
+        private static string DigestKey(string sourceCode, string anchor, string md5)
+            => $"{sourceCode}|{anchor}|{md5}";
 
         /// <summary>
         /// 详情展示的条款号：只保留有正文的条款，剔除只有标题的父级（如 4）。
@@ -2086,9 +2283,11 @@ namespace CertPlatform.Auditor.Services.Expert
         /// <summary>把一份文档提取结果里属于这些条款的摘录投影成证据行。</summary>
         private static List<CertEvidenceRow> ProjectDocSlices(
             DocumentExtraction ext, string checkItemCode, HashSet<string> clauseNos, int sortBase,
-            IReadOnlySet<string>? processKeywords = null)
+            ClauseRecallPlan? recall = null)
         {
-            var keywords = processKeywords ?? new HashSet<string>();
+            var keywords = recall?.ProcessKeywords ?? (IReadOnlySet<string>)new HashSet<string>();
+            var allowedByClause = recall?.AllowedModesByClause;
+            var recordAxisActive = recall?.RecordAxisActive ?? false;
             var rows = new List<CertEvidenceRow>();
             if (ext.IsStale || ext.ExtractStatus != "done" || string.IsNullOrWhiteSpace(ext.ContentJson))
                 return rows;
@@ -2104,14 +2303,17 @@ namespace CertPlatform.Auditor.Services.Expert
                 var markdownHash = meta.ValueKind == JsonValueKind.Object
                     ? GetJsonString(meta, "MarkdownSha256")
                     : string.Empty;
+                // ★ 文档体裁（提取模式）—— RM1 条款轴的体裁白名单过滤依据（15 号 §4.1）
+                var docMode = EnterpriseDocExtractionRouter.NormalizeMode(GetJsonString(root, "ExtractionMode"));
                 // ★ 模式产物先投影：Clauses[] 恒为空，且不能依赖 Clauses 键是否存在
                 var clauseAxisRows = ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
-                    fileName, markdownHash, rows);
+                    fileName, markdownHash, rows, docMode: docMode, allowedByClause: allowedByClause);
 
-                // ★ 条款轴没命中时，按「过程域」召回程序/指导书，按「过程域 + 记录」召回记录表（2026-11-16）。
+                // ★ 过程轴（RM2）：记录族（f2/f1f2）时是**主轴**（不因条款轴命中而跳过），
+                //   否则退回"条款轴没命中时"的兜底（15 号 §三/§四；翻转现状"条款轴优先、过程轴仅兜底"）。
                 //   ⛔ 两条轴都不产生条款号：ClauseCode 保持 null、Anchor 写召回理由，
                 //      条款号只能来自文档自身，避免把采购记录挂到环境因素这类串条款错误。
-                if (clauseAxisRows == 0 && keywords.Count > 0)
+                if (keywords.Count > 0 && (clauseAxisRows == 0 || recordAxisActive))
                 {
                     var mode = GetJsonString(root, "ExtractionMode");
                     var modeOutput = root.TryGetProperty("ModeOutput", out var mo)
@@ -2134,6 +2336,32 @@ namespace CertPlatform.Auditor.Services.Expert
                             ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
                                 fileName, markdownHash, rows, ProcessAreaRecall.RecordAnchor, ignoreClauses: true);
                         }
+                    }
+                }
+
+                // ★ 语义轴（RM7，16 号 §三/§四）：RM1/RM2 之外的**补召回** ——
+                //   用条款释义（ClauseText）与文档画像（FileName/ProcessArea/记录名/表头）的 BM25 相似度反查。
+                //   ⛔ 已由 RM1 锚定同条款的行不重复补（DedupeNestedSlices 只处理"整段包含"，等长会双留）。
+                if (recall?.SemanticMatcher is { IsEmpty: false } semanticMatcher
+                    && recall.SemanticClauses.Count > 0)
+                {
+                    var profileText = BuildDocProfileText(root, fileName);
+                    if (profileText.Length > 0)
+                    {
+                        var anchored = new HashSet<string>(
+                            rows.Where(r => string.Equals(r.SourceCode, ext.FileCode, StringComparison.Ordinal))
+                                .Select(r => r.Anchor ?? string.Empty), StringComparer.Ordinal);
+                        var semanticNos = semanticMatcher.Rank(profileText, 8)
+                            .Where(h => clauseNos.Contains(h.ClauseNumber)
+                                        && recall.SemanticClauses.Contains(h.ClauseNumber)
+                                        && !anchored.Contains(h.ClauseNumber))
+                            .Select(h => h.ClauseNumber)
+                            .Take(3)
+                            .ToList();
+                        if (semanticNos.Count > 0)
+                            ProjectModeOutputSlices(ext, root, checkItemCode, clauseNos, sortBase,
+                                fileName, markdownHash, rows, recallReason: null, ignoreClauses: false,
+                                docMode: docMode, forcedClauseNos: semanticNos, sliceLabel: "语义召回");
                     }
                 }
 
@@ -2214,6 +2442,38 @@ namespace CertPlatform.Auditor.Services.Expert
         }
 
         /// <summary>
+        /// 文档画像文本（RM7 查询串，16 号 §四.2）：<c>FileName</c> + <c>ProcessArea</c> +
+        /// <c>ReportSummary</c> + <c>Records[].RecordName/DocSection</c> + <c>Records[].FormFields[]</c>。
+        /// <para>⛔ 只用**标准无关**的画像字段，⛔ 不含文档自报的条款号（那正是条款号幻觉的来源）。</para>
+        /// </summary>
+        private static string BuildDocProfileText(JsonElement root, string fileName)
+        {
+            var sb = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(fileName)) sb.Append(fileName).Append(' ');
+
+            if (root.TryGetProperty("ModeOutput", out var mo) && mo.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var name in new[] { "ProcessArea", "ReportSummary", "DocTitle", "OwnerDept" })
+                    if (mo.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String)
+                        sb.Append(v.GetString()).Append(' ');
+
+                if (mo.TryGetProperty("Records", out var recs) && recs.ValueKind == JsonValueKind.Array)
+                    foreach (var rec in recs.EnumerateArray())
+                    {
+                        if (rec.ValueKind != JsonValueKind.Object) continue;
+                        foreach (var name in new[] { "RecordName", "ProcessName", "DocSection" })
+                            if (rec.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String)
+                                sb.Append(v.GetString()).Append(' ');
+                        if (rec.TryGetProperty("FormFields", out var ff) && ff.ValueKind == JsonValueKind.Array)
+                            foreach (var f in ff.EnumerateArray())
+                                if (f.ValueKind == JsonValueKind.String) sb.Append(f.GetString()).Append(' ');
+                    }
+            }
+
+            return sb.ToString().Trim();
+        }
+
+        /// <summary>
         /// 模式产物投影：记录/过程/制度/索引类文档的 <c>Clauses[]</c> 恒为空，事实全在 <c>ModeOutput</c>。
         ///
         /// <para>⛔ 必须<b>独立于 <c>Clauses</c> 是否存在</b>调用：放在 <c>Clauses</c> 循环之后，
@@ -2222,7 +2482,9 @@ namespace CertPlatform.Auditor.Services.Expert
         private static int ProjectModeOutputSlices(
             DocumentExtraction ext, JsonElement root, string checkItemCode,
             HashSet<string> clauseNos, int sortBase, string fileName, string markdownHash,
-            List<CertEvidenceRow> rows, string? recallReason = null, bool ignoreClauses = false)
+            List<CertEvidenceRow> rows, string? recallReason = null, bool ignoreClauses = false,
+            string docMode = "", Dictionary<string, HashSet<string>>? allowedByClause = null,
+            IEnumerable<string>? forcedClauseNos = null, string? sliceLabel = null)
         {
             if (!root.TryGetProperty("ModeOutput", out var modeOutput)
                 || modeOutput.ValueKind != JsonValueKind.Object) return 0;
@@ -2231,12 +2493,21 @@ namespace CertPlatform.Auditor.Services.Expert
             var mode = GetJsonString(root, "ExtractionMode");
             modeOutput = ModeOutputProjector.ForProjection(modeOutput, mode);
 
-            var matchedNos = ignoreClauses
-                ? new List<string>()
-                : ModeOutputProjector.ClauseNumbers(modeOutput)
+            // ★ RM1 条款轴：命中条款 + 该条款章作用(Role) 的体裁白名单双重过滤（15 号 §4.1）
+            //   ★ RM7 语义轴（forcedClauseNos 非空）：条款号由调用方给定，⛔ 不再过体裁白名单（白名单已降为降权，16 号 §五）。
+            var matchedNos = forcedClauseNos != null
+                ? forcedClauseNos
                     .Where(no => IsClauseOrDescendantMatch(no, clauseNos))
+                    .Distinct(StringComparer.Ordinal)
                     .Take(3)
-                    .ToList();
+                    .ToList()
+                : ignoreClauses
+                    ? new List<string>()
+                    : ModeOutputProjector.ClauseNumbers(modeOutput)
+                        .Where(no => IsClauseOrDescendantMatch(no, clauseNos))
+                        .Where(no => ModeAllowedByClause(no, clauseNos, allowedByClause, docMode))
+                        .Take(3)
+                        .ToList();
             if (matchedNos.Count == 0 && recallReason == null) return 0;
 
             var excerpt = ModeOutputProjector.Excerpt(modeOutput, mode);
@@ -2291,8 +2562,8 @@ namespace CertPlatform.Auditor.Services.Expert
                     SourceName = string.IsNullOrWhiteSpace(fileName) ? ext.FileCode : fileName,
                     Anchor = no,
                     SourceAnchor = string.IsNullOrWhiteSpace(recordName)
-                        ? "文档提取摘录"
-                        : $"文档提取摘录（{recordName}）",
+                        ? (sliceLabel ?? "文档提取摘录")
+                        : $"{(sliceLabel ?? "文档提取摘录")}（{recordName}）",
                     // 投影不是逐字切片：⛔ 不标 matched，避免下游当成"已核验原文"
                     SourceMatchStatus = "unverified",
                     SourceStart = null,
@@ -2309,20 +2580,101 @@ namespace CertPlatform.Auditor.Services.Expert
         }
 
         /// <summary>
-        /// 检查项条款 → Process 属性 → 中文过程域关键词。
-        /// <para>⛔ 拿不到属性就返回空集合 ⇒ 过程轴不启用（宁可不召回，也不靠写死编号猜）。</para>
+        /// 检查项条款 → 召回计划（15 号 §四公式的唯一接线点）。
+        ///
+        /// <para>一次读 <c>Process / EvidenceFamily / EvidenceForm / Role</c> 四类属性：
+        /// <list type="bullet">
+        ///   <item><c>ProcessKeywords</c>：过程域关键词（RM2 过程轴的键）；</item>
+        ///   <item><c>AllowedModesByClause</c>：条款号 → 章作用(Role) 决定的提取模式白名单（RM1 的体裁过滤，§4.1）；</item>
+        ///   <item><c>RecordAxisActive</c>：是否存在记录族条款（f2/f1f2）⇒ 过程轴由"兜底"翻为"主轴"。</item>
+        /// </list></para>
+        ///
+        /// <para>⛔ 拿不到属性就退化为"不过滤 + 不启用过程轴"（宁可不召回，也不靠写死编号猜）。</para>
         /// </summary>
-        private async Task<IReadOnlySet<string>> ResolveProcessKeywordsAsync(List<ISOClause> clauses)
+        private async Task<ClauseRecallPlan> ResolveClauseRecallAsync(List<ISOClause> clauses)
         {
+            var plan = new ClauseRecallPlan();
             var codes = clauses.Select(c => c.Code).Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct(StringComparer.Ordinal).ToList();
-            if (codes.Count == 0) return new HashSet<string>();
+            if (codes.Count == 0) return plan;
 
+            string[] attrCodes = { "Process", "EvidenceFamily", "EvidenceForm", "Role", "ClauseText" };
             var attrs = (await _db.GetListAsync<ClauseAttrRow>(a =>
-                codes.Contains(a.ClauseCode) && a.AttrCode == "Process"
+                codes.Contains(a.ClauseCode) && attrCodes.Contains(a.AttrCode)
                 && !a.IsDeleted && a.IsValid == 1)).Data ?? new List<ClauseAttrRow>();
-            var keys = attrs.SelectMany(a => ProcessAreaRecall.ParseKeys(a.AttrValue)).ToList();
-            return ProcessAreaRecall.KeywordsFor(keys);
+            if (attrs.Count == 0) return plan;
+
+            var byCode = attrs.GroupBy(a => a.ClauseCode, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key,
+                    g => g.GroupBy(x => x.AttrCode, StringComparer.Ordinal)
+                        .ToDictionary(x => x.Key, x => x.First().AttrValue, StringComparer.Ordinal),
+                    StringComparer.Ordinal);
+
+            var allKeys = new List<string>();
+            var allowed = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            var recordAxisActive = false;
+            // ★ RM7 语义语料：仅收 ClauseCategory ∈ {策划,支持,运行,改进} 且有条款正文的条款
+            var semanticCorpus = new List<(string ClauseNumber, string Text)>();
+            var semanticClauses = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var clause in clauses)
+            {
+                if (string.IsNullOrWhiteSpace(clause.Code)) continue;
+                byCode.TryGetValue(clause.Code!, out var map);
+                string? Get(string code) => map != null && map.TryGetValue(code, out var v) ? v : null;
+
+                var keys = ProcessAreaRecall.ParseKeys(Get("Process")).ToList();
+                allKeys.AddRange(keys);
+
+                var number = ClauseRefs.NormalizeNumber(clause.ClauseNumber);
+                if (number.Length == 0) continue;
+
+                var family = RecallPathResolver.NormalizeFamily(Get("EvidenceFamily"));
+                if (family is "f2" or "f1f2") recordAxisActive = true;
+
+                var paths = RecallPathResolver.Resolve(new ClauseRecallInput
+                {
+                    ClauseNumber = number,
+                    EvidenceFamily = Get("EvidenceFamily"),
+                    EvidenceForm = Get("EvidenceForm"),
+                    Role = Get("Role"),
+                    ProcessKeys = keys
+                });
+
+                var modes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var path in paths)
+                    foreach (var mode in path.DocTypes) modes.Add(mode);
+                if (modes.Count > 0) allowed[number] = modes;
+
+                // ★ RM7：条款作用类型驱动 + 有条款正文 ⇒ 纳入语义召回语料
+                var clauseText = ClauseTextMatcher.FlattenClauseText(Get("ClauseText"));
+                if (clauseText.Length > 0 && ClauseCategoryResolver.NeedsSemantic(Get("Role"), number))
+                {
+                    semanticCorpus.Add((number, clauseText));
+                    semanticClauses.Add(number);
+                }
+            }
+
+            plan.ProcessKeywords = ProcessAreaRecall.KeywordsFor(allKeys);
+            plan.AllowedModesByClause = allowed;
+            plan.RecordAxisActive = recordAxisActive;
+            plan.SemanticClauses = semanticClauses;
+            plan.SemanticMatcher = semanticCorpus.Count > 0 ? ClauseTextMatcher.Build(semanticCorpus) : null;
+            return plan;
+        }
+
+        /// <summary>条款召回计划：过程轴键 + 各条款体裁白名单 + 是否启用记录族主轴 + RM7 语义语料。</summary>
+        private sealed class ClauseRecallPlan
+        {
+            public IReadOnlySet<string> ProcessKeywords { get; set; } = new HashSet<string>();
+            public Dictionary<string, HashSet<string>> AllowedModesByClause { get; set; } = new(StringComparer.Ordinal);
+            public bool RecordAxisActive { get; set; }
+
+            /// <summary>RM7 语义匹配器（条款释义 BM25）；无语料时为 null（跳过 RM7）。</summary>
+            public ClauseTextMatcher? SemanticMatcher { get; set; }
+
+            /// <summary>可参与 RM7 的条款号集（ClauseCategory ∈ {策划,支持,运行,改进} 且有条款正文）。</summary>
+            public IReadOnlySet<string> SemanticClauses { get; set; } = new HashSet<string>();
         }
 
         /// <summary>
@@ -2365,6 +2717,31 @@ namespace CertPlatform.Auditor.Services.Expert
                     return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// 体裁白名单过滤（15 号 §4.1）：文档提取模式 <paramref name="docMode"/> 是否被该条款所属
+        /// 章作用（Role）允许。条款号 → 命中的检查项条款（自身或祖先）→ 该条款的 Role 白名单。
+        ///
+        /// <para>⛔ 无属性（<paramref name="allowedByClause"/> 空）或文档无模式时**放行** ——
+        /// 宁可不漏（旧文档没有 <c>ExtractionMode</c> 时不能凭空丢掉证据）。</para>
+        /// </summary>
+        private static bool ModeAllowedByClause(
+            string clauseNumber, HashSet<string> checkClauses,
+            Dictionary<string, HashSet<string>>? allowedByClause, string docMode)
+        {
+            if (allowedByClause == null || allowedByClause.Count == 0) return true;
+            // 老文档无模式（None/legacy 归一）时无从判定体裁 ⇒ 放行，不凭空丢证据
+            if (string.IsNullOrEmpty(docMode) || docMode == EnterpriseDocExtractionRouter.Legacy) return true;
+
+            var owner = checkClauses.Contains(clauseNumber)
+                ? clauseNumber
+                : checkClauses.FirstOrDefault(root => root.Length > 0
+                    && clauseNumber.Length > root.Length
+                    && clauseNumber.StartsWith(root + ".", StringComparison.Ordinal));
+            if (owner == null) return true;
+            if (!allowedByClause.TryGetValue(owner, out var modes) || modes.Count == 0) return true;
+            return modes.Contains(docMode);
         }
 
         private static string GetJsonString(JsonElement element, string name)

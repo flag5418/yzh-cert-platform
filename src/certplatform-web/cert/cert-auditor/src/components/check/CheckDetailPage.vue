@@ -388,27 +388,37 @@ async function doAutoAnalyze() {
 
     let ok = 0
     const failures: Array<{ label: string; reason: string }> = []
-    for (const r of picked) {
-      const label = r.ClauseTitles || r.ClauseNumbers || r.DetailCode
-      if (!r.TaskItemCode) {
-        // ★ 不再吞掉原因：没有任务项 Code 时，把「任务创建/刷新后仍拿不到」写清楚
-        failures.push({ label, reason: '未取得任务项 Code（任务创建后刷新列表仍未返回，请重试或检查后端日志）' })
-        autoDone.value++
-        continue
-      }
-      try {
-        const res = await analyzeCheckItem(r.TaskItemCode)
-        if (res.success) {
-          ok++
-        } else {
-          failures.push({ label, reason: res.err || res.message || '接口返回失败但未给出原因' })
+
+    // ★ 有限并发（2026-11-24）：单检查项要调 LLM（两段式 N+1 次），串行会让整页耗时线性叠加。
+    //   并发 3 条既明显提速，又不至于打爆后端与 LLM 配额；结果累加在 await 后同步执行，无竞态。
+    const CONCURRENCY = 3
+    const queue = [...picked]
+    const worker = async () => {
+      for (;;) {
+        const r = queue.shift()
+        if (!r) return
+        const label = r.ClauseTitles || r.ClauseNumbers || r.DetailCode
+        if (!r.TaskItemCode) {
+          // ★ 不再吞掉原因：没有任务项 Code 时，把「任务创建/刷新后仍拿不到」写清楚
+          failures.push({ label, reason: '未取得任务项 Code（任务创建后刷新列表仍未返回，请重试或检查后端日志）' })
+          autoDone.value++
+          continue
         }
-      } catch (e) {
-        // 网络/异常也按项记录，避免整页只看到「失败 N 项」
-        failures.push({ label, reason: e instanceof Error ? e.message : String(e) })
+        try {
+          const res = await analyzeCheckItem(r.TaskItemCode)
+          if (res.success) {
+            ok++
+          } else {
+            failures.push({ label, reason: res.err || res.message || '接口返回失败但未给出原因' })
+          }
+        } catch (e) {
+          // 网络/异常也按项记录，避免整页只看到「失败 N 项」
+          failures.push({ label, reason: e instanceof Error ? e.message : String(e) })
+        }
+        autoDone.value++
       }
-      autoDone.value++
     }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, picked.length) }, () => worker()))
 
     await reloadOnly()
     if (drawer.value && currentRow.value) await openDetail(currentRow.value)
@@ -702,6 +712,23 @@ async function removeEvidence(e: CertEvidenceRow) {
 
 /** 审核发现：从企业原始文档提取到的事实（只读，不是证据） */
 const auditFindings = computed<CertEvidenceRow[]>(() => detail.value?.AuditFindings ?? [])
+
+/**
+ * 审核发现「查看原文」：新窗口打开该来源企业文档全文（只读）。
+ * 传 fileCode（= SourceCode）+ enterpriseCode + anchor —— doc-preview 页面据此拉文档全文。
+ */
+function openFindingSource(row: CertEvidenceRow) {
+  if (!row.SourceCode) return
+  const href = router.resolve({
+    path: '/audit-task/doc-preview',
+    query: {
+      fileCode: row.SourceCode,
+      enterpriseCode: row.EnterpriseCode || '',
+      anchor: row.Anchor || '',
+    },
+  }).href
+  window.open(href, '_blank')
+}
 
 /** 现场证据表：只展示审核员在准备/现场补录的证据（⛔ 文档切片不进证据表） */
 const allEvidences = computed<CertEvidenceRow[]>(() => detail.value?.CheckEvidences ?? [])
@@ -1083,6 +1110,8 @@ onMounted(loadAll)
 
 <template>
   <div class="cd-page">
+    <!-- ★ 吸顶区（2026-11-24）：搜索栏及以上全部固定，滚动表格时「自动分析」按钮始终可见 -->
+    <div class="cd-sticky">
     <!-- 面包屑 -->
     <div class="cd-crumb">
       <a @click="backToList">{{ meta.title }}</a>
@@ -1200,6 +1229,7 @@ onMounted(loadAll)
       </el-select>
       <el-button type="primary" @click="loadAll">检索</el-button>
       <el-button type="default" @click="resetQuery">重置</el-button>
+    </div>
     </div>
 
     <!-- 检查项表 -->
@@ -1619,9 +1649,20 @@ onMounted(loadAll)
                   <div v-if="row.SourceAnchor">定位片段：{{ row.SourceAnchor }}</div>
                 </template>
               </el-table-column>
-              <el-table-column label="原文事实" min-width="280" show-overflow-tooltip>
+              <el-table-column label="原文事实（概括）" min-width="280" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <span class="cd-evi-body">{{ row.LlmSummary || row.Snippet || '（无内容）' }}</span>
+                  <span class="cd-evi-body">{{ row.Digest || row.Snippet || '（无内容）' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="90" align="center">
+                <template #default="{ row }">
+                  <el-button
+                    type="primary"
+                    link
+                    size="small"
+                    :disabled="!row.SourceCode"
+                    @click="openFindingSource(row as CertEvidenceRow)"
+                  >查看原文</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -1946,6 +1987,15 @@ onMounted(loadAll)
   padding: var(--yzh-space-4, 16px);
 }
 
+/* ── 吸顶区：搜索栏及以上全部固定（含自动分析按钮），滚动表格时始终可见 ── */
+.cd-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding-top: var(--yzh-space-2, 8px);
+  background: var(--yzh-color-bg-page, #f5f7fa);
+}
+
 /* ── 面包屑 / 页头 ── */
 .cd-crumb {
   display: flex;
@@ -2046,6 +2096,8 @@ onMounted(loadAll)
   flex-wrap: wrap;
   gap: var(--yzh-space-3, 12px);
   margin-bottom: var(--yzh-space-3, 12px);
+  /* 吸顶固定上移至 .cd-sticky（整块搜索栏及以上区域） */
+  padding: var(--yzh-space-2, 8px) 0;
 }
 .cd-filters__kw { width: var(--yzh-width-kw, 240px); }
 .cd-filters__sel { width: var(--yzh-width-sel, 150px); }

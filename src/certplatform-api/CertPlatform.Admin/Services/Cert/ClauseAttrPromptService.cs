@@ -39,6 +39,20 @@ public sealed class ClauseAttrPromptService
     /// <summary>属性池注入占位符</summary>
     public const string AttrPoolPlaceholder = "{{attr_pool}}";
 
+    /// <summary>
+    /// <b>系统派生属性</b> —— 值由系统从标准原文直接产生，⛔ <b>不能交给 LLM「生成」</b>。
+    ///
+    /// <para><c>ClauseText</c>（条款正文）= 从 <c>cert_iso_clause.Description</c> 原样灌入，
+    /// 是 RM7 语义召回的**唯一语料来源**。若把它放进属性池让模型产出 ⇒ 模型会「复述/概括」
+    /// 覆盖标准原文，<b>语料被污染且不报错</b>（RM7 从此命中全错）。</para>
+    ///
+    /// <para>渲染注入段（<see cref="BuildPoolSectionAsync"/>）与落库（<c>ClauseAttrGenerateService</c>）
+    /// 都必须按本集合过滤。⚠️ 与 <c>ClauseAttrGenerateService.ReferenceAttrs</c> 同类：受控硬集合，
+    /// 新增派生属性时在此登记一处即可。</para>
+    /// </summary>
+    public static readonly HashSet<string> DerivedAttrs =
+        new(StringComparer.Ordinal) { "ClauseText" };
+
     /// <summary>条款级占位符</summary>
     private const string PhStandardName = "{{standard_name}}";
     private const string PhClauseNumber = "{{clause_number}}";
@@ -74,10 +88,12 @@ public sealed class ClauseAttrPromptService
     public async Task<ClauseAttrPromptDto> GetPromptAsync(CancellationToken ct = default)
     {
         var (template, row) = await GetTemplateAsync(ct);
-        var pool = await _db.Client.Queryable<ClauseAttrDef>()
+        var pool = (await _db.Client.Queryable<ClauseAttrDef>()
             .Where(p => !p.IsDeleted && p.IsValid == 1)
             .OrderBy(p => p.Sort)
-            .ToListAsync();
+            .ToListAsync())
+            .Where(p => p.Code != null && !DerivedAttrs.Contains(p.Code))
+            .ToList();
 
         return new ClauseAttrPromptDto
         {
@@ -120,10 +136,12 @@ public sealed class ClauseAttrPromptService
     /// </summary>
     public async Task<string> BuildPoolSectionAsync(CancellationToken ct = default)
     {
-        var pool = await _db.Client.Queryable<ClauseAttrDef>()
+        var pool = (await _db.Client.Queryable<ClauseAttrDef>()
             .Where(p => !p.IsDeleted && p.IsValid == 1)
             .OrderBy(p => p.Sort)
-            .ToListAsync();
+            .ToListAsync())
+            .Where(p => p.Code != null && !DerivedAttrs.Contains(p.Code))
+            .ToList();
 
         var sb = new StringBuilder();
         sb.Append("## 属性清单（由「条款属性池」自动生成 · 共 ").Append(pool.Count).AppendLine(" 条）");

@@ -1665,6 +1665,7 @@ namespace CertPlatform.Auditor.Services.Ent
             EnterpriseDocExtractionRouter.WorkInstructionCitation => "指导书引用",
             EnterpriseDocExtractionRouter.PolicyProfile => "制度摘要",
             EnterpriseDocExtractionRouter.ContextList => "组织环境清单",
+            EnterpriseDocExtractionRouter.ManualChapter => "手册章节",
             EnterpriseDocExtractionRouter.ClauseFull => "逐条款",
             EnterpriseDocExtractionRouter.None => "不提取",
             _ => mode,
