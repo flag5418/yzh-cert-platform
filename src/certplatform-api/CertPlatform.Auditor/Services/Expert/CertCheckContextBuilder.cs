@@ -47,6 +47,13 @@ public sealed class ClauseContext
     /// <summary>该条款命中的企业文档切片（来自 <c>cert_document_extraction.ContentJson.Clauses[]</c>）</summary>
     public List<ClauseDocSlice> Slices { get; } = new();
 
+    /// <summary>
+    /// 该条款的召回计划（RM 轴清单，唯一判据 = <see cref="RecallPathResolver.Resolve"/>）。
+    /// <para>供提示词渲染「轴计划 vs 命中」—— 让模型知道「本该从哪条轴找回、实际有没有找回」，
+    /// 而不是只看到命中结果（⛔ 轴 0 命中 ≠ 证据不存在）。</para>
+    /// </summary>
+    public List<RecallPath> RecallPaths { get; set; } = new();
+
     /// <summary>取属性值（不存在或空白 ⇒ <c>null</c>）</summary>
     public string? Attr(string code)
         => Attrs.TryGetValue(code, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
@@ -113,6 +120,13 @@ public sealed class CertCheckContext
     /// <para>格式：<c>条款号|RM计划=RM1,RM7|来源份数=N</c>。</para>
     /// </summary>
     public List<string> RecallTrace { get; init; } = new();
+
+    /// <summary>
+    /// 全库文档目录（只画像，<b>不含正文</b>）：让模型知道「企业还提交了哪些文档、本次未必都被召回」。
+    /// <para>由 <c>LoadDocSlicesAsync</c> 生成，注入 <c>clause_evidence_findings</c> 的 <c>{{doc_catalog}}</c>。
+    /// 用途是「知道自己漏了什么」，⛔ 不是把整库正文塞进上下文（正文仍由召回决定）。</para>
+    /// </summary>
+    public string DocCatalogText { get; init; } = string.Empty;
 
     /// <summary>命中的文档份数（去重）</summary>
     public int DocHitCount => Clauses
@@ -538,8 +552,10 @@ public sealed class CertCheckContextBuilder
             .ToList();
 
         // ---- 4. 文档模型：按「企业 × 标准 × 条款编号」取切片 ----
+        // ★ 顺带产出「全库文档目录」（只画像不含正文）⇒ 注入 clause_evidence_findings 的 {{doc_catalog}}
+        var docCatalog = string.Empty;
         if (!string.IsNullOrWhiteSpace(enterpriseCode))
-            await LoadDocSlicesAsync(clauses, enterpriseCode!, deptNames, warnings, recallTrace);
+            docCatalog = await LoadDocSlicesAsync(clauses, enterpriseCode!, deptNames, warnings, recallTrace);
         else
             warnings.Add("企业 Code 为空 ⇒ 未装配企业文档（条款块里的资料命中全部为空）");
 
@@ -588,7 +604,8 @@ public sealed class CertCheckContextBuilder
             Clauses = clauses,
             OrphanEvidences = orphans,
             Warnings = warnings,
-            RecallTrace = recallTrace
+            RecallTrace = recallTrace,
+            DocCatalogText = docCatalog
         };
     }
 
@@ -620,7 +637,8 @@ public sealed class CertCheckContextBuilder
     /// 取企业文档在本次条款上的原文摘录。
     /// <para>过滤链：<c>EnterpriseCode</c> → <c>StandardCode</c> → <c>ContentJson.Clauses[].ClauseNumber</c>。</para>
     /// </summary>
-    private async Task LoadDocSlicesAsync(
+    /// <returns>「全库文档目录」文本（只画像不含正文）；无可列文档时返回空串。</returns>
+    private async Task<string> LoadDocSlicesAsync(
         List<ClauseContext> clauses, string enterpriseCode, string? deptNames,
         List<string> warnings, List<string> recallTrace)
     {
@@ -636,7 +654,7 @@ public sealed class CertCheckContextBuilder
         if (wanted.Count == 0)
         {
             warnings.Add("条款缺少 ClauseNumber 或 StandardCode ⇒ 无法按条款号过滤文档切片");
-            return;
+            return string.Empty;
         }
 
         var standardGuids = wanted.Keys.ToList();
@@ -651,7 +669,7 @@ public sealed class CertCheckContextBuilder
         if (extractions.Count == 0)
         {
             warnings.Add($"企业文档尚未按标准提取（cert_document_extraction 命中 0 行，enterprise={enterpriseCode}）⇒ 条款块里的资料命中为空");
-            return;
+            return string.Empty;
         }
 
         var staleCount = extractions.Count(e => e.IsStale);
@@ -669,6 +687,9 @@ public sealed class CertCheckContextBuilder
         var processAxisCandidates = new List<ProcessAxisCandidate>();
         // 轴3 部门轴候选（RM3）同样先收集再统一分配，见 ApplyDeptAxis
         var deptAxisCandidates = new List<DeptAxisCandidate>();
+
+        // ★ 全库文档目录（只画像不含正文）：让模型知道「企业还提交了哪些文档、本次未必都被召回」。
+        var catalog = new List<string>();
 
         // ★ 改造1（19 号方案）：逐条款解析召回路径（唯一判据 = RecallPathResolver，全仓唯一）。
         //   条款号 → 路径清单；RM1 体裁白名单从中派生（该条款召回不含条款轴 ⇒ 不做体裁过滤，由 RM2/RM3 承担）。
@@ -728,6 +749,7 @@ public sealed class CertCheckContextBuilder
             // ⛔ 只决定"要不要召回这份文档"，条款归属由被匹配的条款决定，永不反推条款号。
             ExtractProcessAxisCandidate(ex, processAxisCandidates);
             ExtractDeptAxisCandidate(ex, deptAxisCandidates);
+            AppendDocCatalogEntry(ex, currentFiles, catalog);
         }
 
         // ---- 轴2 分配：记录优先；仅对「召回计划含 RM2」的条款执行，且受该条款体裁白名单约束 ----
@@ -746,11 +768,90 @@ public sealed class CertCheckContextBuilder
         // ---- 7. 召回路径记账（改造4）：逐条款记「RM 计划轴 + 来源份数」，供快照核对「不遗漏、不虚增」 ----
         foreach (var c in clauses)
         {
-            var axes = recallByClause.TryGetValue(c.ClauseNumber, out var ps) && ps.Count > 0
-                ? string.Join(",", ps.Select(p => p.Axis))
+            var paths = recallByClause.TryGetValue(c.ClauseNumber, out var ps) ? ps : new List<RecallPath>();
+            // ★ 把召回计划挂到条款：提示词据此渲染「轴计划 vs 命中」（轴 0 命中 ≠ 证据不存在）。
+            if (paths.Count > 0) c.RecallPaths = paths;
+
+            var axes = paths.Count > 0
+                ? string.Join(",", paths.Select(p => p.Axis))
                 : "无(条款属性缺失)";
             var docCount = c.Slices.Select(s => s.FileCode).Distinct(StringComparer.Ordinal).Count();
             recallTrace.Add($"{c.ClauseNumber}|RM计划={axes}|来源份数={docCount}");
+        }
+
+        // ---- 8. 全库文档目录（只画像不含正文）：告诉模型「企业还提交了哪些文档、本次未召回」 ----
+        return BuildDocCatalogText(catalog);
+    }
+
+    /// <summary>全库文档目录的总字符上限（超出则截断并注明）。目录是「知道自己漏了什么」，不是正文，几 KB 足够。</summary>
+    private const int DocCatalogMaxChars = 12000;
+
+    /// <summary>
+    /// 渲染「全库文档目录」：每份文档一行画像（文件名 / 体裁 / 过程域 / 责任部门 / 已提条款），
+    /// <b>不含正文</b>。目的是让模型知道「本次召回之外，企业还提交了哪些文档」，
+    /// ⛔ 不得据此推断未召回文档的内容，也不得写成「企业未提供」。
+    /// </summary>
+    private static string BuildDocCatalogText(List<string> catalog)
+    {
+        if (catalog.Count == 0) return string.Empty;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("## 企业已提交文档目录（本次未必都被召回；只有目录，不含正文）");
+        sb.AppendLine($"共 {catalog.Count} 份：");
+        foreach (var line in catalog)
+        {
+            if (sb.Length > DocCatalogMaxChars)
+            {
+                sb.AppendLine("（目录过长，其余条目已省略）");
+                break;
+            }
+            sb.AppendLine("- " + line);
+        }
+        sb.AppendLine("（说明：某文档未出现在上文「文档原文摘录」中 = 本次未召回，不得据此推断其内容或声称「企业未提供」。）");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 追加一条「全库文档目录」条目：只写画像（文件名 / 体裁 / 过程域 / 责任部门 / 已提条款），
+    /// ⛔ 不含正文 —— 目的是让模型知道「企业还有哪些文档本次未被召回」，而不是把整库塞进上下文。
+    /// </summary>
+    private void AppendDocCatalogEntry(
+        DocumentExtraction ex, Dictionary<string, List<EnterpriseDoc>> files, List<string> catalog)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(ex.ContentJson!);
+            var root = doc.RootElement;
+            var rawMode = GetString(root, "ExtractionMode", "extractionMode") ?? "";
+            var normMode = EnterpriseDocExtractionRouter.NormalizeMode(rawMode);
+
+            var fileName = GetObject(root, "DocMeta", "docMeta") is { } meta
+                ? GetString(meta, "FileName", "fileName") ?? ""
+                : "";
+            if (string.IsNullOrWhiteSpace(fileName)
+                && files.TryGetValue(ex.FileCode, out var f) && f.Count == 1)
+                fileName = f[0].FileName;
+
+            var parts = new List<string> { $"《{fileName}》", $"体裁={normMode}" };
+            if (GetObject(root, "ModeOutput", "modeOutput") is { } output)
+            {
+                output = ModeOutputProjector.ForProjection(output, rawMode);
+                var processArea = GetString(output, "ProcessArea", "processArea");
+                if (!string.IsNullOrWhiteSpace(processArea)) parts.Add($"过程域={processArea}");
+                var depts = DocDeptNames.Collect(output);
+                if (depts.Count > 0) parts.Add($"责任部门={string.Join("/", depts)}");
+            }
+            var numbers = (ex.ClauseNumbers ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim()).Where(s => s.Length > 0)
+                .Distinct(StringComparer.Ordinal).ToList();
+            if (numbers.Count > 0) parts.Add($"条款={string.Join(",", numbers)}");
+
+            catalog.Add(string.Join("｜", parts));
+        }
+        catch (JsonException)
+        {
+            // 产物损坏 ⇒ 目录跳过该份，不影响其它轴
         }
     }
 

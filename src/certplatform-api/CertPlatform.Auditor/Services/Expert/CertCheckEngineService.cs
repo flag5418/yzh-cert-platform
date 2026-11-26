@@ -788,8 +788,51 @@ public class CertCheckEngineService
             .Replace("{{allowed_clause_refs}}", allowedRefs, StringComparison.Ordinal)
             .Replace("{{referenced_clauses}}", "", StringComparison.Ordinal)
             .Replace("{{doc_facts}}", clause.FactText, StringComparison.Ordinal)
-            .Replace("{{doc_excerpts}}", excerpts.ToString(), StringComparison.Ordinal);
+            .Replace("{{doc_excerpts}}", excerpts.ToString(), StringComparison.Ordinal)
+            .Replace("{{recall_paths}}", RenderRecallPaths(clause), StringComparison.Ordinal)
+            .Replace("{{doc_catalog}}", context.DocCatalogText, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 渲染「召回轴计划 vs 实际命中」（供 <c>clause_evidence_findings</c> 的 <c>{{recall_paths}}</c>）。
+    /// <para>目的：让模型知道<b>本该从哪条轴找回、实际有没有找回</b> ——
+    /// ⛔ 轴 0 命中只表示「本次召回未找到」，<b>不等于</b>企业没有该证据（可能是文档未提取/未上传/键不匹配）。</para>
+    /// </summary>
+    private static string RenderRecallPaths(ClauseContext clause)
+    {
+        var hitDocs = clause.Slices.Select(s => s.FileCode).Distinct(StringComparer.Ordinal).Count();
+        var sb = new StringBuilder();
+        sb.AppendLine($"本条命中企业文档份数：{hitDocs}");
+        if (clause.RecallPaths.Count == 0)
+        {
+            sb.AppendLine("召回轴计划：（条款属性缺失，未生成召回计划）");
+            return sb.ToString();
+        }
+
+        sb.AppendLine("召回轴计划（RM = 系统按条款属性推导的召回路线）：");
+        foreach (var p in clause.RecallPaths)
+        {
+            var key = string.IsNullOrWhiteSpace(p.Key) ? "" : $" 键={p.Key}";
+            var types = p.DocTypes.Count > 0 ? $" 体裁={string.Join("/", p.DocTypes)}" : "";
+            var reason = string.IsNullOrWhiteSpace(p.Reason) ? "" : $" 原因={p.Reason}";
+            sb.AppendLine($"- {p.Axis} {AxisName(p.Axis)}{key}{types} 提取={p.Extract}{reason}");
+        }
+        sb.AppendLine("（说明：轴计划 = 系统按条款属性推导的召回路线；命中 0 份仅代表「本次未召回」，⛔ 不得据此写成企业未提供。）");
+        return sb.ToString();
+    }
+
+    /// <summary>召回轴代号 → 中文名（仅供提示词可读性，⛔ 不参与任何业务判定）。</summary>
+    private static string AxisName(string axis) => axis switch
+    {
+        RecallAxis.Clause => "条款轴",
+        RecallAxis.Process => "过程轴",
+        RecallAxis.Dept => "部门轴",
+        RecallAxis.DocNo => "编号轴",
+        RecallAxis.Site => "现场轴",
+        RecallAxis.Interview => "访谈轴",
+        RecallAxis.Semantic => "语义轴",
+        _ => axis
+    };
 
     private static string RenderEvidenceGenPrompt(
         string template, Entities.Expert.CertAuditPlanDetail? detail,
