@@ -341,16 +341,20 @@ public sealed class ClauseAttrGenerateService
     /// 前置条款判定（见 <see cref="GenerateAsync"/> ②-a）：命中 ⇒ 这条不产生检查要求，跳过不生成。
     ///
     /// <para>① 条款号 <c>1 / 2 / 3</c> —— ISO 高层结构里固定是「范围 / 规范性引用文件 / 术语和定义」；
-    /// ② 正文非空但一个义务动词都没有 —— 纯说明性条款。</para>
+    /// ② 全文非空但一个义务动词都没有 —— 纯说明性条款。</para>
     ///
-    /// <para>⚠️ 正文为空时**返回 false**（判不了就不猜）：宁可多生成一条，也不静默丢条款。</para>
+    /// <para>⚠️ 全文 = <c>Title + Description</c>，⛔ 不能只读 <c>Description</c>：
+    /// 落库时条款**首句往往切进 <c>Title</c>**（如 <c>10.2.2</c> Title=「组织应保留成文信息…」、
+    /// Description 只剩 <c>a)/b)</c> 枚举），只读 Description 会把这些**真条款误判成前置** ⇒ 静默不产属性。</para>
+    ///
+    /// <para>⚠️ 全文为空时**返回 false**（判不了就不猜）：宁可多生成一条，也不静默丢条款。</para>
     /// </summary>
     private static bool IsPreambleClause(CertPlatform.Shared.Entities.Cert.ISOClause clause)
     {
         var number = (clause.ClauseNumber ?? string.Empty).Trim().TrimEnd('.');
         if (number is "1" or "2" or "3") return true;
 
-        var text = clause.Description;
+        var text = $"{clause.Title}\n{clause.Description}";
         if (string.IsNullOrWhiteSpace(text)) return false;
 
         var lower = text.ToLowerInvariant();

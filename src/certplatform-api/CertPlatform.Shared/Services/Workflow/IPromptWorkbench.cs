@@ -20,20 +20,18 @@ namespace CertPlatform.Shared.Services.Workflow
         public const string Essential = "doc_essential";
         /// <summary>★★★ 认证准备资料完备性分析（输入「条款 + 属性 + 文档摘录」→ 输出 PrepState / 缺料 / 矛盾 JSON）</summary>
         /// <remarks>
-        /// ★ 2026-11-01 新增（46 号 §6.1）：准备与检查是<b>两套提示词</b>，⛔ 不再共用一个 <see cref="AuditCheck"/>。
+        /// ★ 2026-11-01 新增（46 号 §6.1）：准备与检查是<b>两套提示词</b>。
         /// <para>为什么必须分开：两者要回答的问题不同 ——</para>
         /// <list type="bullet">
         ///   <item><b>准备</b>问「资料齐不齐」（输出 <c>found/partial/missing/unknown/na</c> + 缺哪些材料 + 跨文档矛盾），
         ///         此时审核员还没到现场，<b>不能下符合性结论</b>；</item>
-        ///   <item><b>检查</b>问「符不符合」（输出 <c>pass/ofi/nc/na</c> + NC 建议 + 严重程度）。</item>
+        ///   <item><b>检查</b>问「符不符合」——2026-11-27 起<b>唯一</b>走两段式
+        ///         （<see cref="ClauseEvidenceFindings"/> → <see cref="AuditEvidenceGen"/>），单段 <c>audit_check</c> 已退役。</item>
         /// </list>
         /// <para>共用一个提示词会让模型在两个值域之间摇摆 —— 这正是 46 号 F3「把 pass 写进 PrepState」
         /// 那类语义污染的温床。</para>
         /// </remarks>
         public const string AuditPrep = "audit_prep";
-
-        /// <summary>★★★ 认证检查符合性分析（输入「条款 + 证据」→ 输出结论/NC 建议 JSON）</summary>
-        public const string AuditCheck = "audit_check";
 
         /// <summary>★★★ 审核发现（两段式第一段：条款 + 文档摘录 → 找回事实 / 疑点 / 证据组合，⛔ 不判符合性）</summary>
         public const string ClauseEvidenceFindings = "clause_evidence_findings";
@@ -54,14 +52,17 @@ namespace CertPlatform.Shared.Services.Workflow
         /// <para>⚠️ 输出里的 <c>Artifacts</c> / <c>EvidenceChain</c> 是<b>提示词正文</b>（不是结论），
         /// 因为这两条属性在 L1 的值类型就是 <c>prompt</c>。</para>
         /// </summary>
-        public const string ClauseAttr = "clause_attr";
+        public const string ClauseAttr = "clause_attr_gen";
     }
 
     /// <summary>
     /// 生效提示词的<b>只读投影</b>（Shared 契约）。
     /// <para><b>为什么不直接返回实体</b>：<c>PromptTemplate</c> 是<b>后台端独占实体</b>
-    /// （<c>CertPlatform.Admin/Entities/Wf/</c>）⇒ 透出它等于让专家端重新依赖后台端。
+    /// （<c>CertPlatform.Admin/Entities/Cert/</c>）⇒ 透出它等于让专家端重新依赖后台端。
     /// 本 DTO 只带调用方真正要用的 5 个字段。</para>
+    /// <para>★ 2026-11-27：<c>wf_prompt_template</c> 退役后唯一数据源 = <c>cert_prompt_template</c>，
+    /// 该表无 <c>Version</c>（⇒ <see cref="Version"/> 恒为 1）、无 <c>StandardCode</c>
+    /// （⇒ <see cref="StandardCode"/> 取 <c>ScopeKey</c> 标准短码）。</para>
     /// </summary>
     public sealed class PromptTemplateView
     {
@@ -72,7 +73,7 @@ namespace CertPlatform.Shared.Services.Workflow
         /// <summary>模型名快照（为空 = 用平台默认）</summary>
         public string? ModelName { get; init; }
         /// <summary>
-        /// ★ 命中的是哪一级：<b>标准 GUID</b> = 该标准专属；<c>null</c>/空 = <b>平台级兜底</b>。
+        /// ★ 命中的是哪一级：非空（= 命中行的 <c>ScopeKey</c>，标准短码）= 该标准专属；<c>null</c>/空 = <b>平台级兜底</b>。
         /// <para>调用方据此判断「回退是否发生」——多标准隔离下，用平台兜底等于
         /// 「这个标准还没真正配置」，⛔ 必须能告警，不能静默。</para>
         /// </summary>

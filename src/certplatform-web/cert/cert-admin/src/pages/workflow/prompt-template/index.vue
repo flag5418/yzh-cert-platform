@@ -208,7 +208,7 @@ const typeDef = computed(
 /** 当前节点显示名（空 = 平台级，落在根上） */
 const nodeLabel = computed(() => {
   if (!scope.value) return ''
-  // ★ 比对键 = `code`（GUID）—— 与 wf_prompt_template.StandardCode 同一空间
+  // ★ 比对键 = `code`（GUID）—— 与接口契约 standardCode（cert_iso_standard.Code）同一空间
   const hit = standards.value.find((x) => normScope(x.code) === scope.value)
   return hit?.standardName || hit?.display || scope.value
 })
@@ -498,7 +498,6 @@ async function doSave(opts: { bypassGate?: boolean; silent?: boolean } = {}): Pr
         promptName: row?.promptName || makePromptName(activeType.value, nodeLabel.value || ROOT_SCOPE.label),
         promptType: activeType.value,
         standardCode: scope.value || null,
-        skillTarget: row?.skillTarget ?? null,
         template: templateText.value,
         description: row?.description || typeDef.value.desc
       })

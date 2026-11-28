@@ -2,9 +2,10 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using CertPlatform.Admin.Services.Workflow;
-using CertPlatform.Admin.Entities.Wf;
-// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate（本控制器管 wf_prompt_template）
-using PromptTemplate = CertPlatform.Admin.Entities.Wf.PromptTemplate;
+using CertPlatform.Admin.Entities.Cert;
+// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate
+// ★ 2026-11-27：wf_prompt_template 已退役，本控制器唯一数据源 = cert_prompt_template
+using PromptTemplate = CertPlatform.Admin.Entities.Cert.PromptTemplate;
 using YZH.Core.Api.Controllers;
 using YZH.Core.Api.Services;
 using YZH.Core.Stand.Helpers;
@@ -46,10 +47,11 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
         _workbench = workbench;
     }
 
-    /// <summary>加载 EntityConfig（Workflow/PromptTemplate.json）</summary>
+    /// <summary>加载 EntityConfig（Cert/PromptTemplate.json）</summary>
     protected override EntityConfig LoadConfig()
     {
-        return EntityConfigHelper.GetConfig("Workflow/PromptTemplate");
+        // ★ 2026-11-27：与 Cert/PromptTemplateController 同一份配置（显式路径，避免同名文件歧义）
+        return EntityConfigHelper.GetConfig("Cert/PromptTemplate");
     }
 
     #region 标准端点（继承自 YzhControllerBase）
@@ -64,24 +66,8 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
 
     #region 业务端点
 
-    /// <summary>获取指定类型当前生效的提示词（技能优先匹配，回退通用）</summary>
-    [HttpGet("active/{promptType}")]
-    public async Task<IActionResult> GetActive(string promptType, [FromQuery] string? skillTarget = null)
-    {
-        var entity = await _service.GetActiveAsync(promptType, skillTarget);
-        if (entity == null)
-            return Ok(ApiResponse.Fail("未找到生效的提示词"));
-
-        return Ok(ApiResponse<PromptTemplateDto>.Ok(PromptTemplateDto.From(entity)));
-    }
-
-    /// <summary>激活提示词（同类型其他提示词置为不生效）</summary>
-    [HttpPost("action/activate")]
-    public async Task<IActionResult> Activate([FromQuery] string code)
-    {
-        var ok = await _service.ActivateAsync(code);
-        return ok ? Ok(ApiResponse.Ok("激活成功")) : Ok(ApiResponse.Fail("激活失败"));
-    }
+    // ★ 2026-11-27：已下线 <c>active/{promptType}</c>（GetActive）与 <c>action/activate</c>（Activate）
+    //   —— 二者为 wf 时代「技能优先」语义、前端零引用；工作台统一走 <c>workbench/*</c>。
 
     // ========================================================
     // ★ 提示词工作台（2026-10-02）—— AI 生成草稿 + 上传试跑
@@ -103,7 +89,9 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
         if (entity == null)
             return Ok(ApiResponse<PromptTemplateDto>.Ok(null));
 
-        return Ok(ApiResponse<PromptTemplateDto>.Ok(PromptTemplateDto.From(entity)));
+        // ★ 库里 ScopeKey 存短码，DTO 的 standardCode 契约是 GUID（前端作用域键）⇒ 下发前换算
+        var guid = await _service.ResolveStandardGuidAsync(entity.ScopeKey);
+        return Ok(ApiResponse<PromptTemplateDto>.Ok(PromptTemplateDto.From(entity, guid)));
     }
 
     /// <summary>
@@ -200,15 +188,35 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
     public async Task<IActionResult> List([FromQuery] string? promptType, [FromQuery] string? standardCode)
     {
         var rows = await _workbench.ListAsync(promptType, standardCode);
-        var list = rows.Select(PromptTemplateDto.From).ToList();
+        // ★ 库里 ScopeKey 存短码，DTO 的 standardCode 契约是 GUID ⇒ 逐行换算（标准数极少，同 slug 走缓存）
+        var guidCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var list = new List<PromptTemplateDto>(rows.Count);
+        foreach (var row in rows)
+        {
+            string? guid = null;
+            if (!string.IsNullOrWhiteSpace(row.ScopeKey))
+            {
+                if (!guidCache.TryGetValue(row.ScopeKey!, out guid))
+                {
+                    guid = await _service.ResolveStandardGuidAsync(row.ScopeKey);
+                    guidCache[row.ScopeKey!] = guid;
+                }
+            }
+            list.Add(PromptTemplateDto.From(row, guid));
+        }
         return Ok(ApiResponse<List<PromptTemplateDto>>.Ok(list));
     }
 
     /// <summary>
-    /// 【工作台】保存提示词（按 <c>PromptCode</c> 幂等 upsert：无则新增、有则覆盖正文并置为生效）。
+    /// 【工作台】保存提示词（按行业务键 <c>Code</c> 幂等 upsert：无则新增、有则覆盖正文并置为生效）。
     /// <para>POST /api/PromptTemplate/workbench/save</para>
+    /// <para>★ 请求字段口径（2026-11-27 切 <c>cert_prompt_template</c>）：
+    /// <c>PromptCode</c> = 行业务键（写入 <c>entity.Code</c>）；
+    /// <c>PromptType</c> = 提示词类型（写入 <c>entity.PromptCode</c>）；
+    /// <c>StandardCode</c> = 标准 GUID（服务换算短码写入 <c>entity.ScopeKey</c>）；
+    /// <c>Description</c> = 说明（写入 <c>entity.Remark</c>）。</para>
     /// <para>⚠️ 不走通用 <c>add</c>/<c>update</c>：那两个走 <c>EntityService</c> 的
-    /// 「<c>updateFields</c> = 全部 BcFlag 列」全量写回，会把服务端生成的 <c>Code</c>/<c>IsActive</c> 覆盖成前端值。</para>
+    /// 「<c>updateFields</c> = 全部 BcFlag 列」全量写回，会把服务端生成的 <c>Code</c>/<c>IsValid</c> 覆盖成前端值。</para>
     /// <para>⛔ 版本不再 +1（2026-10-02 裁决：提示词不做版本管理）；
     /// 模型参数不在本请求内（统一 AI 配置，Q3=a）。</para>
     /// </summary>
@@ -219,16 +227,19 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
             return Ok(ApiResponse.Fail("提示词编码（PromptCode）不能为空"));
         if (string.IsNullOrWhiteSpace(req.Template))
             return Ok(ApiResponse.Fail("提示词内容不能为空"));
+        if (string.IsNullOrWhiteSpace(req.PromptType))
+            return Ok(ApiResponse.Fail("提示词类型（PromptType）不能为空"));
 
         var entity = new PromptTemplate
         {
-            PromptCode = req.PromptCode!.Trim(),
+            // ★ cert 表：Code = 行业务键；PromptCode = 提示词类型（两者不可混，见 PromptTemplateService 头注）
+            Code = req.PromptCode!.Trim(),
+            PromptCode = req.PromptType!.Trim(),
             PromptName = string.IsNullOrWhiteSpace(req.PromptName) ? req.PromptCode!.Trim() : req.PromptName!.Trim(),
-            PromptType = req.PromptType?.Trim() ?? "",
-            SkillTarget = string.IsNullOrWhiteSpace(req.SkillTarget) ? null : req.SkillTarget!.Trim(),
-            StandardCode = string.IsNullOrWhiteSpace(req.StandardCode) ? null : req.StandardCode!.Trim(),
+            // ★ 入库换算：标准 GUID → 短码（cert 表 ScopeKey 存短码，D4 裁决）
+            ScopeKey = await _service.ResolveStandardSlugAsync(req.StandardCode),
             Template = req.Template,
-            Description = req.Description,
+            Remark = req.Description,
             // ModelName / MaxTokens / Temperature 故意不赋值（保持 null）：
             // SaveAsync 更新分支会把库中已有值原样保留，NC 链路读它们不受影响。
         };
@@ -265,13 +276,17 @@ public class PromptTemplateController : YzhControllerBase<PromptTemplate>
 public class PromptTemplateDto
 {
     [JsonPropertyName("id")] public long Id { get; set; }
+    /// <summary>行业务键（= cert_prompt_template.Code；工作台前端的 <c>promptCode</c>）</summary>
     [JsonPropertyName("promptCode")] public string PromptCode { get; set; } = string.Empty;
     [JsonPropertyName("promptName")] public string PromptName { get; set; } = string.Empty;
+    /// <summary>提示词类型（= cert_prompt_template.PromptCode：doc_group / clause_attr_gen …）</summary>
     [JsonPropertyName("promptType")] public string PromptType { get; set; } = string.Empty;
-    [JsonPropertyName("skillTarget")] public string? SkillTarget { get; set; }
+    /// <summary>适用标准 GUID（cert_iso_standard.Code）；空 = 平台级默认（对所有标准生效）</summary>
     [JsonPropertyName("standardCode")] public string? StandardCode { get; set; }
     [JsonPropertyName("template")] public string? Template { get; set; }
+    /// <summary>说明（= cert_prompt_template.Remark）</summary>
     [JsonPropertyName("description")] public string? Description { get; set; }
+    /// <summary>是否生效（= IsValid == 1；cert 表无 IsActive，铁律九）</summary>
     [JsonPropertyName("isActive")] public bool IsActive { get; set; }
     [JsonPropertyName("status")] public string? Status { get; set; }
     [JsonPropertyName("creator")] public string? Creator { get; set; }
@@ -282,17 +297,22 @@ public class PromptTemplateDto
     //    本工作台「统一 AI 配置」（Q3=a）—— 模型参数一律读 cert_sys_config，
     //    版本管理已裁决不做。NC 链路 BuildNcPromptSkill 仍读库里的行级参数，不受影响。
 
-    public static PromptTemplateDto From(PromptTemplate e) => new()
+    /// <summary>
+    /// 实体 → DTO。
+    /// <para><paramref name="standardGuid"/> 为标准 GUID，由调用方用
+    /// <c>PromptTemplateService.ResolveStandardGuidAsync(entity.ScopeKey)</c> 换算后传入
+    /// （库里 <c>ScopeKey</c> 存短码，DTO 契约是 GUID）；空 = 平台级。</para>
+    /// </summary>
+    public static PromptTemplateDto From(PromptTemplate e, string? standardGuid = null) => new()
     {
         Id = e.Id,
-        PromptCode = e.PromptCode,
+        PromptCode = e.Code ?? string.Empty,
         PromptName = e.PromptName,
-        PromptType = e.PromptType,
-        SkillTarget = e.SkillTarget,
-        StandardCode = e.StandardCode,
+        PromptType = e.PromptCode,
+        StandardCode = standardGuid,
         Template = e.Template,
-        Description = e.Description,
-        IsActive = e.IsActive,
+        Description = e.Remark,
+        IsActive = e.IsValid == 1,
         Status = e.Status,
         Creator = e.CreateBy,
         CreateTime = e.CreateTime,
@@ -342,17 +362,21 @@ public class PromptTestRequest
     public string? CacheKey { get; set; }
 }
 
-/// <summary>【工作台】保存提示词请求（字段名 = 实体属性名，PascalCase 逐字一致）</summary>
+/// <summary>【工作台】保存提示词请求（⚠️ 字段为前端契约名，映射到 cert 实体见 <c>Save</c>）</summary>
 public class PromptSaveRequest
 {
+    /// <summary>行业务键（写入 cert_prompt_template.Code）</summary>
     public string? PromptCode { get; set; }
     public string? PromptName { get; set; }
+    /// <summary>提示词类型（写入 cert_prompt_template.PromptCode：doc_group / clause_attr_gen …）</summary>
     public string? PromptType { get; set; }
+    /// <summary>适用标准 GUID（服务换算短码写入 ScopeKey）</summary>
     public string? StandardCode { get; set; }
-    public string? SkillTarget { get; set; }
     public string? Template { get; set; }
+    /// <summary>说明（写入 cert_prompt_template.Remark）</summary>
     public string? Description { get; set; }
 
+    // ⛔ 已移除 SkillTarget：cert_prompt_template 无此列（wf 表退役）。
     // ⛔ 已移除 ModelName / MaxTokens / Temperature（2026-10-02 统一 AI 配置，Q3=a）。
     //    更新时由 PromptTemplateService.SaveAsync **保留原值**，避免把 NC 链路
     //    BuildNcPromptSkill 在读的行级参数抹成 NULL。

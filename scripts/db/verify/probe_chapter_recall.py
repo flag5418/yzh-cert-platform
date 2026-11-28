@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -138,7 +139,8 @@ def load_docs(std_guid: str) -> list[dict[str, Any]]:
           ANY_VALUE(COALESCE(JSON_LENGTH(JSON_EXTRACT(e.ContentJson,'$.ModeOutput.Records')),0)),
           ANY_VALUE(COALESCE(JSON_LENGTH(JSON_EXTRACT(e.ContentJson,'$.ModeOutput.Entries')),0)),
           ANY_VALUE(COALESCE(JSON_LENGTH(JSON_EXTRACT(e.ContentJson,'$.Clauses')),0)),
-          ANY_VALUE(COALESCE(JSON_LENGTH(JSON_EXTRACT(e.ContentJson,'$.ModeOutput.DocSections')),0)),
+          ANY_VALUE(COALESCE(JSON_LENGTH(JSON_EXTRACT(e.ContentJson,'$.ModeOutput.Sections')),0)),
+          ANY_VALUE(COALESCE(JSON_LENGTH(JSON_EXTRACT(e.ContentJson,'$.ModeOutput.Chapters')),0)),
           COALESCE(SUM(j.rc),0)
         FROM cert_document_extraction e
         LEFT JOIN JSON_TABLE(e.ContentJson,'$.ModeOutput.Records[*]' COLUMNS (rc INT PATH '$.RowCount')) j ON TRUE
@@ -147,7 +149,7 @@ def load_docs(std_guid: str) -> list[dict[str, Any]]:
     """)
     docs = []
     for r in rows:
-        code, fn, dt, dept, proc, pdca, pc, nrec, nent, ncl, nsec, nrows = r
+        code, fn, dt, dept, proc, pdca, pc, nrec, nent, ncl, nsec, nch, nrows = r
         try:
             primary = json.loads(pc) if pc else []
         except Exception:
@@ -157,7 +159,7 @@ def load_docs(std_guid: str) -> list[dict[str, Any]]:
             "dept": dept, "process_area": proc, "pdca": pdca,
             "primary": [str(x) for x in primary] if isinstance(primary, list) else [],
             "records": int(nrec), "entries": int(nent),
-            "clauses": int(ncl), "sections": int(nsec),
+            "clauses": int(ncl), "sections": int(nsec), "chapters": int(nch),
             "rows": int(nrows or 0),
         })
     return docs
@@ -177,6 +179,40 @@ def load_legacy_clause_map(std_guid: str) -> dict[str, list[str]]:
         if fn and cn:
             out.setdefault(fn, []).append(cn)
     return out
+
+
+# ── 标题里的条款号头部：「4.1 理解组织及其环境」→ 4.1；「一、附件」→ 空 ──
+_CLAUSE_HEAD = re.compile(r"^\s*(\d+(?:\.\d+){0,3})")
+
+
+def clause_numbers_from_title(title: str) -> list[str]:
+    m = _CLAUSE_HEAD.match(title or "")
+    return [m.group(1)] if m else []
+
+
+def load_profile_toc_map() -> dict[str, list[str]]:
+    """企业文档画像 Toc 里的条款号（**0 次 LLM**；画像属输入，产物被清也在）。
+
+    Doc 24 §八 Step 0 ①：R1 必须读画像 Toc —— 手册章节号只在画像里，
+    提取产物缺失时（首跑 / 被清）仅靠产物会让整本手册召不回。
+    """
+    rows = sql("""
+        SELECT COALESCE(d.FileName,''), COALESCE(j.tt,'')
+        FROM cert_enterprise_doc d
+        JOIN JSON_TABLE(d.DocProfileJson,'$.Toc[*]' COLUMNS (tt VARCHAR(200) PATH '$.Title')) j ON TRUE
+        WHERE d.IsDeleted=0 AND JSON_VALID(d.DocProfileJson);
+    """)
+    out: dict[str, list[str]] = {}
+    for fn, tt in rows:
+        if fn:
+            out.setdefault(fn, []).extend(clause_numbers_from_title(tt))
+    return out
+
+
+def ancestry(num: str) -> list[str]:
+    """4.4.1 → [4, 4.4, 4.4.1]（自身 + 全部祖先）。"""
+    parts = num.split(".")
+    return [".".join(parts[:i]) for i in range(1, len(parts) + 1)]
 
 
 def routes_for(attrs: dict[str, str]) -> list[str]:
@@ -204,13 +240,15 @@ def shape_of(doc: dict[str, Any]) -> str:
     if doc["clauses"]:
         return f"Clauses[{doc['clauses']}].Excerpts"
     if doc["sections"]:
-        return f"DocSections[{doc['sections']}]"
+        return f"Sections[{doc['sections']}]"
+    if doc["chapters"]:
+        return f"Chapters[{doc['chapters']}]"
     return "仅元数据"
 
 
 def evidence_rows(doc: dict[str, Any]) -> int:
-    """可用证据行数：Records 用真实行数，Entries/Clauses 按条目数。"""
-    return doc["rows"] + doc["entries"] + doc["clauses"] + doc["sections"]
+    """可用证据行数：Records 用真实行数，Entries/Clauses/Sections/Chapters 按条目数。"""
+    return doc["rows"] + doc["entries"] + doc["clauses"] + doc["sections"] + doc["chapters"]
 
 
 def is_shell(doc: dict[str, Any]) -> bool:
@@ -232,9 +270,12 @@ def main() -> int:
     plan = load_plan_depts([c["clause"] for c in clauses])
     docs = load_docs(std_guid)
     legacy = load_legacy_clause_map(std_guid)
+    profile = load_profile_toc_map()
 
     for d in docs:
-        d["clause_numbers"] = set(d["primary"]) | set(legacy.get(d["file"], []))
+        d["clause_numbers"] = (
+            set(d["primary"]) | set(legacy.get(d["file"], [])) | set(profile.get(d["file"], []))
+        )
 
     result = []
     for c in clauses:
@@ -246,7 +287,9 @@ def main() -> int:
             pass
         depts = plan.get(c["clause"], set())
 
-        r1 = [d for d in docs if c["clause"] in d["clause_numbers"]]
+        # ★ R1 父节→子条款（Doc 24 §八 Step 0 ②）：手册只到「4.4」，
+        #   子条款 4.4.1/4.4.2 必须被召回 —— 精确匹配会让它们永远零召回（静默）。
+        r1 = [d for d in docs if any(a in d["clause_numbers"] for a in ancestry(c["clause"]))]
         r2 = [d for d in docs if d["process_area"] and PROCESS_MAP.get(d["process_area"]) in proc_codes]
         r3_all = [d for d in docs if d["dept"] and d["dept"] in depts]
         r3 = [d for d in r3_all if not is_shell(d)]

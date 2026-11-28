@@ -15,11 +15,10 @@ using YZH.Core.Stand.Interfaces;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Admin.Entities.Doc;
 using YZH.Core.Api.Models.System;
-using CertPlatform.Admin.Entities.Wf;
 using CertPlatform.Admin.Entities.Cert;
 // 消歧：Entities.Cert 与 Entities.Wf 均有 PromptTemplate
-// 本文件按 Version/IsActive 取生效模板 ⇒ 用 Wf.PromptTemplate（cert_ 实体无 Version/IsActive）
-using PromptTemplate = CertPlatform.Admin.Entities.Wf.PromptTemplate;
+// ★ 2026-11-27：wf_prompt_template 已退役，本文件唯一数据源 = cert_prompt_template
+using PromptTemplate = CertPlatform.Admin.Entities.Cert.PromptTemplate;
 
 namespace CertPlatform.Admin.Services.DocExtraction;
 
@@ -30,7 +29,7 @@ namespace CertPlatform.Admin.Services.DocExtraction;
 /// <para>· 执行器替换：IFileExtractor → DocumentConvertClient（anydoc→Markdown，旧格式直转）</para>
 /// <para>·          IWorkflowEngine+LlmExtractSkill → LlmInvokeService（OpenAI 兼容直连）</para>
 /// <para>· 上下文载体：旧 BuildStructuredContext 伪文本 → Markdown（GFM 表格行列语义，LLM 原生理解）</para>
-/// <para>· 配置链（V1.1 §9.3）：ai_extract_enabled 总开关 → cert_sys_config 六键 → wf_prompt_template</para>
+/// <para>· 配置链（V1.1 §9.3）：ai_extract_enabled 总开关 → cert_sys_config 六键 → cert_prompt_template</para>
 /// </summary>
 public partial class DocExtractionRuleService
 {
@@ -1184,7 +1183,7 @@ public partial class DocExtractionRuleService
     /// <para>支持两种提示词格式（与 analyze 的 MapAiFieldsToDtos / MapAiTablesToDtos 对齐）：</para>
     /// <para>· V1（GeneratePromptAsync 生成的“提取任务”格式）：
     ///   fields[].{field_code, field_value} / tables[].{table_code, rows}</para>
-    /// <para>· V2（wf_prompt_template 分析模板，如 analyze_word / extract_all）：
+    /// <para>· V2（cert_prompt_template 分析模板，如 analyze_word / extract_all）：
     ///   fields[].{field_name_cn, field_name_en, extracted_value} /
     ///   tables[].{table_name_cn, table_name_en, columns, extracted_data}</para>
     /// <para>⚠️ 只认 V1 时，选“文档结构分析”这类模板会让提取结果整片丢失（映射后为空），
@@ -1659,7 +1658,7 @@ public partial class DocExtractionRuleService
     /// <summary>
     /// 渲染提示词占位符，并决定文档上下文是「内联进提示词」还是「由调用层追加」。
     /// <para>支持：{{document_content}} / {document_content}、{{fields_json}}、{{tables_json}}、{{prompt}}</para>
-    /// <para>⚠️ wf_prompt_template 里的 extract_all/verify_all 带这些占位符；旧实现从不替换，
+    /// <para>⚠️ cert_prompt_template 里的 extract_all/verify_all 带这些占位符；旧实现从不替换，
     /// 模型拿到字面量 {{tables_json}} 只能自己编结构 → 字段/表格混在一起。</para>
     /// </summary>
     private static (string Prompt, string InlineContent) RenderPrompt(
@@ -1745,9 +1744,11 @@ public partial class DocExtractionRuleService
     private async Task<string> BuildAnalysisPromptAsync(string skill)
     {
         var promptCode = $"analyze_{skill}";
+        // ★ 2026-11-27：唯一数据源 = cert_prompt_template（wf 表已退役）。
+        //   cert 表无 Version / IsActive ⇒ 取有效行（IsValid==1 且未删），按 UpdateTime 最新兜底排序。
         var dbPrompt = await _db.Client.Queryable<PromptTemplate>()
-            .Where(x => x.PromptCode == promptCode && x.IsActive)
-            .OrderByDescending(x => x.Version)
+            .Where(x => x.PromptCode == promptCode && x.IsValid == 1 && !x.IsDeleted)
+            .OrderByDescending(x => x.UpdateTime)
             .Select(x => new PromptRow { template = x.Template })
             .FirstAsync();
         if (!string.IsNullOrWhiteSpace(dbPrompt?.template))

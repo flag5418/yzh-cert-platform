@@ -292,26 +292,29 @@ public class CertCheckEngineService
         if (await HasCurrentManualDecisionAsync(item.CheckItemCode, stageKind))
             return Result<CertAnalysisResult>.Fail("当前分析已有审核员判定，暂不自动替换，请先处理人工判定");
 
-        // ---- L3：解析提示词（★ 按分支分流，F2）----
+        // ---- L3：解析提示词（★ prep 走单段 audit_prep；onsite 只走两段式）----
         var standardCode = task != null ? await ResolveStandardCodeAsync(task.PlanCode) : null;
-        var promptType = isPrep ? PromptTypes.AuditPrep : PromptTypes.AuditCheck;
 
+        // ★ 2026-11-27：wf_prompt_template 退役 ⇒ onsite 单段 audit_check 已删，检不再有单段回退。
+        //   prep 仍走单段（audit_prep）；onsite 由 L6 的 RunTwoStageAsync 直接执行两段式。
+        //   此处 promptView 对 onsite 仅作审计留痕（记录第一段 clause_evidence_findings 的 Code）。
+        var promptType = isPrep ? PromptTypes.AuditPrep : PromptTypes.ClauseEvidenceFindings;
         var promptView = await _promptWb.ResolveActiveAsync(promptType, standardCode);
-        if (promptView?.Template == null)
-            return Result<CertAnalysisResult>.Fail(isPrep
-                ? "未找到认证准备提示词模板（audit_prep）"
-                : "未找到符合性分析提示词模板（audit_check）");
+        var prompt = "";
+        if (isPrep)
+        {
+            if (promptView?.Template == null)
+                return Result<CertAnalysisResult>.Fail("未找到认证准备提示词模板（audit_prep）");
 
-        // 回退告警（§6.2）：命中平台级 = 该标准还没真正配，⛔ 不能静默
-        if (string.IsNullOrEmpty(promptView.StandardCode))
-            _logger.LogWarning(
-                "[CertCheck] 提示词回退到平台级 type={Type} standard={Standard}",
-                promptType, standardCode ?? "(null)");
+            // 回退告警（§6.2）：命中平台级 = 该标准还没真正配，⛔ 不能静默
+            if (string.IsNullOrEmpty(promptView.StandardCode))
+                _logger.LogWarning(
+                    "[CertCheck] 提示词回退到平台级 type={Type} standard={Standard}",
+                    promptType, standardCode ?? "(null)");
 
-        // ---- L4：组装 prompt（★ 真正渲染 DB 里的模板正文，按分支取不同占位符集）----
-        var prompt = BuildPrompt(promptView.Template, stageKind, detail, context, activeEvidences);
-        if (Encoding.UTF8.GetByteCount(prompt) > 60000)
-            return Result<CertAnalysisResult>.Fail("完整分析输入超过当前 60000 字节留痕上限，未调用模型；需要分批处理，不能截断资料后生成结论");
+            // ---- L4：组装单段提示词（★ 真正渲染 DB 里的模板正文）----
+            prompt = BuildPrompt(promptView.Template, stageKind, detail, context, activeEvidences);
+        }
 
         // ---- L5：计算证据指纹（只用于过期告警，不用于跳过）----
         var fingerprint = string.Join("|", evidences
@@ -319,9 +322,15 @@ public class CertCheckEngineService
             .Select(e => e.ContentMD5!)
             .OrderBy(m => m));
 
-        // ---- L6：调 LLM（两段式优先：① 审核发现 → ② 证据生成；缺提示词/失败回退旧单段）----
+        // ---- L6：调 LLM（★ onsite 必走两段式：① 审核发现 → ② 证据生成；prep 走单段）----
         var aiSettings = await GetAiSettingsAsync();
         var twoStage = await RunTwoStageAsync(stageKind, detail, context, activeEvidences, aiSettings);
+
+        // ★ 2026-11-27：单段 audit_check 已删 ⇒ onsite 缺两段式提示词 / 任一段失败，直接失败，⛔ 不再回退单段。
+        if (!isPrep && twoStage == null)
+            return Result<CertAnalysisResult>.Fail(
+                "两段式分析未执行（clause_evidence_findings / audit_check_evidence 提示词缺失或任一段失败），未生成结论");
+
         var llmResponse = twoStage?.Response ?? await _llm.CompleteAsync(new LlmInvokeRequest
         {
             BaseUrl = aiSettings.BaseUrl,
@@ -421,8 +430,9 @@ public class CertCheckEngineService
                 RunNo = runNo,
                 Status = "done",
                 PromptType = promptType,
-                PromptCode = promptView.Code,
-                PromptVersion = promptView.Version.ToString(),
+                // ★ 2026-11-27：onsite 走两段式 ⇒ promptView 记录第一段 clause_evidence_findings；可能为 null（留痕可空）
+                PromptCode = promptView?.Code,
+                PromptVersion = (promptView?.Version ?? 1).ToString(),
                 ModelName = aiSettings.Model,
                 EvidenceFingerprint = fingerprint,
                 InputSnapshotJson = prompt,
@@ -599,14 +609,10 @@ public class CertCheckEngineService
         var clauseBlocks = context.RenderClauseBlocks(isPrep);
         var onsiteBlock = BuildOnsiteEvidenceBlock(evidences);
 
-        // 键值对按 §6.3 的占位符表；后三个是 DB 里旧 audit_check 正文用的名字（兼容）
-        //
-        // ★ 2026-11-02：旧名字不再各自拼一份残片，而是<b>复用同一份装配结果</b> ——
-        //   旧实现里 {{ClauseInfo}} 只给「条款编码/序号/部门」，{{EvidenceList}} 只给
-        //   cert_evidence（实测 0 行）⇒ onsite 分支永远拿不到条款属性和企业文档摘录，
-        //   实测判出「未提供任何支持性证据」。三个名字现在分别是：
-        //     {{ClauseInfo}} / {{CheckRequirement}} → 条款清单（原文 + 9 属性）
-        //     {{EvidenceList}}                       → 企业文档命中（按条款聚合的摘录）
+        // 键值对按 §6.3 的占位符表（★ 2026-11-27：仅 prep / onsite_plan 单段提示词走这里）。
+        //   {{CheckRequirement}} / {{EvidenceList}} 只被已退役的 audit_check 正文用 ⇒ 已删；
+        //   ⚠️ {{ClauseInfo}} 仍被 onsite_plan 正文用（见 20261103_onsite_plan_item_and_prompt_V1.sql），
+        //   ⛔ 不能随 audit_check 一起删，否则 onsite_plan 渲染后残留 {{ClauseInfo}}、模型拿不到条款。
         var map = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["{{task_kind}}"] = stageKind,
@@ -615,10 +621,7 @@ public class CertCheckEngineService
             ["{{clause_blocks}}"] = clauseBlocks,
             ["{{previous_results}}"] = "",          // incremental 才有值，V1 留空
             ["{{onsite_evidence}}"] = isPrep ? "" : onsiteBlock,
-
-            ["{{ClauseInfo}}"] = context.RenderClauseInfo(),
-            ["{{CheckRequirement}}"] = context.RenderClauseInfo(),
-            ["{{EvidenceList}}"] = context.RenderDocHits()
+            ["{{ClauseInfo}}"] = context.RenderClauseInfo()
         };
 
         var hasPlaceholder = map.Keys.Any(k => template.Contains(k, StringComparison.Ordinal));
@@ -681,7 +684,8 @@ public class CertCheckEngineService
 
     // ================================================================
     // 两段式证据链路：① 审核发现（clause_evidence_findings）→ ② 证据生成（audit_check_evidence）
-    // 提示词统一存在 cert_prompt_template（不再散落），缺行 / 失败则回退旧单段 audit_check。
+    // 提示词统一存在 cert_prompt_template（不再散落）。
+    // ★ 2026-11-27：wf_prompt_template 退役 ⇒ 缺行 / 失败<b>直接失败</b>，⛔ 不再回退旧单段 audit_check。
     // ================================================================
 
     /// <summary>读统一提示词表 <c>cert_prompt_template</c> 里的平台级生效行（OrgCode 空、ScopeKey 空）。</summary>
@@ -702,8 +706,9 @@ public class CertCheckEngineService
     private sealed record TwoStageOutcome(LlmInvokeResponse Response, string Pipeline);
 
     /// <summary>
-    /// 两段式分析（仅 onsite 检查分支）：先逐条款跑「审核发现」，再跑一次「证据生成」。
-    /// <para>任一端提示词缺行 / 第一段失败 ⇒ 返回 null，由调用方回退旧单段 audit_check。</para>
+    /// 两段式分析（仅 onsite 检查分支）编排器：解析两段提示词 → 第一段「审核发现」→ 第二段「证据生成」。
+    /// <para>任一端提示词缺行 / 任一段失败 ⇒ 返回 <c>null</c>，由调用方<b>直接失败</b>
+    /// （★ 2026-11-27：wf_prompt_template 退役 ⇒ ⛔ 不再回退旧单段 audit_check）。</para>
     /// </summary>
     private async Task<TwoStageOutcome?> RunTwoStageAsync(
         string stageKind, Entities.Expert.CertAuditPlanDetail? detail,
@@ -716,12 +721,31 @@ public class CertCheckEngineService
         if (string.IsNullOrWhiteSpace(findingsTpl) || string.IsNullOrWhiteSpace(genTpl))
         {
             _logger.LogWarning(
-                "[CertCheck] 两段式提示词缺行 findings={F} gen={G}，回退旧单段 audit_check",
+                "[CertCheck] 两段式提示词缺行 findings={F} gen={G}，直接失败（不再回退单段）",
                 string.IsNullOrWhiteSpace(findingsTpl) ? "missing" : "ok",
                 string.IsNullOrWhiteSpace(genTpl) ? "missing" : "ok");
             return null;
         }
 
+        var findings = await RunFindingsStageAsync(findingsTpl, context, aiSettings);
+        if (findings == null) return null;
+
+        var genResp = await RunEvidenceGenStageAsync(genTpl, detail, context, findings, evidences, aiSettings);
+        if (genResp == null) return null;
+
+        _logger.LogInformation(
+            "[CertCheck] 两段式执行成功 item={Item} clauses={N} findings={F}",
+            detail?.Code, context.Clauses.Count, findings.Count);
+        return new TwoStageOutcome(genResp, "two_stage");
+    }
+
+    /// <summary>
+    /// 第一阶段「审核发现」：逐条款只找回事实（<c>EvidenceFindings</c> / <c>Doubts</c> / <c>EvidenceAssembly</c>），
+    /// ⛔ 不写符合性结论。返回逐条款的原始 JSON 串；<b>任一条款失败 ⇒ 返回 null</b>，由调用方直接失败。
+    /// </summary>
+    private async Task<List<string>?> RunFindingsStageAsync(
+        string findingsTpl, CertCheckContext context, AiSettings aiSettings)
+    {
         var findings = new List<string>();
         foreach (var clause in context.Clauses)
         {
@@ -744,8 +768,18 @@ public class CertCheckEngineService
             }
             findings.Add(resp.Json.RootElement.GetRawText());
         }
+        return findings;
+    }
 
-        var (findingsText, doubtsText, assembliesText) = SplitFindings(findings);
+    /// <summary>
+    /// 第二阶段「证据生成」：消费第一段的逐条款发现（拆成 findings / doubts / assemblies 三段），
+    /// 写出审核证据并给出默认结论。失败 ⇒ 返回 null，由调用方直接失败。
+    /// </summary>
+    private async Task<LlmInvokeResponse?> RunEvidenceGenStageAsync(
+        string genTpl, Entities.Expert.CertAuditPlanDetail? detail,
+        CertCheckContext context, List<string> findingsJson, List<CertEvidence> evidences, AiSettings aiSettings)
+    {
+        var (findingsText, doubtsText, assembliesText) = SplitFindings(findingsJson);
         var genResp = await _llm.CompleteAsync(new LlmInvokeRequest
         {
             BaseUrl = aiSettings.BaseUrl,
@@ -759,17 +793,19 @@ public class CertCheckEngineService
             ForceJson = true
         });
         if (!genResp.Success || genResp.Json == null)
+        {
+            _logger.LogWarning("[CertCheck] 两段式第二段失败 msg={M}", genResp.Message);
             return null;
-
-        _logger.LogInformation(
-            "[CertCheck] 两段式执行成功 item={Item} clauses={N} findings={F}",
-            detail?.Code, context.Clauses.Count, findings.Count);
-        return new TwoStageOutcome(genResp, "two_stage");
+        }
+        return genResp;
     }
 
+    /// <summary>
+    /// 渲染第一段「审核发现」提示词。占位符清单与 DB 模板 <c>clause_evidence_findings</c> 一一对应，
+    /// ⛔ 不再保留 V3 死占位符（<c>{{standard_name}}</c> / <c>{{mode}}</c> / <c>{{allowed_clause_refs}}</c> / <c>{{referenced_clauses}}</c>）。
+    /// </summary>
     private static string RenderFindingsPrompt(string template, ClauseContext clause, CertCheckContext context)
     {
-        var allowedRefs = string.Join("、", context.Clauses.Select(c => c.ClauseNumber).Distinct());
         var excerpts = new StringBuilder();
         foreach (var s in clause.Slices)
         {
@@ -779,14 +815,10 @@ public class CertCheckEngineService
         }
 
         return template
-            .Replace("{{standard_name}}", "", StringComparison.Ordinal)
-            .Replace("{{mode}}", "findings", StringComparison.Ordinal)
             .Replace("{{clause_number}}", clause.ClauseNumber, StringComparison.Ordinal)
             .Replace("{{clause_title}}", clause.Title, StringComparison.Ordinal)
             .Replace("{{clause_content}}", clause.Description ?? "", StringComparison.Ordinal)
             .Replace("{{chapter_profile}}", clause.ChapterProfile, StringComparison.Ordinal)
-            .Replace("{{allowed_clause_refs}}", allowedRefs, StringComparison.Ordinal)
-            .Replace("{{referenced_clauses}}", "", StringComparison.Ordinal)
             .Replace("{{doc_facts}}", clause.FactText, StringComparison.Ordinal)
             .Replace("{{doc_excerpts}}", excerpts.ToString(), StringComparison.Ordinal)
             .Replace("{{recall_paths}}", RenderRecallPaths(clause), StringComparison.Ordinal)
@@ -852,6 +884,7 @@ public class CertCheckEngineService
     /// 把第一段「审核发现」的逐条款 JSON 拆成三段喂给第二段：
     /// <c>EvidenceFindings</c>（事实）、<c>Doubts</c>（疑点）、<c>EvidenceAssembly</c>（证据组合），
     /// 各自带条款号前缀，避免第二段再啃整份发现 JSON。
+    /// <para>条款号只读顶层 <c>ClauseNumber</c>（V5 发现模板已明令「不输出 ClauseContext」，⛔ 无旧格式兜底）。</para>
     /// </summary>
     private static (string Findings, string Doubts, string Assemblies) SplitFindings(List<string> findingsJson)
     {
@@ -865,15 +898,9 @@ public class CertCheckEngineService
             {
                 using var doc = JsonDocument.Parse(raw);
                 var root = doc.RootElement;
-                // 精简版 findings 直接输出顶层 ClauseNumber；保留旧版 ClauseContext 兜底
                 if (root.TryGetProperty("ClauseNumber", out var cn)
                     && cn.ValueKind == JsonValueKind.String)
                     clauseNo = cn.GetString() ?? "";
-                else if (root.TryGetProperty("ClauseContext", out var cc)
-                    && cc.ValueKind == JsonValueKind.Object
-                    && cc.TryGetProperty("ClauseNumber", out var ccn)
-                    && ccn.ValueKind == JsonValueKind.String)
-                    clauseNo = ccn.GetString() ?? "";
 
                 AppendFindingSection(f, root, "EvidenceFindings", clauseNo, "证据发现");
                 AppendFindingSection(d, root, "Doubts", clauseNo, "疑点");
@@ -1269,8 +1296,6 @@ public class CertCheckEngineService
             return Result<List<CertOnsitePlanItem>>.Fail(
                 $"条款无法完整装配，请重新选择或修复条款：{string.Join("；", context.Warnings)}");
         var prompt = BuildPrompt(promptView.Template, StagePrep, detail, context, new List<CertEvidence>());
-        if (Encoding.UTF8.GetByteCount(prompt) > 60000)
-            return Result<List<CertOnsitePlanItem>>.Fail("完整分析输入超过当前 60000 字节上限，未调用模型；需要分批处理");
 
         var aiSettings = await GetAiSettingsAsync();
         var llmResponse = await _llm.CompleteAsync(new LlmInvokeRequest
@@ -1533,7 +1558,7 @@ public class CertCheckEngineService
     /// </summary>
     private async Task InsertFailedAnalysisAsync(
         string userCode, CertTaskItem item, CertTask? task, string stageKind,
-        string promptType, PromptTemplateView promptView, string fingerprint, string error)
+        string promptType, PromptTemplateView? promptView, string fingerprint, string error)
     {
         try
         {
@@ -1555,8 +1580,8 @@ public class CertCheckEngineService
                 RunNo = rows.Count == 0 ? 1 : rows.Max(r => r.RunNo) + 1,
                 Status = "failed",
                 PromptType = promptType,
-                PromptCode = promptView.Code,
-                PromptVersion = promptView.Version.ToString(),
+                PromptCode = promptView?.Code,
+                PromptVersion = (promptView?.Version ?? 1).ToString(),
                 EvidenceFingerprint = fingerprint,
                 ErrorMessage = error,
                 CreateBy = userCode,
@@ -1605,8 +1630,12 @@ public class CertCheckEngineService
     /// 取计划的<b>标准 Code（GUID）</b>，用于提示词按标准级 → 平台级逐层回退。
     ///
     /// <para><b>★ 2026-11-02 修复</b>：旧实现返回的是 <c>plan.EnterpriseCode</c>（企业 Code），
-    /// 拿企业 Code 去匹配 <c>wf_prompt_template.StandardCode</c> 永远不命中 ⇒
+    /// 拿企业 Code 去匹配提示词的标准作用域永远不命中 ⇒
     /// 每一跑都静默回退到平台级提示词，标准专属提示词（若将来配了）形同不存在。</para>
+    ///
+    /// <para><b>★ 2026-11-27</b>：<c>wf_prompt_template</c> 退役 ⇒ 提示词唯一源 = <c>cert_prompt_template</c>，
+    /// 其作用域列 <c>ScopeKey</c> 存的是<b>标准短码</b>。本方法仍返回计划的 <b>GUID</b>，
+    /// 由 <c>IPromptWorkbench.ResolveActiveAsync</c> 内部做 GUID → 短码映射（D4），⛔ 调用方不必自己转。</para>
     ///
     /// <para>多标准计划取第一个：<b>条款级标准</b>由装配上下文逐条给出（<c>ClauseContext.StandardCode</c>），
     /// 落结果行时优先用它 —— 一个计划挂两个标准时，条款 4.1 属于哪个标准不能靠「计划里的第一个」猜。</para>

@@ -157,21 +157,6 @@ export const PROMPT_TYPES: PromptTypeDef[] = [
       'previous_results',
       ...STD_PLACEHOLDERS
     ]
-  },
-  {
-    type: PROMPT_TYPE.AuditCheck,
-    label: '认证检查提示词',
-    badge: '检查',
-    desc: '输入「条款 + 证据 + 现场证据」，输出符合性判定（pass/ofi/nc/na）+ NC 建议 + 严重程度',
-    placeholders: [
-      'task_kind',
-      'check_item_name',
-      'dept_names',
-      'clause_blocks',
-      'previous_results',
-      'onsite_evidence',
-      ...STD_PLACEHOLDERS
-    ]
   }
 ]
 

@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using CertPlatform.Auditor.Entities.Dir;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Entities.Cert;
 using CertPlatform.Shared.DocExtraction;
 using YZH.Core.DataBase.Interfaces;
@@ -62,9 +63,8 @@ public static class EnterpriseDocProfileBuilder
     public static string Build(
         string markdown, string fileName, string relFolderPath, string sha256, int versionNumber)
     {
-        // ⚠️ fileName / relFolderPath 保留仅为签名兼容：V4 起分类**不采信文件名/目录**，
-        //    唯一判据 = 结构指纹（判不出 ⇒ unclassified 待人工确认，⛔ 不猜、⛔ 不兜底）。
-        _ = fileName;
+        // ⚠️ DocType 分类**不采信文件名/目录**，唯一判据 = 结构指纹（判不出 ⇒ unclassified 待人工确认，⛔ 不猜、⛔ 不兜底）。
+        //    但「大章节归属」不同：记录/表单类正文常只剩表头甚至空壳，文件名是其唯一语义证据 ⇒ 见下方 abstractText。
         _ = relFolderPath;
 
         var text = markdown ?? string.Empty;
@@ -88,6 +88,22 @@ public static class EnterpriseDocProfileBuilder
         var fingerprints = DocFingerprintExtractor.Extract(text, docHeadings);
         var cls = DocFingerprintExtractor.Classify(fingerprints);
 
+        // ★ 批3 文档大章节归属（23 号 §4.2/§4.3）：确定性档（目录章号）优先，判不出再走语义档关键词。
+        //   输入「语义骨架」= 文件名 + 简介 + 目的 + 范围 + 目录标题；⛔ 不扫全文（噪声大、易误判）。
+        //   ★ 2026-11-27：① 文件名单独作高权输入（加权 ×3）—— 记录/表单类（如《生产通知单.xls》）
+        //     正文常只剩表头甚至空壳（"Sheet1"），文件名是其唯一语义证据（用户 7.2 审核记录判据）；
+        //     ② 目录章号档**仅对质量手册**可信 —— 程序/作业指导/记录各自的「4 工作程序」是自有编号，
+        //     与 ISO 章号同形不同义（实测 39 份被误判为 toc）。
+        var tocTitles = toc.Select(t => t.Title).ToList();
+        var abstractText = string.Join("\n", new[] { fileName, intro, purpose, scope }
+            .Where(x => !string.IsNullOrWhiteSpace(x))!);
+        if (tocTitles.Count > 0)
+            abstractText = abstractText.Length > 0
+                ? abstractText + "\n" + string.Join("\n", tocTitles)
+                : string.Join("\n", tocTitles);
+        var (domains, domainSource) = ChapterDomain.ResolveDocument(
+            null, tocTitles, abstractText, fileName, cls.DocTypeName == "质量手册");
+
         var profile = new DocProfile
         {
             DocType = cls.DocTypeName,
@@ -108,6 +124,9 @@ public static class EnterpriseDocProfileBuilder
                 .Select(f => new FingerprintItem { Key = f.Key, Weight = f.Weight, Evidence = f.Evidence })
                 .ToList(),
             Toc = toc,
+            ChapterDomains = domains,
+            ChapterDomainsSource = domainSource,
+            Abstract = Truncate(abstractText, 2000),
         };
 
         return JsonSerializer.Serialize(profile, new JsonSerializerOptions
@@ -550,6 +569,15 @@ public static class EnterpriseDocProfileBuilder
         public int VersionNumber { get; set; }
         public string GeneratedAt { get; set; } = string.Empty;
         public List<TocItem> Toc { get; set; } = new();
+
+        /// <summary>文档大章节归属（<c>CD_ENV</c>…/<c>CD_UNKNOWN</c>，可多值）—— 批3 召回初过滤键。</summary>
+        public List<string> ChapterDomains { get; set; } = new();
+
+        /// <summary>章域来源：<c>clause_numbers</c>（确定性）/ <c>toc</c>（确定性）/ <c>semantic</c>（语义档）/ <c>unknown</c>。</summary>
+        public string ChapterDomainsSource { get; set; } = ChapterDomain.SrcUnknown;
+
+        /// <summary>语义骨架（简介 + 目的 + 范围 + 目录标题），语义档的输入，便于后续重算复用。</summary>
+        public string Abstract { get; set; } = string.Empty;
     }
 
     /// <summary>结构指纹条目（PascalCase，与前端字段逐字一致）。</summary>

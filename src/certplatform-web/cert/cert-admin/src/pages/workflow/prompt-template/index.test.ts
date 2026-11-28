@@ -27,7 +27,7 @@ vi.mock('@share/api/workflow/prompt-workbench', () => ({
     Group: 'doc_group',
     Content: 'doc_content',
     Generator: 'prompt_generator',
-    DocumentAnalysis: 'document_analysis'
+    AuditPrep: 'audit_prep'
   },
   getStandardOptions: vi.fn(),
   listPrompts: vi.fn(),

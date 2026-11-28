@@ -1,9 +1,9 @@
 /**
- * 条款属性通用提示词维护 API（PromptType = clause_attr）
+ * 条款属性通用提示词维护 API（PromptType = clause_attr_gen）
  *
  * ★ 后端：`PromptTemplateController`（`/api/Admin/Workflow/PromptTemplate`）。
  *   提示词工作台端点（`workbench/*`）：
- *   - `workbench/list?promptType=clause_attr` — 列出所有条款属性提示词（含平台级）
+ *   - `workbench/list?promptType=clause_attr_gen` — 列出所有条款属性提示词（含平台级）
  *   - `workbench/save`                          — 保存（幂等 upsert：按 PromptCode 分流）
  *   - `workbench/delete?code=xxx`               — 逻辑删除
  *   - `workbench/activate?code=xxx`             — 设生效
@@ -12,7 +12,8 @@
  *
  * ★ 为什么不用 `cert/clause-attr.ts` 里复用 ClauseAttrController：
  *   条款属性提示词是**全局共享**资源（按标准隔离、按类型复用），不是某一条条款的附属数据。
- *   它的生命周期、检索口径（IsActive / StandardCode 回退）都与 `wf_prompt_template` 完全对齐，
+ *   它的生命周期、检索口径（IsValid / ScopeKey 回退）都与 `cert_prompt_template` 对齐
+ *   （2026-11-27 起 `wf_prompt_template` 已退役，本页数据源 = `cert_prompt_template`），
  *   跟 `cert_clause_attr`（一条=某条款上的某属性，稀疏行）是完全不同的实体。
  *   ⇒ 走 PromptTemplate 工作台端点，与文档语义规则（33 号）的提示词同源管理。
  */
@@ -24,7 +25,7 @@ import { unwrap } from '@yzh-core'
 export const CLAUSE_PROMPT_BASE = '/api/Admin/Workflow/PromptTemplate'
 
 /** 条款属性提示词类型常量（与后端 `PromptTypes.ClauseAttr` 一致） */
-export const CLAUSE_PROMPT_TYPE = 'clause_attr'
+export const CLAUSE_PROMPT_TYPE = 'clause_attr_gen'
 
 /** 一条提示词记录（★ 与后端 PromptTemplateDto 字段对齐，camelCase） */
 export interface ClausePromptItem {
@@ -34,7 +35,7 @@ export interface ClausePromptItem {
   promptCode: string
   /** 展示名（如「条款属性预生成提示词（平台级）」） */
   promptName: string
-  /** 提示词类型（固定 clause_attr） */
+  /** 提示词类型（固定 clause_attr_gen） */
   promptType: string
   /** 适用标准 GUID；空 = 平台级默认 */
   standardCode: string | null
@@ -72,7 +73,7 @@ export interface ClausePromptSaveBody {
   promptCode: string
   /** 展示名 */
   promptName: string
-  /** 提示词类型（固定 clause_attr） */
+  /** 提示词类型（固定 clause_attr_gen） */
   promptType: string
   /** 适用标准 GUID；空 = 平台级 */
   standardCode?: string | null
@@ -84,7 +85,7 @@ export interface ClausePromptSaveBody {
 
 /** AI 生成请求体 */
 export interface ClausePromptGenerateBody {
-  /** 固定 clause_attr */
+  /** 固定 clause_attr_gen */
   promptType: string
   /** 适用标准 GUID */
   standardCode?: string | null
@@ -181,8 +182,9 @@ export async function generateClausePrompt(
 /**
  * 标准下拉（Code = GUID，用于写入 standardCode 字段；Display = 展示名）。
  *
- * <p>⚠️ 返回值用的是 <c>Code</code>（GUID）而不是 <c>StandardCode</c>（可读短码）：
- * <c>wf_prompt_template.StandardCode</c> 存的是 GUID，传短码会静默匹配不到。</p>
+ * <p>⚠️ 返回值用的是 <c>Code</c>（GUID）而不是 <c>StandardCode</c>（可读短码）：
+ * 接口契约的 <c>standardCode</c> 字段是 <c>cert_iso_standard.Code</c>（GUID），
+ * 后端在边界换算为 cert_prompt_template.ScopeKey 短码；前端零换算，传短码会静默匹配不到。</p>
  */
 export async function getPromptStandards(): Promise<ClausePromptStandard[]> {
   const res = await yzhApi.get<ApiResponse<ClausePromptStandard[]>>(

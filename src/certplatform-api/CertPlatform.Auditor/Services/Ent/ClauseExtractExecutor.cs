@@ -753,15 +753,15 @@ namespace CertPlatform.Auditor.Services.Ent
             //   ⛔ 不落库 ⇒ 检查退化为「按条款通用提取」，且不报错（最难查的一类缺陷）。
             ManualIndexParser.ManualIndex? manualIndex = null;
             var evidenceSources = new List<ManualIndexParser.ClauseEvidenceSource>();
+            // ★ 本行挂载的条款号（全模式通用）：落 cert_document_extraction.ClauseNumbers 短索引，
+            //   并派生手册的应读章节/负责部门/前置事实。⛔ 恒传空数组 ⇒ 短索引永远为空、
+            //   ClauseCount 恒 0，按条款列表查文档只能全表扫描（静默缺陷，最难查）。
+            var clauseNumbers = ReadPrimaryClauses(modeOutput);
             if (extractionMode == EnterpriseDocExtractionRouter.ManualChapter)
             {
                 manualIndex = ManualIndexParser.Parse(markdown);
-                if (manualIndex != null)
-                {
-                    var clauseNumbers = ReadPrimaryClauses(modeOutput);
-                    if (clauseNumbers.Count > 0)
-                        evidenceSources = ManualIndexParser.BuildEvidenceSources(clauseNumbers, manualIndex);
-                }
+                if (manualIndex != null && clauseNumbers.Count > 0)
+                    evidenceSources = ManualIndexParser.BuildEvidenceSources(clauseNumbers, manualIndex);
             }
 
             var payloadDoc = new ExtractedDoc
@@ -810,7 +810,7 @@ namespace CertPlatform.Auditor.Services.Ent
             var message = $"按 {extractionMode} 提取完成" + (promptScope == "stored" ? "（库内提示词）" : $"（{promptScope}）");
             var (ok, err) = await store.UpsertAsync(
                 doc.Code!, standardCode, doc.EnterpriseCode,
-                json, Array.Empty<string>(), doc.Sha256 ?? string.Empty,
+                json, clauseNumbers, doc.Sha256 ?? string.Empty,
                 promptCode, DocExtractPromptService.PromptVersion,
                 ExtractRowStatus.Done, message, null, cancellationToken);
 
@@ -883,9 +883,6 @@ namespace CertPlatform.Auditor.Services.Ent
             }
             if (map.Count == 0) return;
 
-            var chapters = node["Chapters"] as JsonArray;
-            if (chapters == null) return;
-
             var clauses = new List<string>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
 
@@ -911,16 +908,39 @@ namespace CertPlatform.Auditor.Services.Ent
                 }
             }
 
-            foreach (var item in chapters)
+            // ① 章级输出：模型按章给的内容（实测仅 10 条 ⇒ 只映射出 8 个条款号，覆盖过窄）
+            if (node["Chapters"] is JsonArray chapters)
             {
-                switch (item)
+                foreach (var item in chapters)
                 {
-                    case JsonObject co:
-                        Consider(FirstString(co, "Section", "Chapter", "Clause", "Number", "SectionNo"));
-                        break;
-                    case JsonValue v when v.TryGetValue<string>(out var s):
-                        Consider(s);
-                        break;
+                    switch (item)
+                    {
+                        case JsonObject co:
+                            Consider(FirstString(co, "Section", "Chapter", "Clause", "Number", "SectionNo"));
+                            break;
+                        case JsonValue v when v.TryGetValue<string>(out var s):
+                            Consider(s);
+                            break;
+                    }
+                }
+            }
+
+            // ② ★ 章节概要：SectionSummaries[].Label 形如「4.1 理解组织及其环境」，
+            //    才是「手册实际讲了哪些节」的完整清单（实测 63 条覆盖 4.1–10.3）。
+            //    ⛔ 不并进来 ⇒ 手册只挂 8 个条款号，4.1/5.2 等永远召回不到（静默缺陷，最难查）。
+            if (node["SectionSummaries"] is JsonArray summaries)
+            {
+                foreach (var item in summaries)
+                {
+                    switch (item)
+                    {
+                        case JsonObject so:
+                            Consider(FirstString(so, "Label", "Section", "Title"));
+                            break;
+                        case JsonValue v when v.TryGetValue<string>(out var s):
+                            Consider(s);
+                            break;
+                    }
                 }
             }
 

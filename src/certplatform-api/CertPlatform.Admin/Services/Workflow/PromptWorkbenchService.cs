@@ -13,9 +13,10 @@ using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Scope;
 using CertPlatform.Shared.Services.Workflow;
 using CertPlatform.Admin.Entities.Doc;
-using CertPlatform.Admin.Entities.Wf;
-// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate（本服务管 wf_prompt_template）
-using PromptTemplate = CertPlatform.Admin.Entities.Wf.PromptTemplate;
+using CertPlatform.Admin.Entities.Cert;
+// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate
+// ★ 2026-11-27：wf_prompt_template 已退役，本服务唯一数据源 = cert_prompt_template
+using PromptTemplate = CertPlatform.Admin.Entities.Cert.PromptTemplate;
 using YZH.Core.Api.Models.System;
 using YZH.Core.DataBase.Interfaces;
 
@@ -209,42 +210,53 @@ public class PromptWorkbenchService : IPromptWorkbench
     // ========================================================
 
     /// <summary>按类型 / 标准列出提示词（标准为空 = 只列不限标准的）</summary>
+    /// <remarks>★ 2026-11-27：唯一数据源 = <c>cert_prompt_template</c>（wf 表已退役）。</remarks>
     public async Task<List<PromptTemplate>> ListAsync(string? promptType, string? standardCode)
     {
         var result = await _db.GetListAsync<PromptTemplate>(x =>
-            x.IsValid == 1
-            && (string.IsNullOrEmpty(promptType) || x.PromptType == promptType)
-            && (string.IsNullOrEmpty(standardCode) || x.StandardCode == standardCode || x.StandardCode == null));
+            x.IsValid == 1 && x.IsDeleted == false
+            && (string.IsNullOrEmpty(promptType) || x.PromptCode == promptType));
 
-        return result.Success && result.Data != null
-            ? result.Data.OrderBy(x => x.PromptType).ThenBy(x => x.PromptCode).ToList()
-            : new List<PromptTemplate>();
+        var list = result.Success && result.Data != null ? result.Data : new List<PromptTemplate>();
+        if (!string.IsNullOrEmpty(standardCode))
+        {
+            // 入参是标准 GUID，走到库里要换成短码（D4：cert 表 ScopeKey 存短码）
+            var slug = await ResolveStandardSlugAsync(standardCode);
+            list = list.Where(x =>
+                string.Equals(x.ScopeKey, slug, StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(x.ScopeKey)).ToList();
+        }
+
+        return list.OrderBy(x => x.PromptCode).ThenBy(x => x.ScopeKey).ToList();
     }
 
     /// <summary>按 PromptCode 取一条</summary>
     public async Task<PromptTemplate?> GetByCodeAsync(string promptCode)
     {
         if (string.IsNullOrWhiteSpace(promptCode)) return null;
-        var r = await _db.GetOneAsync<PromptTemplate>(x => x.PromptCode == promptCode && x.IsValid == 1);
+        var r = await _db.GetOneAsync<PromptTemplate>(x =>
+            x.PromptCode == promptCode && x.IsValid == 1 && x.IsDeleted == false);
         return r.Success ? r.Data : null;
     }
 
     /// <summary>
-    /// 三层回退定位生效提示词：**标准级（StandardCode 命中）→ 平台级（StandardCode = NULL）**。
+    /// 生效提示词定位：**标准级（ScopeKey 命中）→ 平台级（ScopeKey = 空）**。
     /// <para>⚠️ 与全局参数同一口径 —— 两套口径会导致「后台看 A、实际跑 B」且不报错。</para>
     /// </summary>
     public async Task<PromptTemplate?> ResolveActiveAsync(string promptType, string? standardCode)
     {
         var list = await ListAsync(promptType, null);
-        var active = list.Where(x => x.IsActive).ToList();
-        if (active.Count == 0) return null;
+        if (list.Count == 0) return null;
 
         if (!string.IsNullOrWhiteSpace(standardCode))
         {
-            var specific = active.FirstOrDefault(x => x.StandardCode == standardCode);
+            var slug = await ResolveStandardSlugAsync(standardCode);
+            var specific = list.FirstOrDefault(x =>
+                !string.IsNullOrWhiteSpace(x.ScopeKey)
+                && string.Equals(x.ScopeKey, slug, StringComparison.OrdinalIgnoreCase));
             if (specific != null) return specific;
         }
-        return active.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.StandardCode));
+        return list.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.ScopeKey));
     }
 
     // ========================================================
@@ -714,7 +726,8 @@ public class PromptWorkbenchService : IPromptWorkbench
             Message = vMsgs.Count > 0 ? $"分析完成（后端已校正 {vMsgs.Count} 处）" : "分析完成",
             Model = settings.Model,
             PromptCode = promptRow.Code,
-            PromptVersion = promptRow.Version,
+            // ★ 2026-11-27：cert_prompt_template 无 Version 列（D3 不做版本回滚）⇒ 固定 1
+            PromptVersion = 1,
             Json = normalized ?? rawJson,
             RawOutput = resp.Content,
             DurationMs = resp.DurationMs,
@@ -1459,11 +1472,13 @@ public class PromptWorkbenchService : IPromptWorkbench
         return t == null ? null : new PromptTemplateView
         {
             Code = t.Code ?? "",
-            Version = t.Version,
+            // ★ 2026-11-27：cert_prompt_template 无 Version 列（D3 不做版本回滚）⇒ 固定 1
+            Version = 1,
             Template = t.Template,
             ModelName = t.ModelName,
             // ★ 标准级还是平台级 —— 调用方靠它判断回退是否发生（24 号 §0.4）
-            StandardCode = t.StandardCode
+            // ★ 2026-11-27：cert 表用 ScopeKey（标准短码）表达作用域，⛔ 无 StandardCode 列
+            StandardCode = t.ScopeKey
         };
     }
 }

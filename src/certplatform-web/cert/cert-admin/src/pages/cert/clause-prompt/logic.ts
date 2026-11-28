@@ -1,8 +1,9 @@
 /**
- * ClausePromptLogic — 条款属性通用提示词维护（PromptType = clause_attr）
+ * ClausePromptLogic — 条款属性通用提示词维护（PromptType = clause_attr_gen）
  *
  * 后端：`PromptTemplateController` 的工作台端点（`workbench/*`）
- * 表：`wf_prompt_template` 中 `PromptType = 'clause_attr'` 的行
+ * 表：`cert_prompt_template` 中 `PromptCode = 'clause_attr_gen'` 的行
+ *     （2026-11-27 起 `wf_prompt_template` 已退役，单一提示词源 = cert_prompt_template）
  *
  * ★ 业务定位（P4）：
  *   条款属性 AI 预生成的提示词需要**持续调优**——模型版本升级、业务口径变化、新增标准…
@@ -248,7 +249,7 @@ export class ClausePromptLogic extends SingleTableCore<ClausePromptItem> {
       await saveClausePrompt({
         promptCode: String(values.promptCode || '').trim(),
         promptName: String(values.promptName || '').trim(),
-        promptType: 'clause_attr',
+        promptType: 'clause_attr_gen',
         standardCode: values.standardCode || null,
         template: String(values.template || ''),
         description: values.description || null,
@@ -297,7 +298,7 @@ export class ClausePromptLogic extends SingleTableCore<ClausePromptItem> {
     this.generating.value = true
     try {
       const result = await generateClausePrompt({
-        promptType: 'clause_attr',
+        promptType: 'clause_attr_gen',
         standardCode: this.selectedStandard.value || null,
         extraRequirement: this.genRequirement.value,
         currentTemplate: currentTemplate || undefined,

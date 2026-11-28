@@ -33,7 +33,7 @@ const businessRoutes: RouteRecordRaw[] = [
   // ★ V2 条款属性：属性池 L0（MENU_00220）/ 条款配置 L1（MENU_00221）
   { path: 'cert/clause-attr-def', name: 'CertClauseAttrDef', component: () => import('@/pages/cert/clause-attr-def/index.vue') },
   { path: 'cert/clause-attr', name: 'CertClauseAttr', component: () => import('@/pages/cert/clause-attr/index.vue') },
-  // ★ 条款属性通用提示词维护（P4）：管理 AI 预生成条款属性的提示词（PromptType = clause_attr）
+  // ★ 条款属性通用提示词维护（P4）：管理 AI 预生成条款属性的提示词（PromptType = clause_attr_gen）
   { path: 'cert/clause-prompt', name: 'CertClausePrompt', component: () => import('@/pages/cert/clause-prompt/index.vue') },
   // ★ 条款管理（MENU_ISO_CLAUSE）—— 标准选择器 + 条款树（增/改/删/批量删除）
   { path: 'cert/iso-clause', name: 'CertIsoClause', component: () => import('@/pages/foundation/iso-clause/index.vue') },

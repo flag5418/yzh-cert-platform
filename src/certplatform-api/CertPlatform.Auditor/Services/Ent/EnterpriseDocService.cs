@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CertPlatform.Auditor.Entities.Dir;
 using CertPlatform.Auditor.Entities.Expert;
+using CertPlatform.Shared.Domain.Clauses;
 using CertPlatform.Shared.Domain.Organization;
 using CertPlatform.Shared.DocExtraction;
 using CertPlatform.Shared.Domain.Scope;
@@ -1419,6 +1420,9 @@ namespace CertPlatform.Auditor.Services.Ent
                 var ok = await EnterpriseDocProfileBuilder.BuildAndSaveAsync(_db, row, markdown, _logger);
                 if (!ok) return new { Success = false, Message = "文档简介生成失败，请查看后端日志" };
 
+                // ★ 批3-4：确定性/关键词档判不出时，走 LLM 语义档定大章节（失败不阻断）
+                await TryResolveChapterDomainByLlmAsync(row);
+
                 var tocCount = CountToc(row.DocProfileJson);
                 return new
                 {
@@ -1498,7 +1502,12 @@ namespace CertPlatform.Auditor.Services.Ent
                     await stream.CopyToAsync(ms);
                     var markdown = Encoding.UTF8.GetString(ms.ToArray());
                     var ok = await EnterpriseDocProfileBuilder.BuildAndSaveAsync(_db, row, markdown, _logger);
-                    if (ok) updated++;
+                    if (ok)
+                    {
+                        updated++;
+                        // ★ 批3-4：确定性/关键词档判不出时，走 LLM 语义档定大章节（失败不阻断）
+                        await TryResolveChapterDomainByLlmAsync(row);
+                    }
                     else
                     {
                         failed++;
@@ -1525,6 +1534,114 @@ namespace CertPlatform.Auditor.Services.Ent
                 Failures = failures,
                 Message = $"画像已更新 {updated} 份（跳过 {skipped}，失败 {failed}）",
             };
+        }
+
+        /// <summary>
+        /// ★ 文档大章节归属「语义档」（批 3-4，LLM 兜底）。
+        ///
+        /// <para><b>为什么需要</b>：记录 / 过程类文档<b>从文档本身看不出属于哪一章</b>（无条款号、无正文，
+        /// 只有表头/抽样行），确定性档（<c>ClauseNumbers</c>/<c>Toc</c>）与关键词档（<c>FromText</c>）都判不出时，
+        /// 只能靠「章节原型语义」让模型判定（用户 2026-11-27 7.2 审核记录样例：正文无任何条款号/章节标题，
+        /// 只能从「培训 / 岗位能力 / 质量意识」等语义归 CD_SUPPORT）。</para>
+        ///
+        /// <para><b>只在落 <c>CD_UNKNOWN</c> 时触发</b>：确定性/关键词档已判出的文档⛔ 不覆盖（省 token、避免模型抖动）。
+        /// <b>失败 / 未配 AI / 低置信</b> ⇒ 保持 <c>CD_UNKNOWN</c>，⛔ 不阻断画像重建、⛔ 不硬猜。</para>
+        /// </summary>
+        private async Task TryResolveChapterDomainByLlmAsync(EnterpriseDoc row, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(row.DocProfileJson)) return;
+
+            JsonObject obj;
+            try
+            {
+                if (JsonNode.Parse(row.DocProfileJson) is not JsonObject parsed) return;
+                obj = parsed;
+            }
+            catch (JsonException) { return; }
+
+            // 仅「确定性 + 关键词档都判不出」才走语义档
+            var src = NodeString(obj, "ChapterDomainsSource");
+            if (!string.Equals(src, ChapterDomain.SrcUnknown, StringComparison.Ordinal)) return;
+
+            var abstractText = NodeString(obj, "Abstract");
+            if (string.IsNullOrWhiteSpace(abstractText)) return;
+            var docType = NodeString(obj, "DocType") ?? string.Empty;
+
+            var settings = await AiConnSettings.ReadAsync(_db, ct);
+            if (!settings.IsUsable)
+            {
+                _logger.LogInformation("[章域语义档] AI 未配置，保持 CD_UNKNOWN file={Code}", row.Code);
+                return;
+            }
+
+            var prompts = new DocExtractPromptService(_db);
+            var (template, _, _) = await prompts.ResolveByCodeAsync(
+                DocExtractPromptService.PromptCodeChapterDomain, null, ct);
+            if (string.IsNullOrWhiteSpace(template)) return;
+
+            var prompt = template
+                .Replace(DocExtractPromptService.PhDocType, docType, StringComparison.Ordinal)
+                .Replace(DocExtractPromptService.PhAbstractText, abstractText, StringComparison.Ordinal);
+
+            var resp = await _llm.CompleteAsync(new LlmInvokeRequest
+            {
+                BaseUrl = settings.BaseUrl,
+                ApiKey = settings.ApiKey,
+                Model = settings.Model,
+                Temperature = 0f,
+                MaxTokens = 500,
+                Prompt = prompt,
+                ForceJson = true,
+                TimeoutSeconds = 90,
+            });
+            if (!resp.Success || resp.Json == null)
+            {
+                _logger.LogInformation("[章域语义档] 调用失败，保持 CD_UNKNOWN file={Code}", row.Code);
+                return;
+            }
+
+            var domains = new List<string>();
+            var confidence = 0d;
+            using (resp.Json)
+            {
+                var root = resp.Json.RootElement;
+                if (root.TryGetProperty("Confidence", out var c) && c.ValueKind == JsonValueKind.Number)
+                    confidence = c.GetDouble();
+                if (root.TryGetProperty("Domains", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var d in arr.EnumerateArray())
+                    {
+                        var code = ChapterDomain.Normalize(d.GetString());
+                        if (code != ChapterDomain.Unknown && !domains.Contains(code)) domains.Add(code);
+                    }
+                }
+            }
+
+            // 模型也判不出 / 低置信 ⇒ 保持 CD_UNKNOWN（⛔ 不硬猜）
+            if (domains.Count == 0 || confidence < 0.4)
+            {
+                _logger.LogInformation(
+                    "[章域语义档] 模型判不出或低置信，保持 CD_UNKNOWN file={Code} domains={Domains} conf={Confidence}",
+                    row.Code, ChapterDomain.Describe(domains), confidence);
+                return;
+            }
+
+            var arr2 = new JsonArray();
+            foreach (var d in domains) arr2.Add(d);
+            obj["ChapterDomains"] = arr2;
+            obj["ChapterDomainsSource"] = ChapterDomain.SrcSemanticLlm;
+            row.DocProfileJson = obj.ToJsonString(new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            });
+            row.UpdateTime = DateTime.Now;
+            await _db.UpdateAsync(row,
+                nameof(EnterpriseDoc.DocProfileJson),
+                nameof(EnterpriseDoc.UpdateTime));
+
+            _logger.LogInformation(
+                "[章域语义档] file={Code} → {Domains} (置信 {Confidence})",
+                row.Code, ChapterDomain.Describe(domains), confidence);
         }
 
         /// <summary>

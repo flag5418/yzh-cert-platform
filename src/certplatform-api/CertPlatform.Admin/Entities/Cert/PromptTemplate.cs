@@ -18,13 +18,19 @@ namespace CertPlatform.Admin.Entities.Cert;
 /// <item>平台默认（<see cref="OrgCode"/> = 空 &amp; <see cref="ScopeKey"/> = 空）</item>
 /// </list></para>
 ///
-/// <para><b>已接管的提示词类型</b>：
+/// <para><b>已接管的提示词类型</b>（2026-11-27 起为<b>全系统唯一提示词源</b>）：
 /// <list type="bullet">
 /// <item><c>clause_attr_gen</c> —— 条款属性预生成（原 cert_sys_config · clause_attr_prompt）</item>
 /// <item><c>doc_extract</c> —— 文档提取提示词（原 cert_doc_extract_rules.PromptContent）</item>
+/// <item><c>audit_prep</c> / <c>onsite_plan</c> / <c>nc_suggest</c> / <c>evidence_link</c> —— 检查链提示词</item>
+/// <item><c>clause_evidence_findings</c> / <c>audit_check_evidence</c> —— 两段式检查提示词</item>
+/// <item><c>doc_group</c> / <c>doc_content</c> / <c>doc_essential</c> / <c>prompt_generator</c> —— 队列语义提示词</item>
 /// </list></para>
 ///
-/// <para><b>不接管</b>：<c>wf_prompt_template</c>（Dify 工作流模板体系，字段语义和生命周期完全不同）。</para>
+/// <para><b>已接管 <c>wf_prompt_template</c></b>（2026-11-27 退役）：原 Dify 工作流模板体系字段
+/// （<c>PromptType</c> → <see cref="PromptCode"/>、<c>StandardCode</c>GUID → <see cref="ScopeKey"/>短码、
+/// <c>ModelName</c>/<c>MaxTokens</c>/<c>Temperature</c> 逐字迁入），旧表已 <c>RENAME</c> 为
+/// <c>zz_retired_wf_prompt_template</c>（⛔ 不 DROP）。</para>
 ///
 /// <para>ORM：SqlSugar（铁律：DB 列名 == C# 属性名，PascalCase 逐字一致）</para>
 /// </summary>
@@ -57,6 +63,16 @@ public class PromptTemplate : BaseEntity, ISoftDelete, IIsValid
 
     public int IsValid { get; set; } = 1;
     public string? Status { get; set; }
+
+    // ── 模板级模型参数（2026-11-27 由 wf_prompt_template 迁入，D1）──
+    /// <summary>模型名（为空 = 用平台默认）</summary>
+    public string? ModelName { get; set; }
+
+    /// <summary>最大输出 tokens（为空 = 用平台默认）</summary>
+    public int? MaxTokens { get; set; }
+
+    /// <summary>温度（为空 = 用平台默认）</summary>
+    public decimal? Temperature { get; set; }
 
     // ── ISoftDelete ──
     public bool IsDeleted { get; set; }

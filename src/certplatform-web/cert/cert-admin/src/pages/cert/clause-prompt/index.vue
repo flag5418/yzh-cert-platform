@@ -9,7 +9,7 @@
  *
  * ★ 功能：
  *   - 标准筛选下拉（只看平台级 / 某标准级）
- *   - 列出所有 clause_attr 提示词（编码 / 名称 / 适用标准 / 说明 / 生效状态）
+ *   - 列出所有 clause_attr_gen 提示词（编码 / 名称 / 适用标准 / 说明 / 生效状态）
  *   - 新增 / 编辑（走抽屉弹窗）/ 删除 / 激活
  *   - 编辑弹窗内 AI 辅助生成 / 优化草稿
  */
@@ -53,7 +53,7 @@ async function refresh() {
     <div v-if="!props.embedded" class="clause-prompt-page__header">
       <div class="clause-prompt-page__title">条款属性提示词维护</div>
       <div class="clause-prompt-page__subtitle">
-        管理 AI 预生成条款属性时使用的提示词（PromptType = clause_attr）。
+        管理 AI 预生成条款属性时使用的提示词（PromptType = clause_attr_gen）。
         同类型只允许一条生效；按标准级 → 平台级回退。
       </div>
     </div>

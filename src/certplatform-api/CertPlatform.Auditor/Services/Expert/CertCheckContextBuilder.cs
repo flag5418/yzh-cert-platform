@@ -61,21 +61,36 @@ public sealed class ClauseContext
     /// <summary>该条款是否命中任何企业文档内容</summary>
     public bool HasDocContent => Slices.Count > 0;
 
+    /// <summary>
+    /// 该条款所属<b>大章节域</b>（<c>CD_ENV</c>…/<c>CD_UNKNOWN</c>）—— 批3 召回初过滤键。
+    /// <para>确定性推导（唯一判据 = <see cref="ChapterDomain.ResolveClause"/>）：属性 <c>ChapterDomain</c> → <c>Role</c> → 条款号。⛔ 端内不得另写映射。</para>
+    /// </summary>
+    public string ChapterDomainCode => ChapterDomain.ResolveClause(
+        Attr("ChapterDomain"), Attr("Role"), ClauseNumber);
+
     /// <summary>手册纲领：该条款的「事实证据提取属性」（应读章节 / 负责部门 / 前置事实）。</summary>
     public ManualIndexParser.ClauseEvidenceSource? EvidenceSource { get; set; }
 
     /// <summary>该条款命中的前置事实原文（公司简介 / 方针目标 / 部门职责），供证据发现定向召回。</summary>
     public string FactText { get; set; } = string.Empty;
 
-    /// <summary>章节画像：喂给证据发现提示词的「去哪找 + 谁负责」纲领。</summary>
-    public string ChapterProfile => RenderChapterProfile(EvidenceSource);
+    /// <summary>章节画像：喂给证据发现提示词的「大章节 + 去哪找 + 谁负责」纲领。</summary>
+    public string ChapterProfile => RenderChapterProfile(EvidenceSource, ChapterDomainCode);
 
-    private static string RenderChapterProfile(ManualIndexParser.ClauseEvidenceSource? src)
+    private static string RenderChapterProfile(
+        ManualIndexParser.ClauseEvidenceSource? src, string domainCode)
     {
-        if (src is null)
-            return "（手册无纲领映射，按条款正文做通用提取）";
-
         var sb = new StringBuilder();
+        // ★ 大章节置顶：2 段式召回第一段 =「大章节 ∧ 部门」初筛，本条条款的大章节必须先让模型看到，
+        //   ⛔ 不能只给手册纲领（后者依赖手册提取，缺失时模型无从得知本条归属哪一大章节）。
+        sb.AppendLine($"大章节：{domainCode}（{ChapterDomain.Name(domainCode)}）");
+
+        if (src is null)
+        {
+            sb.Append("（手册无纲领映射，按条款正文做通用提取）");
+            return sb.ToString();
+        }
+
         sb.AppendLine($"应读章节：{string.Join("、", src.Sections)}");
         if (src.PrimaryDepts.Count > 0)
             sb.AppendLine($"主要责任部门：{string.Join("、", src.PrimaryDepts)}");
@@ -188,7 +203,8 @@ public sealed class CertCheckContext
                 ("Severity", "严重度线索"),
                 ("EvidenceForm", "证据形式"),
                 ("EvidenceFamily", "证据类别"),
-                ("Role", "角色")
+                ("Role", "角色"),
+                ("ChapterDomain", "大章节")
             };
             var attributes = attributeLabels
                 .Select(a => (a.Label, Value: c.Attr(a.Code)))
@@ -683,6 +699,9 @@ public sealed class CertCheckContextBuilder
         var currentFiles = files.GroupBy(d => d.Code, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
 
+        // ★ 两段式召回第一段判据来源：文档准入画像（大章节域 + 责任部门 + 语义骨架）。
+        var docGates = BuildDocGates(extractions, currentFiles);
+
         // 轴2 过程轴候选先收集、循环结束后统一分配（记录优先），见 ApplyProcessAxis
         var processAxisCandidates = new List<ProcessAxisCandidate>();
         // 轴3 部门轴候选（RM3）同样先收集再统一分配，见 ApplyDeptAxis
@@ -760,6 +779,9 @@ public sealed class CertCheckContextBuilder
 
         // ---- 6. 手册纲领：把 EvidenceSources（应读章节/负责部门/前置事实）挂到每条条款 ----
         LoadManualGuidance(clauses, extractions, warnings);
+
+        // ---- 6.5 两段式召回精炼：第一段「章节 + 部门」初过滤 → 第二段「条款语义」二次过滤 ----
+        ApplyTwoStageRecall(clauses, docGates, deptNames, recallTrace);
 
         var noHit = clauses.Where(c => !c.HasDocContent).Select(c => c.ClauseNumber).ToList();
         if (noHit.Count > 0)
@@ -1041,6 +1063,193 @@ public sealed class CertCheckContextBuilder
                 });
             }
         }
+    }
+
+    /// <summary>两段式召回锚点：文档经「章节 + 部门 初筛 → 条款语义 二次筛」入池（23 号 §七/§八）。</summary>
+    private const string TwoStageAnchor = "同章域语义";
+
+    /// <summary>两段式召回：每条条款最终保留的候选文档上限（对齐 23 号 §8.4「约剩 6 份」）。</summary>
+    private const int TwoStageKeepCap = 6;
+
+    /// <summary>
+    /// 文档准入画像 —— 两段式召回的<b>第一段（章节 + 部门）判据来源</b>。
+    /// <para>大章节域取文档画像 <c>DocProfileJson.ChapterDomains</c>（批3 产出）；
+    /// 责任部门优先取画像 <c>DeptCodes</c>、缺失退回 <c>ModeOutput.DeptNames/OwnerDept</c>；
+    /// 语义骨架优先取画像 <c>Abstract</c>、缺失退回 <c>ModeOutput</c> 摘录。</para>
+    /// </summary>
+    private readonly record struct DocGate(
+        string FileCode, string FileName, string StandardCode, string Mode,
+        List<string> ChapterDomains, List<string> DeptCodes,
+        string SemanticText, string Excerpt, bool IsRecord);
+
+    /// <summary>
+    /// 构建每份文档的「准入画像」（两段式召回第一段判据来源）。
+    /// <para>★ 只读<b>已落库的画像与已提取字段</b>：⛔ 不在装配阶段跑语义、⛔ 不查库、⛔ 不二次解析企业文档原文。</para>
+    /// </summary>
+    private static List<DocGate> BuildDocGates(
+        List<DocumentExtraction> extractions, Dictionary<string, List<EnterpriseDoc>> files)
+    {
+        var gates = new List<DocGate>();
+        foreach (var ex in extractions)
+        {
+            if (ex.IsStale || string.IsNullOrWhiteSpace(ex.ContentJson)) continue;
+            if (!files.TryGetValue(ex.FileCode, out var f) || f.Count != 1) continue;
+            var doc = f[0];
+            // 与主循环同源判据：产物指纹须与当前文件一致（否则该产物已过期，不参与召回）
+            if (string.IsNullOrWhiteSpace(ex.SourceSha256)
+                || !string.Equals(ex.SourceSha256, doc.Sha256, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // ---- 大章节域 / 责任部门 / 语义骨架 / 体裁：优先取画像 DocProfileJson ----
+            var domains = new List<string>();
+            var deptCodes = new List<string>();
+            var abstractText = string.Empty;
+            var profileMode = string.Empty;
+            if (!string.IsNullOrWhiteSpace(doc.DocProfileJson))
+            {
+                try
+                {
+                    using var pdoc = JsonDocument.Parse(doc.DocProfileJson);
+                    var root = pdoc.RootElement;
+                    if (TryGetArray(root, out var darr2, "ChapterDomains", "chapterDomains"))
+                        foreach (var it in darr2.EnumerateArray())
+                        {
+                            if (it.ValueKind != JsonValueKind.String) continue;
+                            var d = ChapterDomain.Normalize(it.GetString());
+                            if (d != ChapterDomain.Unknown && !domains.Contains(d)) domains.Add(d);
+                        }
+                    if (TryGetArray(root, out var dcArr, "DeptCodes", "deptCodes"))
+                        foreach (var it in dcArr.EnumerateArray())
+                        {
+                            if (it.ValueKind != JsonValueKind.String) continue;
+                            var s = (it.GetString() ?? string.Empty).Trim();
+                            if (s.Length > 0 && !deptCodes.Contains(s)) deptCodes.Add(s);
+                        }
+                    abstractText = GetString(root, "Abstract", "abstract") ?? string.Empty;
+                    profileMode = GetString(root, "ExtractionMode", "extractionMode") ?? string.Empty;
+                }
+                catch (JsonException)
+                {
+                    // 画像损坏 ⇒ 降级只用提取产物（不影响其它文档）
+                }
+            }
+
+            // ---- 体裁 / 责任部门 / 摘录：取自提取产物（画像缺失时的回退来源） ----
+            var mode = profileMode;
+            var excerpt = string.Empty;
+            try
+            {
+                using var cdoc = JsonDocument.Parse(ex.ContentJson!);
+                var croot = cdoc.RootElement;
+                var rawMode = GetString(croot, "ExtractionMode", "extractionMode") ?? string.Empty;
+                if (mode.Length == 0) mode = rawMode;
+                if (GetObject(croot, "ModeOutput", "modeOutput") is { } output)
+                {
+                    output = ModeOutputProjector.ForProjection(output, rawMode);
+                    if (deptCodes.Count == 0) deptCodes = DocDeptNames.Collect(output);
+                    excerpt = BuildModeExcerpt(output, rawMode);
+                }
+            }
+            catch (JsonException)
+            {
+                // 产物损坏 ⇒ 只靠画像（不影响其它文档）
+            }
+
+            var normMode = EnterpriseDocExtractionRouter.NormalizeMode(mode);
+            var semantic = abstractText.Length > 0 ? abstractText : excerpt;
+            if (semantic.Length == 0) continue; // 既无画像骨架又无提取摘录 ⇒ 无准入依据，不参与两段式
+            var sliceExcerpt = excerpt.Length > 0 ? excerpt : abstractText;
+
+            gates.Add(new DocGate(
+                ex.FileCode, doc.FileName, ex.StandardCode, normMode,
+                domains, deptCodes, doc.FileName + "\n" + semantic, sliceExcerpt,
+                string.Equals(normMode, "record_profile", StringComparison.OrdinalIgnoreCase)));
+        }
+        return gates;
+    }
+
+    /// <summary>
+    /// 两段式召回（23 号 §七 / §八）：
+    /// <para><b>第一段</b>「章节 + 部门」初过滤 —— <c>doc.ChapterDomains ∩ clause.ChapterDomainCode</c>
+    /// ∧（检查项部门 ∩ <c>doc.DeptCodes</c>；检查项无部门 ⇒ 不限部门）。</para>
+    /// <para><b>第二段</b>「条款语义」二次过滤 —— 仅对需语义的条款（<see cref="ClauseCategoryResolver.NeedsSemantic"/>）
+    /// 用 BM25（<see cref="ClauseTextMatcher"/>，RM7 唯一内核）按条款释义对上一步候选打分，保留相关者。</para>
+    /// <para>★ 与 RM 各轴<b>取并集</b>（⛔ 不淘汰既有召回、⛔ 不误杀）；章域未判定（<c>CD_UNKNOWN</c>）只记账不参与。</para>
+    /// </summary>
+    private static void ApplyTwoStageRecall(
+        List<ClauseContext> clauses, List<DocGate> gates, string? deptNames, List<string> recallTrace)
+    {
+        if (gates.Count == 0) return;
+
+        var checkDepts = new HashSet<string>(StringComparer.Ordinal);
+        DocDeptNames.AddText(deptNames, checkDepts);
+
+        foreach (var clause in clauses)
+        {
+            var domain = clause.ChapterDomainCode;
+            if (string.Equals(domain, ChapterDomain.Unknown, StringComparison.Ordinal))
+            {
+                recallTrace.Add($"{clause.ClauseNumber}|两段式=跳过（章域未判定）");
+                continue;
+            }
+
+            // ---- 第一段：章节 + 部门 初过滤 ----
+            var stage1 = gates.Where(g =>
+                string.Equals(g.StandardCode, clause.StandardCode, StringComparison.Ordinal)
+                && g.ChapterDomains.Contains(domain)
+                && (checkDepts.Count == 0 || g.DeptCodes.Any(checkDepts.Contains))).ToList();
+
+            if (stage1.Count == 0)
+            {
+                recallTrace.Add($"{clause.ClauseNumber}|两段式=章域{domain}∧部门 初筛0份");
+                continue;
+            }
+
+            // ---- 第二段：条款语义二次过滤 ----
+            List<DocGate> survivors;
+            if (ClauseCategoryResolver.NeedsSemantic(clause.Attr("Role"), clause.ClauseNumber))
+            {
+                var matcher = ClauseTextMatcher.Build(stage1.Select(g => (g.FileCode, g.SemanticText)));
+                var ranked = matcher.Rank(BuildClauseSemanticText(clause), TwoStageKeepCap);
+                var keep = new HashSet<string>(
+                    ranked.Where(r => r.Score > 0).Select(r => r.ClauseNumber), StringComparer.Ordinal);
+                survivors = stage1.Where(g => keep.Contains(g.FileCode)).ToList();
+            }
+            else
+            {
+                // 不需语义的条款（框架 / 承诺）：第一段命中即保留，仅按上限截断
+                survivors = stage1;
+            }
+
+            survivors = survivors.OrderByDescending(g => g.IsRecord).Take(TwoStageKeepCap).ToList();
+
+            var added = 0;
+            foreach (var g in survivors)
+            {
+                if (clause.Slices.Any(s => string.Equals(s.FileCode, g.FileCode, StringComparison.Ordinal)))
+                    continue;
+                clause.Slices.Add(new ClauseDocSlice
+                {
+                    FileCode = g.FileCode,
+                    FileName = g.FileName,
+                    Anchor = TwoStageAnchor,
+                    Excerpts = new List<string> { g.Excerpt },
+                    ExcerptStatuses = new List<string> { "matched" }
+                });
+                added++;
+            }
+
+            recallTrace.Add(
+                $"{clause.ClauseNumber}|两段式=章域{domain}∧部门 初筛{stage1.Count}份→保留{survivors.Count}份|新增{added}份");
+        }
+    }
+
+    /// <summary>条款释义文本（二次筛选的查询串）：标题 + 条款正文（<c>ClauseText</c> 拍平）。</summary>
+    private static string BuildClauseSemanticText(ClauseContext clause)
+    {
+        var title = clause.Title ?? string.Empty;
+        var body = ClauseTextMatcher.FlattenClauseText(clause.Description);
+        return body.Length == 0 ? title : title + "\n" + body;
     }
 
     /// <summary>

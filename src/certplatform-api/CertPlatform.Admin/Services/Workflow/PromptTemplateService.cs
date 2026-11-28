@@ -4,40 +4,75 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using CertPlatform.Shared.Domain.Scope;
 using YZH.Core.DataBase.Interfaces;
-using CertPlatform.Admin.Entities.Wf;
-// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate（本服务管 wf_prompt_template）
-using PromptTemplate = CertPlatform.Admin.Entities.Wf.PromptTemplate;
+// 消歧：Entities.Wf 与 Entities.Cert 均有 PromptTemplate
+// ★ 2026-11-27：wf_prompt_template 已退役，本服务唯一数据源 = cert_prompt_template
+using PromptTemplate = CertPlatform.Admin.Entities.Cert.PromptTemplate;
 
 namespace CertPlatform.Admin.Services.Workflow;
 
 /// <summary>
-/// Prompt 模板服务（业务层移植）
-/// <para>对照旧 Cert.Platform/Services/Admin/Platform/Wf/PromptTemplateService.cs（EF Core 实现），</para>
-/// <para>职责不变：列表筛选（类型 / 适用技能）+ 按编码读取 + 取生效模板 + 保存（编码幂等 upsert）+ 逻辑删除 + 激活；</para>
-/// <para>ORM 改写为新架构 IDbOrm（旧 EF DbContext 已不在新架构中）。</para>
+/// 提示词工作台数据层（原 Prompt 模板服务移植）。
+///
+/// <para><b>★ 2026-11-27 口径变更</b>：唯一数据源 = <c>cert_prompt_template</c>
+/// （<c>wf_prompt_template</c> 已 RENAME 退役）。字段对应：</para>
+/// <list type="bullet">
+///   <item><c>PromptCode</c> = 提示词<b>类型</b>（doc_group / doc_content / clause_attr_gen …）</item>
+///   <item><c>Code</c> = 行<b>业务键</b>（= 工作台前端的 <c>promptCode</c>）</item>
+///   <item><c>ScopeKey</c> = 标准<b>短码</b>（工作台前端传/收的是 GUID，由本服务负责换算）</item>
+///   <item>启用/禁用唯一字段 = <c>IsValid</c>（铁律九，cert 表无 <c>IsActive</c>）</item>
+/// </list>
 /// </summary>
 public class PromptTemplateService
 {
     private readonly IDbOrm _db;
+    private readonly ICoreResourceQuery _core;
     private readonly ILogger<PromptTemplateService> _logger;
 
-    public PromptTemplateService(IDbOrm db, ILogger<PromptTemplateService> logger)
+    public PromptTemplateService(IDbOrm db, ICoreResourceQuery core, ILogger<PromptTemplateService> logger)
     {
         _db = db;
+        _core = core;
         _logger = logger;
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // 一、标准口径换算（工作台前端用 GUID，库里 ScopeKey 存短码）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>标准 GUID（<c>cert_iso_standard.Code</c>）→ 可读短码（<c>StandardCode</c>）。</summary>
+    public async Task<string?> ResolveStandardSlugAsync(string? standardCode)
+    {
+        if (string.IsNullOrWhiteSpace(standardCode)) return null;
+        var r = await _core.GetStandardByCodeAsync(standardCode);
+        if (r != null && !string.IsNullOrWhiteSpace(r.StandardCode))
+            return r.StandardCode;
+        // 已经是短码（老数据兜底）就直接用
+        return standardCode;
+    }
+
+    /// <summary>标准短码 → GUID（DTO 下发用：前端作用域键 = GUID）。</summary>
+    public async Task<string?> ResolveStandardGuidAsync(string? slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug)) return null;
+        var r = await _core.ResolveStandardAsync(slug);
+        return r?.Code;
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 二、读取
+    // ════════════════════════════════════════════════════════════════════
+
     /// <summary>
-    /// 获取提示词列表（可按类型 / 适用技能筛选）
-    /// <para>对照旧实现：skillTarget 命中「指定技能」或「无技能限制（null）」的记录</para>
+    /// 按类型取提示词列表（<paramref name="standardCode"/> 为 GUID 时按标准短码过滤，
+    /// 并保留平台级 <c>ScopeKey</c> 为空的兜底行）。
     /// </summary>
-    public async Task<List<PromptTemplate>> GetListAsync(string? promptType = null, string? skillTarget = null)
+    public async Task<List<PromptTemplate>> GetListAsync(string? promptType, string? standardCode)
     {
         var result = await _db.GetListAsync<PromptTemplate>(x =>
-            x.IsValid == 1
-            && (string.IsNullOrEmpty(promptType) || x.PromptType == promptType)
-            && (string.IsNullOrEmpty(skillTarget) || x.SkillTarget == skillTarget || x.SkillTarget == null));
+            x.IsValid == 1 && x.IsDeleted == false
+            && (string.IsNullOrEmpty(promptType) || x.PromptCode == promptType));
 
         if (!result.Success)
         {
@@ -45,68 +80,78 @@ public class PromptTemplateService
             return new List<PromptTemplate>();
         }
 
-        return result.Data!
-            .OrderBy(x => x.PromptType)
-            .ThenBy(x => x.PromptCode)
-            .ToList();
+        var list = result.Data ?? new List<PromptTemplate>();
+        if (!string.IsNullOrWhiteSpace(standardCode))
+        {
+            var slug = await ResolveStandardSlugAsync(standardCode);
+            list = list.Where(x =>
+                string.Equals(x.ScopeKey, slug, StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(x.ScopeKey)).ToList();
+        }
+
+        return list.OrderBy(x => x.PromptCode).ThenBy(x => x.ScopeKey).ToList();
     }
 
-    /// <summary>根据 prompt_code 获取单条提示词</summary>
-    public async Task<PromptTemplate?> GetByCodeAsync(string promptCode)
+    /// <summary>按行业务键 <c>Code</c> 取一条。</summary>
+    public async Task<PromptTemplate?> GetByCodeAsync(string code)
     {
-        if (string.IsNullOrWhiteSpace(promptCode)) return null;
+        if (string.IsNullOrWhiteSpace(code)) return null;
         var result = await _db.GetOneAsync<PromptTemplate>(
-            x => x.PromptCode == promptCode && x.IsValid == 1);
+            x => x.Code == code && x.IsValid == 1 && x.IsDeleted == false);
         return result.Success ? result.Data : null;
     }
 
     /// <summary>
-    /// 获取指定类型当前生效的提示词（适用技能优先精确匹配，回退到「通用 / 无技能限制」）
+    /// 取指定类型当前生效的提示词（标准级 → 平台级回退）。
+    /// <para>★ 与 <c>PromptWorkbenchService.ResolveActiveAsync</c> 同一口径。</para>
     /// </summary>
-    public async Task<PromptTemplate?> GetActiveAsync(string promptType, string? skillTarget = null)
+    public async Task<PromptTemplate?> GetActiveAsync(string promptType, string? standardCode = null)
     {
         if (string.IsNullOrWhiteSpace(promptType)) return null;
 
-        var result = await _db.GetListAsync<PromptTemplate>(x =>
-            x.PromptType == promptType && x.IsActive == true && x.IsValid == 1);
+        var list = await GetListAsync(promptType, standardCode);
+        if (list.Count == 0) return null;
 
-        if (!result.Success || result.Data == null) return null;
-
-        var candidates = result.Data;
-        if (!string.IsNullOrWhiteSpace(skillTarget))
+        if (!string.IsNullOrWhiteSpace(standardCode))
         {
-            var specific = candidates.FirstOrDefault(x => x.SkillTarget == skillTarget);
+            var slug = await ResolveStandardSlugAsync(standardCode);
+            var specific = list.FirstOrDefault(x =>
+                !string.IsNullOrWhiteSpace(x.ScopeKey)
+                && string.Equals(x.ScopeKey, slug, StringComparison.OrdinalIgnoreCase));
             if (specific != null) return specific;
         }
 
-        return candidates.FirstOrDefault(x => x.SkillTarget == null || x.SkillTarget == "all");
+        return list.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.ScopeKey)) ?? list[0];
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // 三、保存 / 删除 / 激活
+    // ════════════════════════════════════════════════════════════════════
+
     /// <summary>
-    /// 创建或更新提示词（按 prompt_code 幂等匹配；更新时覆盖正文并置为生效）
-    /// <para>⛔ 2026-10-02 起<b>不再 +1 版本</b>（裁决：提示词不做版本管理），
-    /// 原 <c>Version</c> 原样保留 —— <c>DocExtractionRuleService.AI</c> 与
-    /// <c>BuildNcPromptSkill</c> 仍按 <c>OrderByDescending(Version)</c> 取行。</para>
+    /// 创建或更新提示词（按行业务键 <c>Code</c> 幂等 upsert：无则新增、有则覆盖正文）。
+    /// <para>准则 A：定位 / 分流只用 <c>Code</c>，⛔ 不用 <c>Id</c>。</para>
     /// </summary>
     public async Task<(bool Success, string Message)> SaveAsync(PromptTemplate entity)
     {
+        if (string.IsNullOrWhiteSpace(entity.Code))
+            return (false, "提示词编码（Code）不能为空");
         if (string.IsNullOrWhiteSpace(entity.PromptCode))
-            return (false, "prompt_code 不能为空");
-        if (string.IsNullOrWhiteSpace(entity.PromptType))
-            return (false, "prompt_type 不能为空");
+            return (false, "提示词类型（PromptCode）不能为空");
         if (string.IsNullOrWhiteSpace(entity.Template))
             return (false, "template 不能为空");
 
-        var existing = await GetByCodeAsync(entity.PromptCode);
+        var existing = await GetByCodeAsync(entity.Code);
+        var now = DateTime.Now;
 
         if (existing == null)
         {
-            // 准则 A：新增 — Id 不参与分流（保持实体默认 0）
-            entity.Code = Guid.NewGuid().ToString("N");
-            entity.Version = 1;
-            entity.IsActive = true;
+            // ★ OrgCode / ScopeKey 在库里是 NOT NULL 无默认值：null ⇒ 1364「必填字段为空」
+            entity.OrgCode ??= string.Empty;
+            entity.ScopeKey ??= string.Empty;
             entity.IsValid = 1;
-            entity.CreateTime = DateTime.Now;
+            entity.IsDeleted = false;
+            entity.CreateTime = now;
             if (string.IsNullOrWhiteSpace(entity.Status)) entity.Status = "active";
 
             var inserted = await _db.InsertAsync(entity);
@@ -115,41 +160,29 @@ public class PromptTemplateService
             return (true, "保存成功");
         }
 
-        // 更新：靠 Code 定位（禁止回填 Id 作 WHERE / 分流键）
-        if (string.IsNullOrWhiteSpace(existing.Code))
-            return (false, "更新失败：缺少业务键 Code");
+        existing.PromptCode = entity.PromptCode;
+        existing.PromptName = string.IsNullOrWhiteSpace(entity.PromptName) ? existing.PromptName : entity.PromptName;
+        existing.ScopeKey = entity.ScopeKey ?? string.Empty;
+        existing.Template = entity.Template;
+        existing.Remark = entity.Remark;
+        existing.IsValid = 1;
+        if (!string.IsNullOrWhiteSpace(entity.Status)) existing.Status = entity.Status;
+        existing.UpdateTime = now;
 
-        entity.Code = existing.Code;
-        // ★ 统一 AI 配置（Q3=a）：本工作台不编辑行级模型参数 ⇒ 更新时**原样保留**。
-        //   否则请求里没有这几个字段会把它们写成 NULL，NC 链路 BuildNcPromptSkill 读到空值即炸。
-        entity.ModelName = existing.ModelName;
-        entity.MaxTokens = existing.MaxTokens;
-        entity.Temperature = existing.Temperature;
-        // ★ 不做版本管理：保留原版本号，仅刷新正文
-        entity.Version = existing.Version;
-        entity.IsActive = true;
-        entity.IsValid = 1;
-        entity.CreateTime = existing.CreateTime;
-        entity.CreateBy = existing.CreateBy;
-        entity.UpdateTime = DateTime.Now;
-        entity.DeleteBy = null;
-        entity.DeleteTime = null;
-        if (string.IsNullOrWhiteSpace(entity.Status)) entity.Status = existing.Status;
-
-        var updated = await _db.UpdateAsync(entity,
-            nameof(PromptTemplate.IsActive), nameof(PromptTemplate.IsValid),
-            nameof(PromptTemplate.CreateTime), nameof(PromptTemplate.CreateBy),
-            nameof(PromptTemplate.UpdateTime), nameof(PromptTemplate.DeleteBy),
-            nameof(PromptTemplate.DeleteTime), nameof(PromptTemplate.Status));
+        var updated = await _db.UpdateAsync(existing,
+            nameof(PromptTemplate.PromptCode), nameof(PromptTemplate.PromptName),
+            nameof(PromptTemplate.ScopeKey), nameof(PromptTemplate.Template),
+            nameof(PromptTemplate.Remark), nameof(PromptTemplate.IsValid),
+            nameof(PromptTemplate.Status), nameof(PromptTemplate.UpdateTime));
         if (!updated.Success)
             return (false, updated.Error ?? "保存失败");
         return (true, "保存成功");
     }
 
-    /// <summary>删除提示词（逻辑禁用：IsValid = 0）</summary>
-    public async Task<bool> DeleteAsync(string promptCode)
+    /// <summary>删除提示词（逻辑禁用：IsValid = 0）。</summary>
+    public async Task<bool> DeleteAsync(string code)
     {
-        var entity = await GetByCodeAsync(promptCode);
+        var entity = await GetByCodeAsync(code);
         if (entity == null) return false;
 
         entity.IsValid = 0;
@@ -159,36 +192,41 @@ public class PromptTemplateService
     }
 
     /// <summary>
-    /// 激活提示词（同类型的其他提示词置为不生效，对齐旧实现的一次仅一条生效语义）
+    /// 激活提示词：目标行 <c>IsValid=1</c>，同类型 + 同作用域的其他行 <c>IsValid=0</c>。
+    /// <para>★ cert 表无 <c>IsActive</c>（铁律九：启用唯一字段 = <c>IsValid</c>），
+    /// 「一次仅一条生效」按 <c>(PromptCode, ScopeKey)</c> 维度表达。</para>
     /// </summary>
-    public async Task<bool> ActivateAsync(string promptCode)
+    public async Task<bool> ActivateAsync(string code)
     {
-        var target = await GetByCodeAsync(promptCode);
+        var target = await GetByCodeAsync(code);
         if (target == null) return false;
 
         var siblings = await _db.GetListAsync<PromptTemplate>(x =>
-            x.PromptType == target.PromptType && x.PromptCode != promptCode && x.IsValid == 1);
+            x.PromptCode == target.PromptCode
+            && x.ScopeKey == target.ScopeKey
+            && x.Code != code
+            && x.IsValid == 1);
 
         if (siblings.Success && siblings.Data != null)
         {
             foreach (var item in siblings.Data)
             {
-                item.IsActive = false;
+                item.IsValid = 0;
                 item.UpdateTime = DateTime.Now;
-                await _db.UpdateAsync(item, nameof(PromptTemplate.IsActive), nameof(PromptTemplate.UpdateTime));
+                await _db.UpdateAsync(item, nameof(PromptTemplate.IsValid), nameof(PromptTemplate.UpdateTime));
             }
         }
 
-        target.IsActive = true;
+        target.IsValid = 1;
         target.UpdateTime = DateTime.Now;
-        var result = await _db.UpdateAsync(target, nameof(PromptTemplate.IsActive), nameof(PromptTemplate.UpdateTime));
+        var result = await _db.UpdateAsync(target, nameof(PromptTemplate.IsValid), nameof(PromptTemplate.UpdateTime));
         return result.Success;
     }
 
     /// <summary>
-    /// 【工作台】标准下拉选项：<c>Code</c>（GUID，存库值）+ <c>StandardCode</c> / <c>StandardName</c>（展示）。
-    /// <para>⚠️ 返回值用 <c>Code</c>（GUID），因为 <c>wf_prompt_template.StandardCode</c> 与
-    /// <c>cert_enterprise_stage.StandardCode</c> 同口径都存 GUID —— 存可读编码会造成「页面看 A、匹配 B」且不报错。</para>
+    /// 【工作台】标准下拉选项：<c>Code</c>（GUID，工作台作用域键）+ <c>StandardCode</c> / <c>StandardName</c>（展示）。
+    /// <para>⚠️ 返回值用 <c>Code</c>（GUID）：工作台前端的 <c>standardCode</c> 字段是 GUID 口径，
+    /// 落库时由本服务换算为短码写入 <c>cert_prompt_template.ScopeKey</c>。</para>
     /// </summary>
     public async Task<List<StandardOption>> GetStandardOptionsAsync()
     {
@@ -218,7 +256,7 @@ public class PromptTemplateService
     /// </remarks>
     public class StandardOption
     {
-        /// <summary>★ 存库值（cert_iso_standard.Code，GUID）</summary>
+        /// <summary>★ 工作台作用域键（cert_iso_standard.Code，GUID）</summary>
         [System.Text.Json.Serialization.JsonPropertyName("code")]
         public string Code { get; set; } = "";
         /// <summary>可读标准号（如 iso9001，不含年份）</summary>

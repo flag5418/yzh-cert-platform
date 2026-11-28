@@ -47,6 +47,9 @@ namespace CertPlatform.Auditor.Services.Ent
         public const string PromptCodeIndex = "doc_extract_index";
         public const string PromptCodeAudit = "doc_extract_audit";
 
+        /// <summary>文档「大章节归属」语义档提示词代码（批3-4：确定性档 + 关键词档均判不出时才调用）。</summary>
+        public const string PromptCodeChapterDomain = "doc_chapter_domain";
+
         /// <summary>提示词版本（留痕到 <c>cert_document_extraction.PromptVersion</c>）</summary>
         public const string PromptVersion = "v2.1";
 
@@ -112,6 +115,9 @@ namespace CertPlatform.Auditor.Services.Ent
             // ③ 旧主链允许代码兜底；新提示词缺行必须失败，避免“以为用了新提示词、实际跑旧正文”。
             if (code == PromptCode)
                 return (FallbackTemplate, "fallback", null);
+            // 章域判定是通用分类（与标准无关、无提取副作用），允许代码兜底，缺库行也能跑。
+            if (code == PromptCodeChapterDomain)
+                return (FallbackChapterDomainTemplate, "fallback", null);
             return (string.Empty, "missing", null);
         }
 
@@ -221,5 +227,47 @@ DOC
 
 - 文档与条款清单无关 ⇒ 返回 { ""clauses"": [] }，这是合法输出。
 - 全中文（原文英文术语照抄），字段名保持英文。";
+
+        /// <summary>
+        /// 章域语义档提示词占位符 —— 由 <c>EnterpriseDocService</c> 替换后送模型。
+        /// <c>{{abstract_text}}</c> = 画像语义骨架（简介 + 目的 + 范围 + 表头/抽样行）。
+        /// </summary>
+        public const string PhDocType = "{{doc_type}}";
+        public const string PhAbstractText = "{{abstract_text}}";
+
+        /// <summary>
+        /// 章域判定兜底正文（库中 <c>doc_chapter_domain</c> 缺行时使用）。
+        /// <para>记录/表单类文档无条款号、无正文，只靠「表头字段 + 抽样行 + 部门 + 文件名」语义归章；
+        /// ⛔ 判不出必须落 <c>CD_UNKNOWN</c>，不许硬猜（见 27 号 §3.3 / §十 风险）。</para>
+        /// </summary>
+        public const string FallbackChapterDomainTemplate = @"你是 ISO 管理体系文档的「大章节归属」判定器。只判断这份文档主要属于哪几个大章节，不做符合性判断、不提取条款事实。
+
+## 可选章域（只能从这里选，可多选，最多 3 个）
+CD_ENV 组织环境（第4章）：理解组织及其环境、相关方需求与期望、管理体系范围
+CD_LEAD 领导作用（第5章）：领导承诺、方针、岗位职责与权限、沟通协商
+CD_DECIDE 策划（第6章）：风险和机遇、目标及其实现策划、变更策划
+CD_SUPPORT 支持（第7章）：资源、能力与意识、培训、基础设施、监视和测量资源、组织知识、成文信息（文件控制/记录控制）
+CD_RUN 运行（第8章）：运行策划与控制、设计开发、采购与外部提供、生产与服务提供、检验与放行、不合格输出、标识追溯防护、交付
+CD_ASSESS 绩效评价（第9章）：监视测量分析评价、内部审核、管理评审、顾客满意、合规性评价
+CD_IMPROVE 改进（第10章）：不符合与纠正措施、持续改进
+
+## 判定规则（记录/表单类重点）
+- 记录/表单常无条款号、无正文，只能靠「表头字段 + 抽样行 + 部门 + 文件名」的语义判断归属。
+- 「培训计划 / 培训签到 / 岗位能力评价 / 检验人员任命 / 质量意识」→ CD_SUPPORT（7.2 能力、7.5 成文信息）。
+- 「进料检验 / 出厂检验 / 制程巡检 / 首件 / 质检日报 / 生产日报 / 发货单 / 装箱单 / 生产通知单」→ CD_RUN（8.5 生产与服务提供、8.6 放行）。
+- 「文件借阅 / 文件更改 / 文件销毁 / 外来文件清单」→ CD_SUPPORT（7.5.3 成文信息控制）。
+- 与 ISO 管理体系无关的行政制度（考勤、劳动纪律、请销假、宿舍、报销等）⇒ Domains=[""CD_UNKNOWN""]。
+- 证据不足、判断不了 ⇒ Domains=[""CD_UNKNOWN""]，⛔ 不许硬猜、⛔ 不许默认归 CD_RUN。
+
+## 输入
+文档类型：{{doc_type}}
+语义骨架（简介 / 目的 / 范围 / 目录标题 / 表头抽样行）：
+<<<DOC
+{{abstract_text}}
+DOC
+
+## 输出（只输出一个 JSON 对象；第一个字符 {，最后一个字符 }；不要代码块、不要解释）
+{""Domains"":[""CD_XXX""],""Confidence"":0.0,""Reason"":""一句话依据""}
+Confidence 0~1：语义明确对应某章 ⇒ 0.8 以上；相关但不充分 ⇒ 0.4~0.7；只能靠猜测 ⇒ 0.4 以下并改判 CD_UNKNOWN。";
     }
 }

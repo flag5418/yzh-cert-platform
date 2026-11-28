@@ -1,7 +1,9 @@
 /**
  * 提示词工作台 API（2026-10-02）
  *
- * 后端：CertPlatform.Admin / PromptTemplateController（路由 /api/PromptTemplate）
+ * 后端：CertPlatform.Admin / Controllers/Workflow/PromptTemplateController
+ *       （路由 `/api/Admin/Workflow/PromptTemplate`，工作台端点 `workbench/*`）
+ * 数据源：`cert_prompt_template`（2026-11-27 起 `wf_prompt_template` 已退役，单一提示词源）
  *
  * ★ 契约（务必按此读，混了就是「页面空着、零报错」）：
  *   · 信封：camelCase —— `res.success` / `res.err`（唯一判据 = success）
@@ -37,30 +39,22 @@ export const PROMPT_TYPE = {
   Content: 'doc_content',
   /** 元提示词：供「AI 自动生成 / 优化」按钮调用 */
   Generator: 'prompt_generator',
-  /** 旧路径：字段 / 表格提取 */
-  DocumentAnalysis: 'document_analysis',
   /**
    * ★ 认证准备资料完备性分析（2026-11-01 新增）
    *
    * 输入「条款 + 属性 + 文档摘录」→ 输出 PrepState（found/partial/missing/unknown/na）+ 缺料 + 矛盾。
    * ⛔ 准备阶段审核员还没到现场，**不能下符合性结论**（输出 pass/nc 是语义污染）。
    */
-  AuditPrep: 'audit_prep',
-  /**
-   * ★ 认证检查符合性分析
-   *
-   * 输入「条款 + 证据」→ 输出结论（pass/ofi/nc/na）+ NC 建议 + 严重程度。
-   * 与 AuditPrep 是两个值域，⛔ 不共用一个提示词。
-   */
-  AuditCheck: 'audit_check'
+  AuditPrep: 'audit_prep'
 } as const
 
 export interface PromptTemplateDto {
   id: number
+  /** 行业务键（= cert_prompt_template.Code） */
   promptCode: string
   promptName: string
+  /** 提示词类型（= cert_prompt_template.PromptCode：doc_group / clause_attr_gen …） */
   promptType: string
-  skillTarget?: string | null
   /** ★ 存的是 cert_iso_standard.Code（GUID）；空 = 平台级默认（对所有标准生效） */
   standardCode?: string | null
   template?: string | null
@@ -70,6 +64,7 @@ export interface PromptTemplateDto {
   creator?: string | null
   createTime?: string | null
   updateTime?: string | null
+  // ⛔ 无 skillTarget：cert_prompt_template 无此列（wf 表退役）
   // ⛔ 无 modelName / maxTokens / temperature（统一 AI 配置，读 cert_sys_config）
   // ⛔ 无 version（2026-10-02 裁决：提示词不做版本管理）
 }
@@ -149,13 +144,15 @@ export interface PromptTestResultDto {
 }
 
 export interface PromptSavePayload {
+  /** 行业务键（写入 cert_prompt_template.Code） */
   promptCode: string
   promptName?: string
+  /** 提示词类型（写入 cert_prompt_template.PromptCode） */
   promptType: string
   standardCode?: string | null
-  skillTarget?: string | null
   template: string
   description?: string | null
+  // ⛔ 无 skillTarget：cert_prompt_template 无此列（wf 表退役）
   // ⛔ 无 modelName / maxTokens / temperature（统一 AI 配置，Q3=a）
 }
 
@@ -273,7 +270,6 @@ export async function savePrompt(payload: PromptSavePayload): Promise<void> {
     PromptName: payload.promptName ?? null,
     PromptType: payload.promptType,
     StandardCode: payload.standardCode ?? null,
-    SkillTarget: payload.skillTarget ?? null,
     Template: payload.template,
     Description: payload.description ?? null
   })
